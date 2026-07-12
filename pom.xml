@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.jrobertgardzinski</groupId>
+    <artifactId>workspace-portal</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>workspace-portal</name>
+    <description>
+        Aggregator for the PORTAL product: the meme gallery, comments, the user's
+        saved refs and the account-deletion process manager. Each module is an
+        independent git repository; this pom only ties them into a single Maven
+        reactor. It is a pure aggregator — NOT the parent of the modules.
+
+        The shared kernel (identity + libraries) lives in ../shared and feeds this
+        reactor through ~/.m2 — build it first: (cd ../shared; ./mvnw install).
+        infra-up.sh does exactly that. The F1 game is the OTHER product (../formula);
+        the two share only identity.
+    </description>
+
+    <modules>
+        <module>microservice-memes</module>
+        <module>microservice-comments</module>
+        <module>microservice-user-collections</module>
+        <module>microservice-offboarding</module>
+        <!-- microservice-image (the PNG->WebP encoder) is Python — no reactor seat -->
+    </modules>
+
+</project>

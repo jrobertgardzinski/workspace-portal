@@ -1,0 +1,284 @@
+# The PORTAL product: meme gallery (:8083), comments (:8085), the user's saved refs
+# (user-collections :8092 + its UI on an own origin :8093) and the account-deletion process
+# manager (offboarding :8094) — running on the shared identity stack (security, email chain,
+# stub IdP, Kafka), which is defined ONCE in ../shared/docker-compose.identity.yml and
+# included here. Jars are built on the host first — use ./infra-up.sh, then
+# ../shared/infra-smoke.sh to prove the flows end to end (it needs the formula world too).
+#
+# The project name stays "security" (pinned in the included identity file and here): all
+# product composes share ONE compose project, so dev volumes predate the workspace split
+# and portal + formula up together reuse a single identity stack.
+#
+# Ports on the host:
+#   8083  microservice-memes     (gallery UI at /; uploads/votes need signing in)
+#   8085  microservice-comments  (comment threads + comment votes)
+#   8092  microservice-user-collections (Helidon SE; a user's saved refs; saga participant)
+#   8093  collections-ui         (the favourites UI on its own origin — CORS on display)
+#   8094  microservice-offboarding (the account-deletion saga's process manager)
+#   ----  image-encoder          (internal: PNG->WebP for memes; Python + Pillow)
+#   plus the identity stack's ports — see ../shared/docker-compose.identity.yml
+
+name: security
+
+include:
+  - ../shared/docker-compose.identity.yml
+  - ../shared/docker-compose.observability.yml
+
+x-otel-agent: &otel-agent
+  JAVA_TOOL_OPTIONS: "-javaagent:/otel/opentelemetry-javaagent.jar"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_TRACES_EXPORTER: otlp
+  OTEL_METRICS_EXPORTER: none    # metrics already flow through Prometheus scraping
+  OTEL_LOGS_EXPORTER: none       # logs already flow through Promtail -> Loki
+
+services:
+  memes:
+    build:
+      context: microservice-memes
+    ports:
+      - "8083:8083"
+    environment:
+      <<: *otel-agent
+      OTEL_SERVICE_NAME: memes
+      # writes require a bearer token that security confirms; reads (and the UI at :8083) are public
+      SECURITY_URL: http://security:8080
+      # the gallery is durable: metadata and image bytes in its own Postgres
+      DB_URL: jdbc:postgresql://memes-postgres:5432/memes
+      DB_USER: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      # account-deletion saga (memes axis) + MEME_DELETED announcements for the comments service
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_ENABLED: "true"
+      # smaller WebP to clients that accept it; if the encoder is down, PNG is still served
+      IMAGE_ENCODER_URL: http://image-encoder:8087
+      # image bytes live in object storage (MinIO speaks S3); metadata stays in Postgres
+      MEMES_BLOB_STORE: s3
+      MEMES_S3_ENDPOINT: http://minio:9000
+      MEMES_S3_BUCKET: memes
+      MEMES_S3_ACCESS_KEY: memes
+      MEMES_S3_SECRET_KEY: ${MINIO_PASSWORD:-supersecret}
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8083"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 10s
+    volumes:
+      - ../shared/observability/otel:/otel:ro   # the OpenTelemetry agent (JAVA_TOOL_OPTIONS above)
+    depends_on:
+      memes-postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      security:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  # object storage for the gallery's image bytes — the S3 ObjectStore adapter's home
+  minio:
+    image: minio/minio:RELEASE.2024-06-13T22-53-53Z
+    restart: always
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: memes
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-supersecret}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  image-encoder:
+    build:
+      context: microservice-image
+    # internal only — memes calls it; not published to the host
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8087), 2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 5s
+
+  memes-postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: memes
+    volumes:
+      - memes_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d memes"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  comments:
+    build:
+      context: microservice-comments
+    ports:
+      - "8085:8085"
+    environment:
+      <<: *otel-agent
+      OTEL_SERVICE_NAME: comments
+      DB_URL: jdbc:postgresql://comments-postgres:5432/comments
+      DB_USER: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      SECURITY_URL: http://security:8080
+      # the offline trade-off on display: comments verifies security's JWTs against its JWKS
+      # instead of calling /me (memes keeps introspection — instant revocation awareness)
+      SECURITY_VERIFY: offline
+      MEMES_URL: http://memes:8083
+      # account-deletion saga (comments axis) + the MEME_DELETED thread cascade
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_ENABLED: "true"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8085"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 10s
+    volumes:
+      - ../shared/observability/otel:/otel:ro   # the OpenTelemetry agent (JAVA_TOOL_OPTIONS above)
+    depends_on:
+      comments-postgres:
+        condition: service_healthy
+      security:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  comments-postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: comments
+    volumes:
+      - comments_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d comments"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  # the sixth flavour: Helidon 4 SE on virtual threads. The user's saved refs (favourites etc.);
+  # the third participant in the account-deletion saga (consumes content-commands, confirms on
+  # usercollections-events). Offline JWT like comments; its own Postgres.
+  user-collections:
+    build:
+      context: microservice-user-collections
+    ports:
+      - "8092:8092"
+    environment:
+      <<: *otel-agent
+      OTEL_SERVICE_NAME: user-collections
+      COLLECTIONS_PORT: "8092"
+      DB_URL: jdbc:postgresql://collections-postgres:5432/collections
+      DB_USER: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      SECURITY_URL: http://security:8080
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    healthcheck:
+      # alpine image: busybox nc, not bash /dev/tcp
+      test: ["CMD", "nc", "-z", "localhost", "8092"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 10s
+    volumes:
+      - ../shared/observability/otel:/otel:ro   # the OpenTelemetry agent (JAVA_TOOL_OPTIONS above)
+    depends_on:
+      collections-postgres:
+        condition: service_healthy
+      security:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  # the favourites UI on its OWN origin (react-native-web built by Vite, served by nginx) — the
+  # browser then calls security and user-collections cross-origin, exercising their CORS edges
+  collections-ui:
+    build:
+      context: microservice-user-collections/collections-ui
+    ports:
+      - "8093:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:80"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
+
+  collections-postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: collections
+    volumes:
+      - collections_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d collections"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  # the portal's process manager for account deletion (the saga orchestration extracted from
+  # security): consumes the deletion fact off security-events, commands the content purge on
+  # content-commands, collects the participants' confirmations, and announces the single outcome
+  # security waits for on offboarding-events. Participants are CONFIGURATION — a new content
+  # service joins the saga right here, without touching a line of security.
+  offboarding:
+    build:
+      context: microservice-offboarding
+    ports:
+      - "8094:8094"
+    environment:
+      <<: *otel-agent
+      OTEL_SERVICE_NAME: offboarding
+      OFFBOARDING_PORT: "8094"
+      OFFBOARDING_PARTICIPANTS: memes=memes-events,comments=comments-events,collections=usercollections-events
+      DB_URL: jdbc:postgresql://offboarding-postgres:5432/offboarding
+      DB_USER: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    healthcheck:
+      # alpine image: busybox nc, not bash /dev/tcp
+      test: ["CMD", "nc", "-z", "localhost", "8094"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 10s
+    volumes:
+      - ../shared/observability/otel:/otel:ro   # the OpenTelemetry agent (JAVA_TOOL_OPTIONS above)
+    depends_on:
+      offboarding-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  offboarding-postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: offboarding
+    volumes:
+      - offboarding_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d offboarding"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  offboarding_pgdata:
+  memes_pgdata:
+  minio_data:
+  comments_pgdata:
+  collections_pgdata:

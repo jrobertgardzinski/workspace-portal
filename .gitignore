@@ -1,0 +1,13 @@
+target/
+.idea/
+.allure/
+.jqwik-database
+*.log
+
+# Independent sub-repositories — each keeps its own git history.
+# The workspace versions shared scripts/tooling only, not their contents.
+/microservice-memes/
+/microservice-comments/
+/microservice-user-collections/
+/microservice-offboarding/
+/microservice-image/
