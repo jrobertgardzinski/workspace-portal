@@ -84,7 +84,10 @@ client). Acceptable for a throwaway local cluster only — a hosted overlay
   when a loop stops completing passes — broker or database away; the pod
   leaves traffic/gating and comes back when the dependency does) and
   **liveness on `/alive`** (503 only when a loop thread died or stopped being
-  scheduled past `*_ALIVE_STALL_SEC`, default 120s — the one failure a
+  scheduled past `*_ALIVE_STALL_SEC` — code default 240s, set explicitly to
+  240s in both manifests, and floored at 183s by each service itself (the
+  worst legal iteration sums to 146s of Kafka, JDBC and backoff clocks, plus
+  a 25% margin) — the one failure a
   restart actually cures). Liveness used to hit `/health` too, which
   restart-looped these pods whenever their Postgres was down; a dead loop
   still gets bounced, an outage no longer does. Exactly what those
@@ -93,7 +96,7 @@ client). Acceptable for a throwaway local cluster only — a hosted overlay
   auto-enabled when Spring detects Kubernetes.
 - **security** (Micronaut): `/health`; **email** (Quarkus): TCP only (the image
   ships no health extension — same as compose); Python stubs: TCP or `/health`.
-- JVMs get a generous `startupProbe` (up to 5 min) instead of huge
+- JVMs get a generous `startupProbe` (36 × 5s = up to 3 min) instead of huge
   initialDelays.
 
 ## Env pins the deployment must respect
