@@ -1,0 +1,57 @@
+# One Ingress, host-per-service, on k3s' bundled Traefik (the default class).
+# Only the four public faces get a route: the gallery, the comment API, the
+# favourites UI and security (the token issuer the UIs and curl talk to).
+# image-encoder, Kafka, MinIO, Mailpit and every Postgres stay internal.
+#
+# *.localhost names resolve to 127.0.0.1 in browsers and on systemd-resolved
+# hosts; with the k3d loadbalancer mapping 9080:80 the portal answers at e.g.
+#   http://memes.portal.localhost:9080/
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: portal
+  labels:
+    app.kubernetes.io/part-of: portal
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: memes.portal.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: memes
+                port:
+                  name: http
+    - host: comments.portal.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: comments
+                port:
+                  name: http
+    - host: collections.portal.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: collections-ui
+                port:
+                  name: http
+    - host: security.portal.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: security
+                port:
+                  name: http

@@ -1,0 +1,114 @@
+# microservice-security — the identity kernel every portal service signs in
+# through (Micronaut, hexagonal). Env mirrors docker-compose.identity.yml with
+# k8s deltas:
+#  - DB_HOST is security-postgres (compose calls the container just `postgres`);
+#  - VERIFY_LINK_BASE points at the memes Ingress host, so the link in the mail
+#    opens the gallery served by THIS cluster;
+#  - NO JAVA_TOOL_OPTIONS: no OTel javaagent in this scope (no Tempo here);
+#  - SECURITY_SMS_URL is omitted on purpose: register/verify/authenticate and
+#    the deletion saga never touch the SMS channel — it only carries MFA-SMS
+#    codes, and no account in a fresh dev cluster has that factor enrolled.
+#    (microservice-sms and -push are therefore not deployed at all.)
+#  - the OAuth stub-IdP wiring is kept (idp IS deployed), but the authorize-url
+#    a BROWSER must visit has no Ingress in this scope — social login is
+#    api-complete yet not clickable from outside; see k8s/README.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: security
+  labels:
+    app: security
+    app.kubernetes.io/part-of: portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: security
+  template:
+    metadata:
+      labels:
+        app: security
+    spec:
+      containers:
+        - name: security
+          image: security-security:latest
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: portal-common
+          env:
+            - name: MICRONAUT_ENVIRONMENTS
+              value: dev
+            - name: DB_HOST
+              value: security-postgres
+            - name: DB_NAME
+              value: security
+            - name: DB_USER
+              value: postgres
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-db
+                  key: POSTGRES_PASSWORD
+            - name: VERIFY_LINK_BASE
+              value: http://memes.portal.localhost:9080/?verify=
+            - name: RESET_LINK_BASE
+              value: http://security.portal.localhost:9080/reset-password?token=
+            - name: SECURITY_REGISTRATION_MAX_PER_WINDOW
+              value: "100"
+            # social login against the in-cluster stub IdP; token/userinfo are
+            # server-side calls, the authorize-url would need a browser route
+            - name: SECURITY_OAUTH_PROVIDERS_GOOGLE_ISSUER
+              value: http://idp:8091
+            - name: SECURITY_OAUTH_PROVIDERS_GOOGLE_AUTHORIZE_URL
+              value: http://idp:8091/authorize
+            - name: SECURITY_OAUTH_PROVIDERS_GOOGLE_TOKEN_URL
+              value: http://idp:8091/token
+            - name: SECURITY_OAUTH_PROVIDERS_GOOGLE_CLIENT_ID
+              value: demo-client
+            - name: SECURITY_OAUTH_PROVIDERS_GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: idp-client
+                  key: IDP_CLIENT_SECRET
+            - name: SECURITY_OAUTH_PROVIDERS_GOOGLE_REDIRECT_URI
+              value: http://security.portal.localhost:9080/oauth/callback
+            - name: SECURITY_OAUTH_ALLOWED_RETURN_PREFIXES
+              value: http://memes.portal.localhost:9080/
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60   # a JVM on a shared dev box may need minutes
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+            failureThreshold: 4
+          resources:
+            requests:
+              cpu: 250m
+              memory: 384Mi
+            limits:
+              memory: 768Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: security
+spec:
+  selector:
+    app: security
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

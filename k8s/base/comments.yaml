@@ -1,0 +1,80 @@
+# microservice-comments — comment threads + votes (Spring Boot). Verifies
+# security's JWTs OFFLINE against its JWKS (the trade-off on display vs memes'
+# introspection). Probes on the auto-enabled k8s health groups, like memes.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: comments
+  labels:
+    app: comments
+    app.kubernetes.io/part-of: portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: comments
+  template:
+    metadata:
+      labels:
+        app: comments
+    spec:
+      containers:
+        - name: comments
+          image: security-comments:latest
+          ports:
+            - name: http
+              containerPort: 8085
+          envFrom:
+            - configMapRef:
+                name: portal-common
+          env:
+            - name: DB_URL
+              value: jdbc:postgresql://comments-postgres:5432/comments
+            - name: DB_USER
+              value: postgres
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-db
+                  key: POSTGRES_PASSWORD
+            - name: SECURITY_VERIFY
+              value: offline
+            - name: MEMES_URL
+              value: http://memes:8083
+            - name: KAFKA_ENABLED
+              value: "true"
+          startupProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 15
+            failureThreshold: 4
+          resources:
+            requests:
+              cpu: 200m
+              memory: 320Mi
+            limits:
+              memory: 640Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: comments
+spec:
+  selector:
+    app: comments
+  ports:
+    - name: http
+      port: 8085
+      targetPort: http

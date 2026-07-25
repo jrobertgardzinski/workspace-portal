@@ -1,0 +1,60 @@
+# collections-ui — the favourites UI on its OWN origin (react-native-web built
+# by Vite, served by nginx). NOTE the dev-parity caveat: the compose-built image
+# BAKES the API base URLs at Vite build time (VITE_SECURITY_URL /
+# VITE_COLLECTIONS_URL, defaulting to http://localhost:8080 / :8092), so the
+# page this cluster serves still calls the compose stack's host ports from the
+# browser. A k8s-native UI needs a rebuild with the Ingress URLs baked in —
+# out of scope here, documented in k8s/README.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collections-ui
+  labels:
+    app: collections-ui
+    app.kubernetes.io/part-of: portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: collections-ui
+  template:
+    metadata:
+      labels:
+        app: collections-ui
+    spec:
+      containers:
+        - name: collections-ui
+          image: security-collections-ui:latest
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: collections-ui
+spec:
+  selector:
+    app: collections-ui
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -1,0 +1,55 @@
+# image-encoder — PNG->WebP for memes (Python + Pillow). Internal only, no
+# Ingress: memes calls it, nobody else should. Has a real /health endpoint.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-encoder
+  labels:
+    app: image-encoder
+    app.kubernetes.io/part-of: portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: image-encoder
+  template:
+    metadata:
+      labels:
+        app: image-encoder
+    spec:
+      containers:
+        - name: image-encoder
+          image: security-image-encoder:latest
+          ports:
+            - name: http
+              containerPort: 8087
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: image-encoder
+spec:
+  selector:
+    app: image-encoder
+  ports:
+    - name: http
+      port: 8087
+      targetPort: http

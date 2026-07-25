@@ -1,0 +1,115 @@
+# The portal on Kubernetes (k3s/k3d) — dev-parity manifests
+
+Kustomize manifests for the whole portal product **plus the minimal identity
+core it cannot live without**: security, email, the stub IdP, Kafka (single-node
+KRaft), security's Postgres and Mailpit. Everything in one `portal` namespace —
+the k8s mirror of the single compose project. Validated end to end on a local
+k3d cluster (all pods Ready; registration → Mailpit → verify → authenticate →
+upload → comment → favourite → account-deletion saga, all green).
+
+```
+k8s/
+├── base/                 # one file per component: Deployment+Service (+PVC)
+│   ├── kustomization.yaml
+│   └── ...
+└── overlays/
+    └── dev/              # local k3d: dev Secrets, imagePullPolicy Never
+        └── kustomization.yaml
+```
+
+## Bring it up on k3d
+
+```bash
+# 1. images — compose builds them (project name "security"):
+./infra-up.sh            # or: docker compose build
+
+# 2. cluster with the Traefik loadbalancer published on host port 9080
+k3d cluster create portal-dev --port 9080:80@loadbalancer
+
+# 3. hand the locally built images to the cluster (nothing is pulled — the
+#    dev overlay pins imagePullPolicy: Never)
+k3d image import -c portal-dev \
+  security-security:latest security-email:latest security-idp:latest \
+  security-memes:latest security-comments:latest \
+  security-user-collections:latest security-collections-ui:latest \
+  security-offboarding:latest security-image-encoder:latest \
+  postgres:16-alpine minio/minio:RELEASE.2024-06-13T22-53-53Z \
+  apache/kafka:3.9.1 axllent/mailpit:latest
+
+# 4. apply — ALWAYS through the overlay (the base has no Secrets)
+kubectl apply -k k8s/overlays/dev
+kubectl -n portal get pods -w     # ~2 min until everything is Ready
+
+# tear-down when done looking
+k3d cluster delete portal-dev
+```
+
+Early restarts of the JVM pods while Postgres/Kafka come up are normal — k8s
+has no `depends_on`; the probes gate traffic and the restarts converge.
+
+## Who answers where
+
+Ingress (Traefik, k3s' default class) routes by host name; `*.localhost`
+resolves to 127.0.0.1 in browsers and on systemd-resolved machines:
+
+| URL (host port 9080)                        | Service          | compose port |
+|---------------------------------------------|------------------|--------------|
+| http://memes.portal.localhost:9080          | memes (gallery)  | 8083 |
+| http://comments.portal.localhost:9080       | comments         | 8085 |
+| http://collections.portal.localhost:9080    | collections-ui   | 8093 |
+| http://security.portal.localhost:9080       | security         | 8080 |
+
+Everything else is cluster-internal on its compose port (image-encoder 8087,
+user-collections 8092, offboarding 8094, MinIO 9000, Kafka 9092, Mailpit
+8025/1025, each Postgres 5432). Peek at internals with a port-forward, e.g.:
+
+```bash
+kubectl -n portal port-forward svc/mailpit 8025:8025   # the "inbox" UI
+kubectl -n portal port-forward svc/user-collections 8092:8092
+```
+
+## Secrets
+
+Dev values are **generated in the overlay** (`overlays/dev/kustomization.yaml`)
+with the same plaintext defaults compose uses: `secret` (all Postgres),
+`memes`/`supersecret` (MinIO), `local-dev-key` (mail API), `demo-secret` (IdP
+client). Acceptable for a throwaway local cluster only — a hosted overlay
+(HOSTING-K3S.md) must bring SealedSecrets/ExternalSecrets instead of literals.
+
+## Probes — the /health work pays off
+
+- **offboarding** and **user-collections**: liveness on `/health`, which turns
+  503 when the saga consumer/sweeper loop dies — a dead loop now means a pod
+  restart instead of an open port hiding a corpse. Exactly what those
+  endpoints were built for.
+- **memes/comments** (Spring Boot): `/actuator/health/{liveness,readiness}` —
+  auto-enabled when Spring detects Kubernetes.
+- **security** (Micronaut): `/health`; **email** (Quarkus): TCP only (the image
+  ships no health extension — same as compose); Python stubs: TCP or `/health`.
+- JVMs get a generous `startupProbe` (up to 5 min) instead of huge
+  initialDelays.
+
+## Deliberately missing vs compose
+
+- **Observability** (Prometheus, Grafana, Tempo, Loki, Promtail, exporters) —
+  a future overlay of its own.
+- **OTel javaagent** — compose attaches it via `JAVA_TOOL_OPTIONS`; here there
+  is no Tempo to export to, so no `JAVA_TOOL_OPTIONS` is set at all (a
+  `-javaagent` pointing at a missing jar would abort every JVM).
+- **sms / push stubs** — register/verify/authenticate and the deletion saga
+  never touch them; SMS only carries MFA-SMS codes and no fresh-cluster account
+  has that factor enrolled. `SECURITY_SMS_URL` is omitted accordingly
+  (see `base/security.yaml`).
+- **Browser-side social login** — the stub IdP runs (server-side token/userinfo
+  calls work) but its `/authorize` form has no Ingress in this scope.
+- **UI API base URLs** — memes-ui and collections-ui bake
+  `VITE_SECURITY_URL`/`VITE_COLLECTIONS_URL` at build time, defaulting to the
+  compose host ports (`localhost:8080`/`8092`). The pages served from the
+  cluster therefore still aim their **browser** calls at the compose stack; a
+  k8s-native UI build (and security CORS entries for the new origins) is a
+  follow-up. API-level flows through the Ingress are fully functional.
+- **Resources**: modest requests (~2.5 GB total) and memory limits (~6 GB
+  total) per HOSTING-K3S.md's small-node budget; CPU limits are omitted on
+  purpose — throttling JVM startup only makes probes lie.
+- **Images**: local compose tags (`security-*:latest`) + `imagePullPolicy:
+  Never` in the dev overlay; the hosted setup swaps these for GHCR-pushed tags.

@@ -1,0 +1,6 @@
+# Everything (the portal's services AND the minimal identity core it signs in
+# through) lives in ONE namespace — dev-parity with the single compose project.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: portal

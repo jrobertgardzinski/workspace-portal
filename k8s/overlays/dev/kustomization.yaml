@@ -1,0 +1,51 @@
+# dev overlay — local k3d/k3s, images built by docker compose on THIS machine.
+#
+# Images: compose builds them as security-<service>:latest (the compose project
+# name is pinned to "security"). They are imported into the cluster with
+# `k3d image import`, so every pod pulls NOTHING: imagePullPolicy Never below.
+# The eventual hosted setup (HOSTING-K3S.md) swaps this for GHCR-tagged images
+# and drops the patch.
+#
+# Secrets: generated HERE with the same plaintext dev defaults compose uses
+# (secret / supersecret / local-dev-key / demo-secret). That is fine for a
+# throwaway local cluster and NOTHING ELSE — production uses SealedSecrets or
+# ExternalSecrets, never literals in git.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# the base sets this too, but a kustomization's namespace does NOT reach into
+# overlays — without it the generated Secrets land in `default`, out of the
+# pods' sight (CreateContainerConfigError: secret "portal-db" not found)
+namespace: portal
+
+resources:
+  - ../../base
+
+# stable names — the base references them; no content-hash suffixes
+generatorOptions:
+  disableNameSuffixHash: true
+
+secretGenerator:
+  - name: portal-db
+    literals:
+      - POSTGRES_PASSWORD=secret
+  - name: minio-creds
+    literals:
+      - MINIO_ROOT_USER=memes
+      - MINIO_ROOT_PASSWORD=supersecret
+  - name: mail-api-key
+    literals:
+      - MAIL_API_KEY=local-dev-key
+  - name: idp-client
+    literals:
+      - IDP_CLIENT_SECRET=demo-secret
+
+patches:
+  # every pod here is single-container; images live only in the k3d image
+  # store (imported from the host's docker), so a pull must never be attempted
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never

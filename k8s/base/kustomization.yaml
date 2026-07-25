@@ -1,0 +1,33 @@
+# The portal on Kubernetes — base layer (dev-parity with docker-compose.yml
+# plus the minimal identity core from ../shared/docker-compose.identity.yml).
+# Apply through an overlay (overlays/dev), never bare: the base references
+# Secrets (portal-db, minio-creds, mail-api-key, idp-client) that only an
+# overlay provides.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: portal
+
+resources:
+  - namespace.yaml
+  - configmap-common.yaml
+  # identity core — the portal signs in through these
+  - kafka.yaml
+  - mailpit.yaml
+  - security-postgres.yaml
+  - security.yaml
+  - email.yaml
+  - idp.yaml
+  # the portal product
+  - minio.yaml
+  - image-encoder.yaml
+  - memes-postgres.yaml
+  - memes.yaml
+  - comments-postgres.yaml
+  - comments.yaml
+  - collections-postgres.yaml
+  - user-collections.yaml
+  - collections-ui.yaml
+  - offboarding-postgres.yaml
+  - offboarding.yaml
+  - ingress.yaml

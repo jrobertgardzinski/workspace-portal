@@ -1,0 +1,80 @@
+# microservice-offboarding — the account-deletion saga's process manager.
+# Participants are CONFIGURATION (OFFBOARDING_PARTICIPANTS) — a new content
+# service joins the saga here, without touching security. Its /health goes 503
+# when the consumer or sweeper loop dies; the liveness probe turns that into a
+# restart — precisely the behaviour the 503 was added for.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: offboarding
+  labels:
+    app: offboarding
+    app.kubernetes.io/part-of: portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: offboarding
+  template:
+    metadata:
+      labels:
+        app: offboarding
+    spec:
+      containers:
+        - name: offboarding
+          image: security-offboarding:latest
+          ports:
+            - name: http
+              containerPort: 8094
+          envFrom:
+            - configMapRef:
+                name: portal-common
+          env:
+            - name: OFFBOARDING_PORT
+              value: "8094"
+            - name: OFFBOARDING_PARTICIPANTS
+              value: memes=memes-events,comments=comments-events,collections=usercollections-events
+            - name: DB_URL
+              value: jdbc:postgresql://offboarding-postgres:5432/offboarding
+            - name: DB_USER
+              value: postgres
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-db
+                  key: POSTGRES_PASSWORD
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+            failureThreshold: 4
+          resources:
+            requests:
+              cpu: 150m
+              memory: 192Mi
+            limits:
+              memory: 384Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: offboarding
+spec:
+  selector:
+    app: offboarding
+  ports:
+    - name: http
+      port: 8094
+      targetPort: http

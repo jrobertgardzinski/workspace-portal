@@ -1,0 +1,67 @@
+# Stub OIDC provider — "Sign in with Google" without Google. Deployed so
+# security's OAuth wiring stays live (token/userinfo are server-side calls);
+# the browser-facing /authorize form has no Ingress in this scope, so social
+# login is not clickable from outside the cluster — see k8s/README.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: idp
+  labels:
+    app: idp
+    app.kubernetes.io/part-of: portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: idp
+  template:
+    metadata:
+      labels:
+        app: idp
+    spec:
+      containers:
+        - name: idp
+          image: security-idp:latest
+          ports:
+            - name: http
+              containerPort: 8091
+          env:
+            - name: PORT
+              value: "8091"
+            - name: IDP_ISSUER
+              value: http://idp:8091
+            - name: IDP_CLIENT_ID
+              value: demo-client
+            - name: IDP_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: idp-client
+                  key: IDP_CLIENT_SECRET
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: idp
+spec:
+  selector:
+    app: idp
+  ports:
+    - name: http
+      port: 8091
+      targetPort: http

@@ -15,6 +15,16 @@ export const MAILPIT = process.env.MAILPIT_URL ?? 'http://localhost:8025';
 // step mid-wait
 setDefaultTimeout(90_000);
 
+/**
+ * Every wire call goes through here: fetch with a hard 10 s cap. A hanging service must fail the
+ * call (AbortError) instead of pinning it — `eventually` then retries, and the After-hook's
+ * best-effort farewell stays best-effort instead of eating the whole cucumber step budget and
+ * failing a green scenario on a timeout that was never the scenario's fault.
+ */
+export function boundedFetch(url, options = {}) {
+  return fetch(url, { ...options, signal: AbortSignal.timeout(10_000) });
+}
+
 let counter = 0;
 
 /**
@@ -71,13 +81,13 @@ class SagaWorld {
   async newestMail(email, { matching } = {}) {
     const query = encodeURIComponent(`to:${email}`);
     for (let i = 0; i < 240; i++) {
-      const found = await fetch(`${MAILPIT}/api/v1/search?query=${query}&limit=25`);
+      const found = await boundedFetch(`${MAILPIT}/api/v1/search?query=${query}&limit=25`);
       if (found.ok) {
         const { messages = [] } = await found.json();
         const newestFirst = [...messages].sort(
           (a, b) => new Date(b.Created).getTime() - new Date(a.Created).getTime());
         for (const message of newestFirst) {
-          const body = await (await fetch(`${MAILPIT}/api/v1/message/${message.ID}`)).json();
+          const body = await (await boundedFetch(`${MAILPIT}/api/v1/message/${message.ID}`)).json();
           const text = `${body.Text ?? ''}\n${body.HTML ?? ''}`;
           if (matching && !matching.test(text)) continue;
           return text;
@@ -107,7 +117,7 @@ class SagaWorld {
   async uploadMeme(token) {
     const form = new FormData();
     form.append('file', new Blob([uniquePng()], { type: 'image/png' }), 'pixel.png');
-    const r = await fetch(`${MEMES}/memes`, {
+    const r = await boundedFetch(`${MEMES}/memes`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: form,
@@ -118,7 +128,7 @@ class SagaWorld {
 
   /** Posts a comment under a meme; answers the comment id. */
   async postComment(token, memeId, text) {
-    const r = await fetch(`${COMMENTS}/memes/${memeId}/comments`, {
+    const r = await boundedFetch(`${COMMENTS}/memes/${memeId}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ text }),
@@ -129,14 +139,14 @@ class SagaWorld {
 
   /** The public comment thread under a meme. */
   async commentsUnder(memeId) {
-    const r = await fetch(`${COMMENTS}/memes/${memeId}/comments`);
+    const r = await boundedFetch(`${COMMENTS}/memes/${memeId}/comments`);
     if (!r.ok) throw new Error(`comments listing failed: ${r.status}`);
     return r.json();
   }
 
   /** Saves a meme into the account's favourites and proves the save took. */
   async saveFavourite(token, memeId) {
-    const put = await fetch(`${COLLECTIONS}/collections/favourites/items/meme/${memeId}`, {
+    const put = await boundedFetch(`${COLLECTIONS}/collections/favourites/items/meme/${memeId}`, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -148,7 +158,7 @@ class SagaWorld {
   /** The account's saved favourites. The access token verifies OFFLINE in user-collections
    *  (JWKS, not introspection), so it still opens the — by then empty — list after deletion. */
   async favourites(token) {
-    const r = await fetch(`${COLLECTIONS}/collections/favourites/items`, {
+    const r = await boundedFetch(`${COLLECTIONS}/collections/favourites/items`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!r.ok) throw new Error(`favourites listing failed: ${r.status}`);
@@ -160,13 +170,13 @@ class SagaWorld {
    *  keeping of which the Then-steps watch. `purge` carries the wizard's explicit choice; no
    *  purge means every content service applies its deployment default. */
   async requestAccountDeletion(account, token, purge = undefined) {
-    const elevated = await fetch(`${SECURITY}/account/step-up`, {
+    const elevated = await boundedFetch(`${SECURITY}/account/step-up`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ action: 'delete-account', password: account.password }),
     });
     if (!elevated.ok) throw new Error(`step-up before deletion refused: ${elevated.status}`);
-    const r = await fetch(`${SECURITY}/account/delete`, {
+    const r = await boundedFetch(`${SECURITY}/account/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: purge ? JSON.stringify({ purge }) : undefined,
@@ -190,7 +200,7 @@ class SagaWorld {
   }
 
   post(url, body) {
-    return fetch(url, {
+    return boundedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

@@ -1,0 +1,79 @@
+# microservice-user-collections — Helidon SE on virtual threads; the user's
+# saved refs and the saga's third participant. Its /health WATCHES the
+# purge-consumer loop and turns 503 when the loop stops completing cycles
+# (COLLECTIONS_CONSUMER_STALL_SEC, default 60s) — the liveness probe below is
+# exactly what that was built for: a dead consumer now means a pod restart,
+# not an open port hiding a corpse.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-collections
+  labels:
+    app: user-collections
+    app.kubernetes.io/part-of: portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-collections
+  template:
+    metadata:
+      labels:
+        app: user-collections
+    spec:
+      containers:
+        - name: user-collections
+          image: security-user-collections:latest
+          ports:
+            - name: http
+              containerPort: 8092
+          envFrom:
+            - configMapRef:
+                name: portal-common
+          env:
+            - name: COLLECTIONS_PORT
+              value: "8092"
+            - name: DB_URL
+              value: jdbc:postgresql://collections-postgres:5432/collections
+            - name: DB_USER
+              value: postgres
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-db
+                  key: POSTGRES_PASSWORD
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+            failureThreshold: 4
+          resources:
+            requests:
+              cpu: 150m
+              memory: 192Mi
+            limits:
+              memory: 384Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-collections
+spec:
+  selector:
+    app: user-collections
+  ports:
+    - name: http
+      port: 8092
+      targetPort: http

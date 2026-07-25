@@ -1,6 +1,6 @@
 import { Given, When, Then } from '@cucumber/cucumber';
 import assert from 'node:assert/strict';
-import { SECURITY, MEMES } from '../support/world.mjs';
+import { SECURITY, MEMES, boundedFetch } from '../support/world.mjs';
 
 // ---------------------------------------------------------------------------------------------
 // Given — the world before the goodbye. Everything is provisioned through the public endpoints:
@@ -57,9 +57,9 @@ When('the user asks for their account to be deleted, choosing that their comment
 
 Then('their meme disappears from the gallery', async function () {
   await this.eventually(async () => {
-    const direct = await fetch(`${MEMES}/memes/${this.ownMemeId}`);
+    const direct = await boundedFetch(`${MEMES}/memes/${this.ownMemeId}`);
     assert.equal(direct.status, 404, `the meme still answers ${direct.status}`);
-    const wall = await (await fetch(`${MEMES}/memes`)).text();
+    const wall = await (await boundedFetch(`${MEMES}/memes`)).text();
     assert.ok(!wall.includes(this.ownMemeId), 'the meme still hangs on the public wall');
   });
 });

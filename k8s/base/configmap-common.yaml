@@ -1,0 +1,13 @@
+# Env every backend shares — mirrors the values docker-compose.yml repeats per
+# service. Consumed through envFrom; a service that ignores a key is unharmed.
+#
+# Deliberately NO JAVA_TOOL_OPTIONS / OTEL_* here: the compose stack attaches the
+# OpenTelemetry javaagent, but this k8s scope ships no Tempo to export to, and a
+# -javaagent pointing at a missing jar aborts the JVM. See k8s/README.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: portal-common
+data:
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  SECURITY_URL: http://security:8080

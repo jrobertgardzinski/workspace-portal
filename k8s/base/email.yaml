@@ -1,0 +1,76 @@
+# microservice-email (Quarkus) — consumes mail-request events off Kafka and
+# delivers over SMTP to Mailpit. No /health endpoint in the image (compose
+# probes bare TCP too), so the k8s probes are TCP as well.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: email
+  labels:
+    app: email
+    app.kubernetes.io/part-of: portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: email
+  template:
+    metadata:
+      labels:
+        app: email
+    spec:
+      containers:
+        - name: email
+          image: security-email:latest
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: portal-common
+          env:
+            - name: MAIL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mail-api-key
+                  key: MAIL_API_KEY
+            - name: QUARKUS_MAILER_HOST
+              value: mailpit
+            - name: QUARKUS_MAILER_PORT
+              value: "1025"
+            - name: QUARKUS_MAILER_MOCK
+              value: "false"
+            # Mailpit speaks plain SMTP; the prod profile would demand STARTTLS
+            - name: MAIL_SMTP_START_TLS
+              value: DISABLED
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 15
+            failureThreshold: 4
+          resources:
+            requests:
+              cpu: 150m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: email
+spec:
+  selector:
+    app: email
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
