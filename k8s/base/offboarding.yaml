@@ -9,9 +9,14 @@
 #                        so liveness must NOT bite here (a down Postgres used
 #                        to restart-loop this pod when liveness hit /health).
 #   /alive  (LIVENESS)   503 only when a loop THREAD died or stopped being
-#                        scheduled (OFFBOARDING_ALIVE_STALL_SEC, default 120s
-#                        = four max backoffs). A restart is the cure for
-#                        exactly that and nothing else.
+#                        scheduled (OFFBOARDING_ALIVE_STALL_SEC: code default
+#                        120s, floored at a value DERIVED in Main from the
+#                        loop's own clocks — 2x max(delivery.timeout,
+#                        default.api.timeout, max backoff) + one sweep interval
+#                        + one broker probe, plus 25% margin, currently 100s.
+#                        This manifest overrides it to 180s below, on purpose).
+#                        A restart is the cure for exactly that and nothing
+#                        else.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

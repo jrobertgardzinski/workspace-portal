@@ -18,21 +18,14 @@ COLLECTIONS_URL=${COLLECTIONS_URL:-http://localhost:8092}
 OFFBOARDING_URL=${OFFBOARDING_URL:-http://localhost:8094}
 MAILPIT_URL=${MAILPIT_URL:-http://localhost:8025}
 
-# the harness needs Node >= 20.3 (AbortSignal.any in e2e/support/world.mjs) — say so up front
-# instead of failing mid-scenario with a bare TypeError
-node -e 'const [maj,min]=process.versions.node.split(".").map(Number); if (maj<20||(maj===20&&min<3)) { console.error(`FAIL: the e2e harness needs Node >= 20.3 (AbortSignal.any), found ${process.versions.node}`); process.exit(1); }'
+# the harness's Node floor, stated once for both runners (e2e/require-node.sh explains why 20.3)
+./e2e/require-node.sh
 
-# a previous @outage run that died mid-scenario leaves the favourites service stopped — heal
-# that BEFORE the aliveness check, so the check reports real trouble, not old trouble (the
-# same self-healing preflight lives in ./e2e-saga.sh)
-if ! docker compose ps --services --status running 2>/dev/null | grep -qx user-collections; then
-    echo "== user-collections is not running (leftover of an interrupted @outage run?) — starting it"
-    docker compose start user-collections >/dev/null 2>&1 || true
-    for i in $(seq 1 30); do
-        curl -sf --max-time 3 "$COLLECTIONS_URL/health" >/dev/null 2>&1 && break
-        sleep 2
-    done
-fi
+# container preflight, shared with ./e2e-saga.sh: a previous @outage run that died mid-scenario
+# leaves the favourites service stopped, and healing that BEFORE the aliveness check keeps the
+# check about today's trouble — but a container that CRASHED is not a leftover and is reported
+# loudly instead of quietly started; see e2e/preflight-stack.sh
+COLLECTIONS_URL="$COLLECTIONS_URL" ./e2e/preflight-stack.sh
 
 echo "== checking every member of the chain is alive"
 down=()
