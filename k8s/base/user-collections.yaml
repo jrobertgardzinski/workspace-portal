@@ -9,10 +9,17 @@
 #                        the dependency (a down Postgres used to restart-loop
 #                        this pod when liveness hit /health).
 #   /alive  (LIVENESS)   503 only when the consumer THREAD died or stopped
-#                        being scheduled (COLLECTIONS_ALIVE_STALL_SEC, default
-#                        120s). A restart is the cure for exactly that — an
-#                        open port no longer hides a corpse, and an outage no
-#                        longer gets pods bounced for no gain.
+#                        being scheduled (COLLECTIONS_ALIVE_STALL_SEC: code
+#                        default 240s, floored at a value DERIVED in Main from
+#                        the consumer's own clocks — the SUM of one worst legal
+#                        iteration's blocks (rewind lookup + broker probe +
+#                        poll + database + confirmation send + commit + max
+#                        backoff = 146s), plus a 25% margin, currently 183s.
+#                        Same arithmetic as offboarding.yaml, term for term.
+#                        This manifest pins 240s below, on purpose).
+#                        A restart is the cure for exactly that — an open port
+#                        no longer hides a corpse, and an outage no longer gets
+#                        pods bounced for no gain.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -51,14 +58,18 @@ spec:
                 secretKeyRef:
                   name: portal-db
                   key: POSTGRES_PASSWORD
-            # EXPLICIT on purpose, not the code default: the liveness verdict must stay
-            # strictly slower than the slowest honest Kafka pass — the consumer's marker
-            # can legitimately go quiet for a full delivery.timeout.ms (30s) plus the
-            # backoff ladder, and 180s (six such windows) keeps a broker outage from ever
-            # reading as a dead thread. Keep in lockstep with the
-            # COLLECTIONS_ALIVE_STALL_SEC floor in microservice-user-collections' Main.
+            # EXPLICIT on purpose: the liveness verdict must stay strictly slower than the
+            # slowest HONEST pass, and that pass is not one clock but a sum — a rewind
+            # lookup, a probe, a poll, a database block, a confirmation send, a commit and
+            # the backoff, 146s of legal waiting end to end. Was 180s here while the floor
+            # in Main was computed as 2x max(...) = 83s; the floor is now the honest sum
+            # + 25% = 183s, so 180 would have been SILENTLY RAISED to 183 at boot — a
+            # manifest that says one number while the process runs another. 240s (the code
+            # default, ~31% above the floor) is the value now, pinned here so the manifest
+            # states it rather than inheriting it. Keep in lockstep with ALIVE_STALL_FLOOR
+            # in microservice-user-collections' Main: anything below it is corrected.
             - name: COLLECTIONS_ALIVE_STALL_SEC
-              value: "180"
+              value: "240"
           # startup gates on /alive (process up, loop scheduled): gating it on
           # /health would restart-loop a freshly booted pod whose Postgres or
           # broker is still coming up — readiness below handles that instead
@@ -77,7 +88,7 @@ spec:
             periodSeconds: 10
             failureThreshold: 3
           # liveness: conservative on purpose — the endpoint itself already
-          # waits out COLLECTIONS_ALIVE_STALL_SEC (180s, set explicitly above)
+          # waits out COLLECTIONS_ALIVE_STALL_SEC (240s, set explicitly above)
           # before turning 503, so consecutive failures here mean a genuinely
           # dead consumer thread; 3x20s on top avoids restarting on a single
           # hiccup

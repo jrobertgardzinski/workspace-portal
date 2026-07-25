@@ -10,11 +10,14 @@
 #                        to restart-loop this pod when liveness hit /health).
 #   /alive  (LIVENESS)   503 only when a loop THREAD died or stopped being
 #                        scheduled (OFFBOARDING_ALIVE_STALL_SEC: code default
-#                        120s, floored at a value DERIVED in Main from the
-#                        loop's own clocks — 2x max(delivery.timeout,
-#                        default.api.timeout, max backoff) + one sweep interval
-#                        + one broker probe, plus 25% margin, currently 100s.
-#                        This manifest overrides it to 180s below, on purpose).
+#                        240s, floored at a value DERIVED in Main from the
+#                        loops' own clocks — the SUM of one worst legal
+#                        iteration's blocks (rewind lookup + broker probe +
+#                        poll + database + send/flush + commit + max backoff =
+#                        146s), plus a 25% margin, currently 183s; the sweeper
+#                        loop is measured the same way and comes out shorter,
+#                        so the consumer sets the floor. This manifest pins
+#                        240s below, on purpose).
 #                        A restart is the cure for exactly that and nothing
 #                        else.
 apiVersion: apps/v1
@@ -57,14 +60,18 @@ spec:
                 secretKeyRef:
                   name: portal-db
                   key: POSTGRES_PASSWORD
-            # EXPLICIT on purpose, not the code default: the liveness verdict must stay
-            # strictly slower than the slowest honest Kafka pass — the loop's marker can
-            # legitimately go quiet for a full delivery.timeout.ms (30s) plus the backoff
-            # ladder, and 180s (six such windows) keeps a broker outage from ever reading
-            # as a dead thread. Keep in lockstep with the OFFBOARDING_ALIVE_STALL_SEC
-            # floor in microservice-offboarding's Main.
+            # EXPLICIT on purpose: the liveness verdict must stay strictly slower than the
+            # slowest HONEST pass, and that pass is not one clock but a sum — a rewind
+            # lookup, a probe, a poll, a database block, a flush, a commit and the backoff,
+            # 146s of legal waiting end to end. Was 180s here while the floor in Main was
+            # computed as 2x max(...) = 100s; the floor is now the honest sum + 25% = 183s,
+            # so 180 would have been SILENTLY RAISED to 183 at boot — a manifest that says
+            # one number while the process runs another. 240s (the code default, ~31% above
+            # the floor) is the value now, and it is pinned here so the manifest states it
+            # rather than inheriting it. Keep in lockstep with ALIVE_STALL_FLOOR in
+            # microservice-offboarding's Main: anything below it is silently corrected.
             - name: OFFBOARDING_ALIVE_STALL_SEC
-              value: "180"
+              value: "240"
           # startup gates on /alive (process up, loops scheduled): gating it on
           # /health would restart-loop a freshly booted pod whose Postgres or
           # broker is still coming up — readiness below handles that instead
@@ -84,7 +91,7 @@ spec:
             periodSeconds: 10
             failureThreshold: 3
           # liveness: conservative on purpose — the endpoint itself already
-          # waits out OFFBOARDING_ALIVE_STALL_SEC (180s, set explicitly above)
+          # waits out OFFBOARDING_ALIVE_STALL_SEC (240s, set explicitly above)
           # before turning 503, so consecutive failures here mean a genuinely
           # dead loop thread; 3x20s on top avoids restarting on a single hiccup
           livenessProbe:
