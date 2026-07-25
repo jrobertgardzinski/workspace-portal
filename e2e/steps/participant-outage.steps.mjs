@@ -20,6 +20,22 @@ function compose(...args) {
   return run('docker', ['compose', ...args], { cwd: WORKSPACE, timeout: 90_000 });
 }
 
+/**
+ * GUARD for every step that manipulates real infrastructure: only the outage runner
+ * (../e2e-saga-outage.sh) stages these steps, and it marks the run with E2E_OUTAGE_PROFILE=1.
+ * Without the marker the step refuses loudly BEFORE touching docker — so a feature that reuses
+ * "the favourites service is down" WITHOUT the @outage tag fails with this message instead of
+ * silently stopping a container in the middle of the default suite.
+ */
+function assertOutageRun(stepName) {
+  if (process.env.E2E_OUTAGE_PROFILE !== '1') {
+    throw new Error(
+      `"${stepName}" stops/starts real compose containers and may only run under `
+      + '../e2e-saga-outage.sh (which exports E2E_OUTAGE_PROFILE=1). Running in the default '
+      + 'suite? Then a feature is using this step without the @outage tag.');
+  }
+}
+
 /** Subjects of the two verdict mails security can send about a deletion. */
 const VERDICTS = [/your account is deleted/i, /could not delete your account/i];
 
@@ -44,6 +60,7 @@ Given('a signed-in user with a meme and a favourite', async function () {
 });
 
 Given('the favourites service is down', { timeout: 120_000 }, async function () {
+  assertOutageRun('the favourites service is down');   // refuse before touching any container
   this.collectionsStopped = true;   // the After hook restores it unconditionally
   await compose('stop', 'user-collections');
   // prove the outage is real: the health endpoint must stop answering

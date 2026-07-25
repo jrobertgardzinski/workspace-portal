@@ -51,6 +51,14 @@ spec:
                 secretKeyRef:
                   name: portal-db
                   key: POSTGRES_PASSWORD
+            # EXPLICIT on purpose, not the code default: the liveness verdict must stay
+            # strictly slower than the slowest honest Kafka pass — the consumer's marker
+            # can legitimately go quiet for a full delivery.timeout.ms (30s) plus the
+            # backoff ladder, and 180s (six such windows) keeps a broker outage from ever
+            # reading as a dead thread. Keep in lockstep with the
+            # COLLECTIONS_ALIVE_STALL_SEC floor in microservice-user-collections' Main.
+            - name: COLLECTIONS_ALIVE_STALL_SEC
+              value: "180"
           # startup gates on /alive (process up, loop scheduled): gating it on
           # /health would restart-loop a freshly booted pod whose Postgres or
           # broker is still coming up — readiness below handles that instead
@@ -69,9 +77,10 @@ spec:
             periodSeconds: 10
             failureThreshold: 3
           # liveness: conservative on purpose — the endpoint itself already
-          # waits out COLLECTIONS_ALIVE_STALL_SEC (120s) before turning 503,
-          # so consecutive failures here mean a genuinely dead consumer
-          # thread; 3x20s on top avoids restarting on a single hiccup
+          # waits out COLLECTIONS_ALIVE_STALL_SEC (180s, set explicitly above)
+          # before turning 503, so consecutive failures here mean a genuinely
+          # dead consumer thread; 3x20s on top avoids restarting on a single
+          # hiccup
           livenessProbe:
             httpGet:
               path: /alive

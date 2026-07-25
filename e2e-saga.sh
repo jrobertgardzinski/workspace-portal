@@ -17,6 +17,22 @@ COLLECTIONS_URL=${COLLECTIONS_URL:-http://localhost:8092}
 OFFBOARDING_URL=${OFFBOARDING_URL:-http://localhost:8094}
 MAILPIT_URL=${MAILPIT_URL:-http://localhost:8025}
 
+# the harness needs Node >= 20.3 (AbortSignal.any in e2e/support/world.mjs) — say so up front
+# instead of failing mid-scenario with a bare TypeError
+node -e 'const [maj,min]=process.versions.node.split(".").map(Number); if (maj<20||(maj===20&&min<3)) { console.error(`FAIL: the e2e harness needs Node >= 20.3 (AbortSignal.any), found ${process.versions.node}`); process.exit(1); }'
+
+# heal a leftover of an interrupted @outage run: participant-outage stops user-collections, and
+# a run killed mid-scenario leaves it stopped — start it here (the same self-healing preflight
+# as ./e2e-saga-outage.sh), so the aliveness check below reports real trouble, not old trouble
+if ! docker compose ps --services --status running 2>/dev/null | grep -qx user-collections; then
+    echo "== user-collections is not running (leftover of an interrupted @outage run?) — starting it"
+    docker compose start user-collections >/dev/null 2>&1 || true
+    for i in $(seq 1 30); do
+        curl -sf --max-time 3 "$COLLECTIONS_URL/health" >/dev/null 2>&1 && break
+        sleep 2
+    done
+fi
+
 echo "== checking every member of the chain is alive"
 down=()
 for probe in "security $SECURITY_URL/health" \
