@@ -1,8 +1,17 @@
 # microservice-offboarding — the account-deletion saga's process manager.
 # Participants are CONFIGURATION (OFFBOARDING_PARTICIPANTS) — a new content
-# service joins the saga here, without touching security. Its /health goes 503
-# when the consumer or sweeper loop dies; the liveness probe turns that into a
-# restart — precisely the behaviour the 503 was added for.
+# service joins the saga here, without touching security.
+#
+# Probes — two endpoints, two different questions:
+#   /health (READINESS)  503 when a loop stops COMPLETING passes (broker or
+#                        database away). Readiness only takes the pod out of
+#                        traffic/gating — restarting would not fix the broker,
+#                        so liveness must NOT bite here (a down Postgres used
+#                        to restart-loop this pod when liveness hit /health).
+#   /alive  (LIVENESS)   503 only when a loop THREAD died or stopped being
+#                        scheduled (OFFBOARDING_ALIVE_STALL_SEC, default 120s
+#                        = four max backoffs). A restart is the cure for
+#                        exactly that and nothing else.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -43,23 +52,34 @@ spec:
                 secretKeyRef:
                   name: portal-db
                   key: POSTGRES_PASSWORD
+          # startup gates on /alive (process up, loops scheduled): gating it on
+          # /health would restart-loop a freshly booted pod whose Postgres or
+          # broker is still coming up — readiness below handles that instead
           startupProbe:
             httpGet:
-              path: /health
+              path: /alive
               port: http
             periodSeconds: 5
             failureThreshold: 36
+          # readiness: forgiving thresholds — flapping in and out of the
+          # Service on a single slow pass helps nobody; ~30s of failed checks
+          # takes the pod out of traffic/gating, recovery puts it back
           readinessProbe:
             httpGet:
               path: /health
               port: http
             periodSeconds: 10
+            failureThreshold: 3
+          # liveness: conservative on purpose — the endpoint itself already
+          # waits out OFFBOARDING_ALIVE_STALL_SEC (120s) before turning 503,
+          # so consecutive failures here mean a genuinely dead loop thread;
+          # 3x20s on top avoids restarting on a single hiccup
           livenessProbe:
             httpGet:
-              path: /health
+              path: /alive
               port: http
-            periodSeconds: 15
-            failureThreshold: 4
+            periodSeconds: 20
+            failureThreshold: 3
           resources:
             requests:
               cpu: 150m

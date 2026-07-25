@@ -64,7 +64,9 @@ user-collections 8092, offboarding 8094, MinIO 9000, Kafka 9092, Mailpit
 8025/1025, each Postgres 5432). Peek at internals with a port-forward, e.g.:
 
 ```bash
-kubectl -n portal port-forward svc/mailpit 8025:8025   # the "inbox" UI
+# host port 8026 on purpose (same example as base/mailpit.yaml): when the
+# compose stack runs on this machine, IT already owns host port 8025
+kubectl -n portal port-forward svc/mailpit 8026:8025   # the "inbox" UI
 kubectl -n portal port-forward svc/user-collections 8092:8092
 ```
 
@@ -76,11 +78,16 @@ with the same plaintext defaults compose uses: `secret` (all Postgres),
 client). Acceptable for a throwaway local cluster only — a hosted overlay
 (HOSTING-K3S.md) must bring SealedSecrets/ExternalSecrets instead of literals.
 
-## Probes — the /health work pays off
+## Probes — readiness and liveness are different questions
 
-- **offboarding** and **user-collections**: liveness on `/health`, which turns
-  503 when the saga consumer/sweeper loop dies — a dead loop now means a pod
-  restart instead of an open port hiding a corpse. Exactly what those
+- **offboarding** and **user-collections**: **readiness on `/health`** (503
+  when a loop stops completing passes — broker or database away; the pod
+  leaves traffic/gating and comes back when the dependency does) and
+  **liveness on `/alive`** (503 only when a loop thread died or stopped being
+  scheduled past `*_ALIVE_STALL_SEC`, default 120s — the one failure a
+  restart actually cures). Liveness used to hit `/health` too, which
+  restart-looped these pods whenever their Postgres was down; a dead loop
+  still gets bounced, an outage no longer does. Exactly what those
   endpoints were built for.
 - **memes/comments** (Spring Boot): `/actuator/health/{liveness,readiness}` —
   auto-enabled when Spring detects Kubernetes.
@@ -88,6 +95,17 @@ client). Acceptable for a throwaway local cluster only — a hosted overlay
   ships no health extension — same as compose); Python stubs: TCP or `/health`.
 - JVMs get a generous `startupProbe` (up to 5 min) instead of huge
   initialDelays.
+
+## Env pins the deployment must respect
+
+- **memes**: never set `SPRING_DATASOURCE_HIKARI_AUTO_COMMIT=false`. The
+  repo pins autocommit in a test that does not see env overrides, and the
+  after-commit sweeps on the DB blob store rely on the connection's
+  autocommit being restored — an env override would silently break them
+  in production while every test stays green.
+- **memes**: `MEMES_DECODE_CONCURRENCY` (default 3) caps concurrent image
+  decodes; the memory limit in `base/memes.yaml` is sized for 3 × ~256 MB
+  worst-case decodes — raise them together or not at all.
 
 ## Deliberately missing vs compose
 
@@ -108,8 +126,9 @@ client). Acceptable for a throwaway local cluster only — a hosted overlay
   cluster therefore still aim their **browser** calls at the compose stack; a
   k8s-native UI build (and security CORS entries for the new origins) is a
   follow-up. API-level flows through the Ingress are fully functional.
-- **Resources**: modest requests (~2.5 GB total) and memory limits (~6 GB
-  total) per HOSTING-K3S.md's small-node budget; CPU limits are omitted on
+- **Resources**: modest requests (~2.9 GiB total) and memory limits
+  (~7.3 GiB total — memes alone carries 1.5 GiB for its 3-decode burst
+  budget) per HOSTING-K3S.md's small-node budget; CPU limits are omitted on
   purpose — throttling JVM startup only makes probes lie.
 - **Images**: local compose tags (`security-*:latest`) + `imagePullPolicy:
   Never` in the dev overlay; the hosted setup swaps these for GHCR-pushed tags.

@@ -20,9 +20,14 @@ setDefaultTimeout(90_000);
  * call (AbortError) instead of pinning it — `eventually` then retries, and the After-hook's
  * best-effort farewell stays best-effort instead of eating the whole cucumber step budget and
  * failing a green scenario on a timeout that was never the scenario's fault.
+ *
+ * A caller's own `options.signal` is respected, not overwritten: both signals abort the call,
+ * whichever fires first.
  */
 export function boundedFetch(url, options = {}) {
-  return fetch(url, { ...options, signal: AbortSignal.timeout(10_000) });
+  const cap = AbortSignal.timeout(10_000);
+  const signal = options.signal ? AbortSignal.any([options.signal, cap]) : cap;
+  return fetch(url, { ...options, signal });
 }
 
 let counter = 0;

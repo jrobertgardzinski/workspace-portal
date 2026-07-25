@@ -1,9 +1,18 @@
 # microservice-user-collections — Helidon SE on virtual threads; the user's
-# saved refs and the saga's third participant. Its /health WATCHES the
-# purge-consumer loop and turns 503 when the loop stops completing cycles
-# (COLLECTIONS_CONSUMER_STALL_SEC, default 60s) — the liveness probe below is
-# exactly what that was built for: a dead consumer now means a pod restart,
-# not an open port hiding a corpse.
+# saved refs and the saga's third participant.
+#
+# Probes — two endpoints, two different questions:
+#   /health (READINESS)  503 when the purge-consumer loop stops COMPLETING
+#                        cycles (COLLECTIONS_CONSUMER_STALL_SEC, default 60s)
+#                        — broker or database away. Readiness only takes the
+#                        pod out of traffic/gating; restarting would not fix
+#                        the dependency (a down Postgres used to restart-loop
+#                        this pod when liveness hit /health).
+#   /alive  (LIVENESS)   503 only when the consumer THREAD died or stopped
+#                        being scheduled (COLLECTIONS_ALIVE_STALL_SEC, default
+#                        120s). A restart is the cure for exactly that — an
+#                        open port no longer hides a corpse, and an outage no
+#                        longer gets pods bounced for no gain.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -42,23 +51,33 @@ spec:
                 secretKeyRef:
                   name: portal-db
                   key: POSTGRES_PASSWORD
+          # startup gates on /alive (process up, loop scheduled): gating it on
+          # /health would restart-loop a freshly booted pod whose Postgres or
+          # broker is still coming up — readiness below handles that instead
           startupProbe:
             httpGet:
-              path: /health
+              path: /alive
               port: http
             periodSeconds: 5
             failureThreshold: 36
+          # readiness: forgiving thresholds — ~30s of failed checks takes the
+          # pod out of traffic/gating, recovery puts it back; no restarts here
           readinessProbe:
             httpGet:
               path: /health
               port: http
             periodSeconds: 10
+            failureThreshold: 3
+          # liveness: conservative on purpose — the endpoint itself already
+          # waits out COLLECTIONS_ALIVE_STALL_SEC (120s) before turning 503,
+          # so consecutive failures here mean a genuinely dead consumer
+          # thread; 3x20s on top avoids restarting on a single hiccup
           livenessProbe:
             httpGet:
-              path: /health
+              path: /alive
               port: http
-            periodSeconds: 15
-            failureThreshold: 4
+            periodSeconds: 20
+            failureThreshold: 3
           resources:
             requests:
               cpu: 150m

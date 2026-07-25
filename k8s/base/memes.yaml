@@ -59,6 +59,20 @@ spec:
                 secretKeyRef:
                   name: minio-creds
                   key: MINIO_ROOT_PASSWORD
+            # JVM-wide cap on concurrent image decodes. The per-image bomb
+            # guard (8000px per side) still admits ~256 MB of heap PER DECODE
+            # at 16-bit depth, so without this cap N parallel uploads could
+            # stack enough decodes to take the heap down; the 4th concurrent
+            # decode now waits briefly and is refused with 429 + Retry-After.
+            # The memory limit below is sized for exactly this worst case.
+            - name: MEMES_DECODE_CONCURRENCY
+              value: "3"
+            # let the heap actually reach the decode budget: the default 25%
+            # of a 1.5Gi limit (~384Mi) could not hold even two worst-case
+            # decodes; 70% ≈ 1075Mi covers 3 x ~256Mi + the app's baseline,
+            # leaving ~460Mi headroom for metaspace/threads/native
+            - name: JDK_JAVA_OPTIONS
+              value: "-XX:MaxRAMPercentage=70"
           startupProbe:
             httpGet:
               path: /actuator/health/readiness
@@ -76,12 +90,17 @@ spec:
               port: http
             periodSeconds: 15
             failureThreshold: 4
+          # sized for MEMES_DECODE_CONCURRENCY=3: three worst-case decodes are
+          # ~768Mi of heap on their own, plus the app's working heap and the
+          # JVM's non-heap — the old 768Mi limit would OOM under exactly the
+          # load the semaphore admits. Request stays modest (decodes are
+          # bursts, not steady state); the limit carries the burst.
           resources:
             requests:
               cpu: 250m
-              memory: 384Mi
+              memory: 512Mi
             limits:
-              memory: 768Mi
+              memory: 1536Mi
 ---
 apiVersion: v1
 kind: Service
