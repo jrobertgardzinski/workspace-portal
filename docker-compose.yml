@@ -25,7 +25,11 @@ include:
   - ../shared/docker-compose.observability.yml
 
 x-otel-agent: &otel-agent
-  JAVA_TOOL_OPTIONS: "-javaagent:/otel/opentelemetry-javaagent.jar"
+  # infra-up.sh exports OTEL_JAVA_TOOL_OPTIONS="" when the agent jar could not be fetched:
+  # a -javaagent pointing at a missing file aborts the JVM, which would crash-loop every
+  # JVM service instead of the promised "start without tracing" (no-colon ${VAR-...} so an
+  # explicitly empty value disables the agent, absence keeps it)
+  JAVA_TOOL_OPTIONS: ${OTEL_JAVA_TOOL_OPTIONS--javaagent:/otel/opentelemetry-javaagent.jar}
   OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
   OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
   OTEL_TRACES_EXPORTER: otlp
@@ -36,6 +40,7 @@ services:
   memes:
     build:
       context: microservice-memes
+    restart: unless-stopped
     ports:
       - "8083:8083"
     environment:
@@ -95,6 +100,7 @@ services:
   image-encoder:
     build:
       context: microservice-image
+    restart: unless-stopped
     # internal only — memes calls it; not published to the host
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8087), 2)"]
@@ -120,6 +126,7 @@ services:
   comments:
     build:
       context: microservice-comments
+    restart: unless-stopped
     ports:
       - "8085:8085"
     environment:
@@ -172,6 +179,7 @@ services:
   user-collections:
     build:
       context: microservice-user-collections
+    restart: unless-stopped
     ports:
       - "8092:8092"
     environment:
@@ -184,8 +192,12 @@ services:
       SECURITY_URL: http://security:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     healthcheck:
-      # alpine image: busybox nc, not bash /dev/tcp
-      test: ["CMD", "nc", "-z", "localhost", "8092"]
+      # busybox wget against the real /health endpoint — a TCP-open check (nc -z) kept
+      # reporting healthy while the saga consumer thread was dead. /health itself now watches
+      # that thread: it turns 503 once the purge-consumer loop stops completing cycles for
+      # longer than COLLECTIONS_CONSUMER_STALL_SEC (default 60s), so a dead consumer now
+      # flips the container unhealthy instead of hiding behind an open port
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8092/health"]
       interval: 3s
       timeout: 3s
       retries: 40
@@ -205,6 +217,7 @@ services:
   collections-ui:
     build:
       context: microservice-user-collections/collections-ui
+    restart: unless-stopped
     ports:
       - "8093:80"
     healthcheck:
@@ -236,6 +249,7 @@ services:
   offboarding:
     build:
       context: microservice-offboarding
+    restart: unless-stopped
     ports:
       - "8094:8094"
     environment:
@@ -248,8 +262,9 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-secret}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     healthcheck:
-      # alpine image: busybox nc, not bash /dev/tcp
-      test: ["CMD", "nc", "-z", "localhost", "8094"]
+      # busybox wget against the real /health endpoint — /health now goes 503 when the
+      # consumer or sweeper loop is dead, which a TCP-open check (nc -z) never noticed
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8094/health"]
       interval: 3s
       timeout: 3s
       retries: 40

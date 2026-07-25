@@ -15,6 +15,11 @@ if [ ! -f "$OTEL_AGENT" ]; then
         "https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.29.0/opentelemetry-javaagent.jar" \
         || { echo "WARNING: could not fetch the OTel agent; JVM services will start without tracing"; rm -f "$OTEL_AGENT"; }
 fi
+# no agent jar -> disable the -javaagent flag in the compose file, otherwise every JVM
+# service would abort on the missing jar and the warning above would be a lie
+if [ ! -f "$OTEL_AGENT" ]; then
+    export OTEL_JAVA_TOOL_OPTIONS=""
+fi
 
 # build order across workspaces: the shared kernel first (its install feeds ~/.m2 with the
 # libraries this reactor depends on AND packages the identity jars the compose build needs),

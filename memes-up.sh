@@ -8,6 +8,16 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# same guard as infra-up.sh: the compose anchor points JAVA_TOOL_OPTIONS at the mounted OTel
+# agent jar, and a -javaagent aimed at a missing file aborts every JVM service. This script
+# does not fetch the agent (the memes world starts no Tempo to receive traces — infra-up.sh
+# is the one that provisions it), so when the jar is absent just disable the flag; when
+# infra-up.sh fetched it earlier, the services come up traced as usual
+OTEL_AGENT=../shared/observability/otel/opentelemetry-javaagent.jar
+if [ ! -f "$OTEL_AGENT" ]; then
+    export OTEL_JAVA_TOOL_OPTIONS=""
+fi
+
 # shared kernel first (libs into ~/.m2 + identity jars; voting rides along — the gallery and
 # comments vote through it), then just the memes-world jars
 (cd ../shared && ./mvnw -q -pl microservice-security/security-infrastructure,microservice-email,voting -am install -DskipTests)

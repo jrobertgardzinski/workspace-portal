@@ -1,0 +1,13 @@
+{
+  "name": "portal-e2e-saga",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "User-language end-to-end of the account-deletion saga against the LIVE portal stack",
+  "scripts": {
+    "test": "cucumber-js --config cucumber.mjs"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "^11.3.0"
+  }
+}
