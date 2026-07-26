@@ -142,6 +142,22 @@ class SagaWorld {
     return (await r.json()).id;
   }
 
+  /**
+   * The ids on one page of the PUBLIC wall.
+   *
+   * The gallery listing is PAGED and caps its size server-side, so "the wall" is never a request
+   * for everything — and a scenario that asks for the default page is asking a question it cannot
+   * state. Every step that reads absence out of the listing goes through here: the page is named
+   * explicitly, because an absence proves nothing if nobody can say what was searched. Page 0 with
+   * a full-size page is the honest default for these scenarios — the listing is newest-first and
+   * the memes involved were uploaded minutes ago, so page 0 is the page they would be on.
+   */
+  async wallIds({ page = 0, size = 100 } = {}) {
+    const r = await boundedFetch(`${MEMES}/memes?page=${page}&size=${size}`);
+    if (!r.ok) throw new Error(`gallery listing failed: ${r.status}`);
+    return (await r.json()).map((row) => row.id);
+  }
+
   /** The public comment thread under a meme. */
   async commentsUnder(memeId) {
     const r = await boundedFetch(`${COMMENTS}/memes/${memeId}/comments`);
@@ -150,14 +166,37 @@ class SagaWorld {
   }
 
   /** Saves a meme into the account's favourites and proves the save took. */
-  async saveFavourite(token, memeId) {
-    const put = await boundedFetch(`${COLLECTIONS}/collections/favourites/items/meme/${memeId}`, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  saveFavourite(token, memeId) {
+    return this.saveRef(token, 'meme', memeId);
+  }
+
+  /**
+   * Saves ANY reference into the account's favourites and proves the save took. The collection is
+   * a bag of opaque `(itemType, itemId)` pointers — a comment is as savable as a meme, which is
+   * what the second hop of the deletion cascade is about — so the type is the caller's word.
+   * Verified by finding THIS ref rather than by counting: a scenario may save more than one.
+   */
+  async saveRef(token, itemType, itemId) {
+    const put = await boundedFetch(
+      `${COLLECTIONS}/collections/favourites/items/${itemType}/${itemId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+      });
     if (!put.ok) throw new Error(`favourite save refused: ${put.status}`);
     const items = await this.favourites(token);
-    if (items.length < 1) throw new Error('favourite did not appear in the list');
+    if (!items.some((ref) => ref.itemType === itemType && ref.itemId === itemId)) {
+      throw new Error(`the saved ${itemType} did not appear in the list`);
+    }
+  }
+
+  /** Takes a meme down as its author would, through the gallery's own endpoint. */
+  async deleteMeme(token, memeId) {
+    const r = await boundedFetch(`${MEMES}/memes/${memeId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) throw new Error(`meme deletion refused: ${r.status}`);
+    return r.json();
   }
 
   /** The account's saved favourites. The access token verifies OFFLINE in user-collections

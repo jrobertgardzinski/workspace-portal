@@ -120,6 +120,10 @@ Then('their meme has already disappeared from the gallery', async function () {
   await this.eventually(async () => {
     const direct = await boundedFetch(`${MEMES}/memes/${this.ownMemeId}`);
     assert.equal(direct.status, 404, `the meme still answers ${direct.status}`);
+    // and gone from the WALL, which is what "from the gallery" says: the listing is paged, so the
+    // page is named (world.wallIds) — the same question account-deletion's step asks
+    const wall = await this.wallIds();
+    assert.ok(!wall.includes(this.ownMemeId), 'the meme still hangs on the public wall');
   });
 });
 
@@ -141,6 +145,8 @@ Then('their meme stays gone', async function () {
   // long ago and the failure outcome names that partial purge — the meme must not resurrect
   const direct = await boundedFetch(`${MEMES}/memes/${this.ownMemeId}`);
   assert.equal(direct.status, 404, `the purged meme answers ${direct.status} again`);
+  const wall = await this.wallIds();
+  assert.ok(!wall.includes(this.ownMemeId), 'the purged meme is back on the public wall');
 });
 
 // ---------------------------------------------------------------------------------------------

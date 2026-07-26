@@ -59,7 +59,10 @@ Then('their meme disappears from the gallery', async function () {
   await this.eventually(async () => {
     const direct = await boundedFetch(`${MEMES}/memes/${this.ownMemeId}`);
     assert.equal(direct.status, 404, `the meme still answers ${direct.status}`);
-    const wall = await (await boundedFetch(`${MEMES}/memes`)).text();
+    // the wall is PAGED now, so "not in the listing" only means something for a page the meme
+    // would actually be on — world.wallIds names that page explicitly (page 0, newest-first),
+    // and every scenario that reads absence out of the listing asks the same way
+    const wall = await this.wallIds();
     assert.ok(!wall.includes(this.ownMemeId), 'the meme still hangs on the public wall');
   });
 });
