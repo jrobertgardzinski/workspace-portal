@@ -1,0 +1,278 @@
+name: Saga e2e (full stack)
+
+# The account-deletion saga end to end: ./e2e-saga.sh — four scenarios told in the user's language
+# against the LIVE compose stack (real security, real broker, real mailbox, real content services),
+# plus the two MEME_DELETED cascades. Until this file existed, the only e2e in CI was the gallery's
+# browser suite, and NONE of its assertions reach past the moment the deletion request is accepted
+# (an account in limbo answers 401 exactly like a deleted one). A typo in a confirmation topic —
+# OFFBOARDING_PARTICIPANTS, a k8s overlay, a renamed topic — therefore passed the whole Maven
+# reactor, every pact and that suite without one red mark, while in production the content was
+# already gone and the saga capitulated. This workflow is the missing red mark.
+#
+# WHY IT IS NOT ON push/pull_request (YET)
+# ----------------------------------------
+# Not because the suite is slow. Measured against the live stack on 2026-07-26 it is the cheapest
+# thing in this repository: 4 scenarios, 21 steps, 10.1 seconds. Every minute this job spends goes
+# on the stack UNDER it — the kernel install, the reactor jars, eleven image builds, twenty-six
+# containers coming up.
+#
+# The reason is that NOBODY HAS EVER SEEN THAT STACK COME UP ON A HOSTED RUNNER. The gallery's e2e
+# job is supposed to do it (run-e2e.sh has called ./infra-up.sh since 2026-07-20) but it could not
+# have succeeded once: four build contexts — image-encoder, idp, sms, push — were never checked
+# out, so `docker compose up --build` failed before the first container, and the last recorded CI
+# run on this repo (2026-07-15) predates the change entirely. That gap is fixed in ci.yml now, but
+# fixed-in-theory is not the same as observed: twenty-six containers on four vCPUs, 16 GB of RAM
+# and ~14 GB of disk is a claim, not a measurement.
+#
+# You do not put an unmeasured half-hour job in front of every pull request. So this one runs where
+# a false red costs nobody a merge — nightly — plus a button for whoever is touching the saga right
+# now. After a few nights have shown real durations, promoting it is a decision with data behind
+# it, and the cheap promotion is obvious: the gallery's e2e job already stands the same stack up, so
+# running these ten seconds there (KEEP_STACK=1 + one step) would cost almost nothing. The reason
+# not to do that TODAY is coupling, not cost: it would make the saga's only automated proof
+# hostage to a browser suite's flakiness, which is the same shape of dependency the audit
+# complained about.
+#
+# One forward-looking caveat for whoever promotes it: these scenarios assert on which side of the
+# saga's absolute wall-clock budget reality landed — a 120s purge timeout, 15s sweeps, three
+# re-commands, ~165s to capitulation (SweepOverdue + KafkaLoop). The happy path clears that by
+# three orders of magnitude, so this is not today's problem; but on a starved runner it is the
+# thing that would go red for the weather instead of for the diff, and no timeout can be raised to
+# fix it, because the budget IS what is under test.
+#
+# @outage (participant-outage.feature) stays out of the scheduled run: it stops and starts a real
+# container and spends minutes watching the retry budget burn down on purpose. Ask for it by hand
+# with the `outage` input. To have the nightly cover the compensation path too, add a second cron
+# or flip that input's default — deliberately left to the owner, because it doubles the runtime.
+
+on:
+  schedule:
+    # 02:17 UTC — deliberately off the top of the hour, where every other cron on GitHub queues
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+    inputs:
+      outage:
+        description: 'Also run @outage (stops a container, watches the saga capitulate; +several minutes)'
+        type: boolean
+        default: false
+
+concurrency:
+  # two runs of this workflow are two full builds and two full stacks for one answer; let the
+  # newer one wait rather than cancel, so a nightly result is never thrown away half-finished
+  group: e2e-saga-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  saga:
+    runs-on: ubuntu-latest
+    # the honest ceiling for: build the kernel, build the reactor jars, build eleven images, boot
+    # twenty-six containers, then run the suites. A stack that wedges must not sit here for hours.
+    timeout-minutes: 60
+    env:
+      # five JVMs on four vCPUs, and the OpenTelemetry agent buys nothing for scenarios that assert
+      # on HTTP and mail. docker-compose.yml reads ${OTEL_JAVA_TOOL_OPTIONS--javaagent:...} with NO
+      # colon, so an explicitly EMPTY value detaches the agent (an ABSENT one would keep it), and
+      # infra-up.sh reads the same signal to skip the 21 MB download.
+      OTEL_JAVA_TOOL_OPTIONS: ''
+      # e2e/preflight-stack.sh starts a user-collections container it finds stopped. On a developer's
+      # disk that is right (an interrupted @outage run leaves it stopped); in CI a container that
+      # went down on its own must FAIL the run instead of being restarted underneath it.
+      E2E_STRICT_PREFLIGHT: '1'
+    steps:
+      # The three-workspace layout, reproduced exactly as on a developer's disk — shared/ (the
+      # kernel) next to portal/ — because the compose file reaches the identity services through
+      # ../shared/docker-compose.identity.yml and infra-up.sh builds the kernel through ../shared.
+      # NOTE: this list is longer than the one in ci.yml on purpose. That one only needs what Maven
+      # compiles; `docker compose up --build` also needs a BUILD CONTEXT for every service in the
+      # merged file — including the four that carry no Java at all (idp, sms, push, image-encoder).
+      - name: Checkout this workspace as portal/
+        uses: actions/checkout@v4
+        with:
+          path: portal
+
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/workspace-shared
+          path: shared
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/adjustable-clock
+          path: shared/adjustable-clock
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/infrastructure-micronaut-clock
+          path: shared/infrastructure-micronaut-clock
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/voting
+          path: shared/voting
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/offline-jwt
+          path: shared/offline-jwt
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/test-starter
+          path: shared/test-starter
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/libs   # the constraint lib lives in repo "libs"
+          path: shared/constraint
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/config
+          path: shared/config
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/email
+          path: shared/email
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/password
+          path: shared/password
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/microservice-security
+          path: shared/microservice-security
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/microservice-email
+          path: shared/microservice-email
+          token: ${{ secrets.REPO_PAT }}
+      # the three identity services the Maven jobs never touch, because they are Python — but
+      # `docker compose up --build` needs their Dockerfiles, and without them the BUILD fails
+      # before a single container starts
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/microservice-idp
+          path: shared/microservice-idp
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/microservice-sms
+          path: shared/microservice-sms
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/microservice-push
+          path: shared/microservice-push
+          token: ${{ secrets.REPO_PAT }}
+
+      # the portal's own children — microservice-image is Python for the same reason, and memes
+      # calls it for WebP, so its context has to be here too
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/microservice-memes
+          path: portal/microservice-memes
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/microservice-comments
+          path: portal/microservice-comments
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/microservice-user-collections
+          path: portal/microservice-user-collections
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/microservice-offboarding
+          path: portal/microservice-offboarding
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/microservice-image
+          path: portal/microservice-image
+          token: ${{ secrets.REPO_PAT }}
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: portal/e2e/package-lock.json
+
+      # eleven images built plus a dozen pulled is several GB, and a hosted runner ships with ~14 GB
+      # free. Running out of disk halfway through a `docker build` is this job's most boring
+      # possible failure, and the toolchains below are of no use to it. `df -h` stays in the log so
+      # the next reader can see whether this step still earns its minute.
+      - name: Free the runner's disk of toolchains this job never uses
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost || true
+          df -h /
+
+      - name: Install the saga harness (cucumber-js)
+        run: npm ci
+        working-directory: portal/e2e
+
+      # infra-up.sh does the whole build itself: the shared kernel first (it feeds ~/.m2 and
+      # packages the identity jars the images copy in), then the portal reactor, then
+      # `docker compose up --build -d`.
+      - name: Build the jars and bring the whole stack up
+        run: ./infra-up.sh
+        working-directory: portal
+
+      # `up -d` returns when the containers are STARTED. depends_on gates the dependants on the
+      # databases, the broker and security being healthy, but the JVMs on top are merely launched —
+      # and e2e-saga.sh's own aliveness probe allows three seconds per service, which is a cold-JVM
+      # trap. Wait properly, and name the offender if it never arrives.
+      - name: Wait for every service to report healthy
+        run: ./wait-healthy.sh 900
+        working-directory: portal
+
+      - name: The saga in the user's language (4 scenarios, incl. the MEME_DELETED cascade)
+        run: ./e2e-saga.sh
+        working-directory: portal
+
+      # only on request: this one stops a real container and spends minutes watching the retry
+      # budget burn down until the account is handed back
+      - name: The saga under a participant's outage (@outage)
+        if: ${{ inputs.outage }}
+        run: ./e2e-saga-outage.sh
+        working-directory: portal
+
+      - name: What the stack looked like when it failed
+        if: failure()
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color --timestamps > /tmp/portal-stack.log 2>&1 || true
+          tail -n 200 /tmp/portal-stack.log
+        working-directory: portal
+
+      - name: Upload the stack's logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: saga-e2e-stack-logs
+          path: /tmp/portal-stack.log
+          if-no-files-found: warn
+
+      # A hosted runner is thrown away after this, so `down` is only hygiene there — but this
+      # workflow must stay safe to run on a self-hosted runner too, where the volumes would
+      # otherwise pile up between nights. NOTE for that case: the compose project is shared with
+      # ../formula (both are named "security"), so `down -v` on a machine that hosts a real dev
+      # stack takes that stack's databases with it.
+      - name: Take the stack down
+        if: always()
+        run: ./infra-down.sh -v
+        working-directory: portal

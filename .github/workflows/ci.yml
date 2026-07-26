@@ -125,7 +125,10 @@ jobs:
         working-directory: portal
 
   # The gallery driven through a real browser (cucumber-js + Playwright): the memes-ui harness
-  # boots security from ../../../shared and its portal neighbours from the reactor's jars.
+  # boots the REAL compose stack (run-e2e.sh -> ../../infra-up.sh) and drives the gallery in it.
+  # Its assertions stop at the browser's edge, though — for the account-deletion SAGA (the
+  # confirmations, the outcome, the farewell mail) see the sibling workflow e2e-saga.yml, which is
+  # nightly and manual rather than per-PR, and says in its own header why.
   e2e:
     runs-on: ubuntu-latest
     steps:
@@ -212,6 +215,32 @@ jobs:
         with:
           repository: jrobertgardzinski/microservice-offboarding
           path: portal/microservice-offboarding
+          token: ${{ secrets.REPO_PAT }}
+      # The four services that carry no Java, and that no Maven job ever needs — but run-e2e.sh
+      # now starts the REAL stack (./infra-up.sh, since 2026-07-20: „an end-to-end missing a member
+      # proves nothing about the member it skipped"), and `docker compose up --build` builds EVERY
+      # service in the merged file. Without these four contexts on disk the build fails before a
+      # single container starts, so a job that had been passing on four jars cannot pass any more
+      # without them.
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/microservice-image
+          path: portal/microservice-image
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/microservice-idp
+          path: shared/microservice-idp
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/microservice-sms
+          path: shared/microservice-sms
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/microservice-push
+          path: shared/microservice-push
           token: ${{ secrets.REPO_PAT }}
 
       - name: Set up JDK 25

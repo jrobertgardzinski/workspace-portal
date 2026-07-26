@@ -8,7 +8,14 @@ cd "$(dirname "$0")"
 # volume, not baked into the images — fetch it once into the SHARED workspace (the identity
 # compose owns observability/); gitignored there, ~21 MB
 OTEL_AGENT=../shared/observability/otel/opentelemetry-javaagent.jar
-if [ ! -f "$OTEL_AGENT" ]; then
+# an OTEL_JAVA_TOOL_OPTIONS that is SET AND EMPTY means "no agent, on purpose" — the same signal
+# the compose file reads (no-colon ${VAR-...}), and the CI saga job sets it: five JVMs each paying
+# the agent's startup on a four-vCPU runner costs minutes and buys nothing for scenarios that
+# assert on mail and HTTP. Then there is no jar to fetch either, so 21 MB do not travel for
+# nothing. `${VAR+set}` first, because -u would abort on the emptiness test of an unset variable.
+if [ -n "${OTEL_JAVA_TOOL_OPTIONS+set}" ] && [ -z "$OTEL_JAVA_TOOL_OPTIONS" ]; then
+    echo "OTEL_JAVA_TOOL_OPTIONS is explicitly empty — starting without tracing, not fetching the agent"
+elif [ ! -f "$OTEL_AGENT" ]; then
     echo "fetching the OpenTelemetry Java agent..."
     mkdir -p ../shared/observability/otel
     curl -sfL -o "$OTEL_AGENT" \
@@ -16,7 +23,8 @@ if [ ! -f "$OTEL_AGENT" ]; then
         || { echo "WARNING: could not fetch the OTel agent; JVM services will start without tracing"; rm -f "$OTEL_AGENT"; }
 fi
 # no agent jar -> disable the -javaagent flag in the compose file, otherwise every JVM
-# service would abort on the missing jar and the warning above would be a lie
+# service would abort on the missing jar and the warning above would be a lie (this also
+# re-affirms the deliberate opt-out above, which is already empty)
 if [ ! -f "$OTEL_AGENT" ]; then
     export OTEL_JAVA_TOOL_OPTIONS=""
 fi
