@@ -275,6 +275,12 @@ jobs:
       - name: Install voting (the gallery and comments vote through it)
         run: ./mvnw -B -q --no-transfer-progress -pl voting -am install -DskipTests
         working-directory: shared
+      # memes and comments publish their saga events through the outbox, and neither module sits in
+      # the closure of security-infrastructure or voting — so without this step the jars above
+      # resolve fine and the portal build dies on a missing SNAPSHOT.
+      - name: Install the outbox (memes and comments publish their saga events through it)
+        run: ./mvnw -B -q --no-transfer-progress -pl transactional-outbox,infrastructure-spring-outbox -am install -DskipTests
+        working-directory: shared
       - name: Build the portal jars (deps closure, no tests)
         run: ./mvnw -B -q --no-transfer-progress -pl microservice-memes/memes-infrastructure,microservice-comments,microservice-user-collections -am package -DskipTests
         working-directory: portal
