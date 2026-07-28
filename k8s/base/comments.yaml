@@ -10,6 +10,14 @@ metadata:
     app.kubernetes.io/part-of: portal
 spec:
   replicas: 1
+  # Recreate, not the default RollingUpdate. This service runs an outbox republisher, and the poll
+  # is a plain SELECT — no FOR UPDATE SKIP LOCKED, no lease — so two relays alive at once both pick
+  # the same batch and both send it. RollingUpdate guarantees exactly that overlap on EVERY deploy:
+  # the new pod starts before the old one goes. Consumers are idempotent, so the cost is duplicates
+  # rather than damage, but after a broker outage it is a duplicate storm of the whole backlog.
+  # The same shape as the offboarding sweeper (P12 S6).
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: comments
