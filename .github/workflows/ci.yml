@@ -269,6 +269,19 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+      # The runner's stock Compose refuses a service that a local file and an included file both
+      # name ("services.idp conflicts with imported resource"). This compose does exactly that on
+      # purpose: the identity and observability services are DEFINED in ../shared and portal only
+      # adds `restart: unless-stopped` on top of them, so a host reboot brings the whole stack back.
+      # Newer Compose merges that override, which is why it works on a developer's disk and not
+      # here. Pinned to the version the workspace is actually developed against.
+      - name: Use a Compose that merges include overrides (see the restart block in docker-compose.yml)
+        run: |
+          mkdir -p ~/.docker/cli-plugins
+          curl -sSL https://github.com/docker/compose/releases/download/v5.1.1/docker-compose-linux-x86_64 \
+            -o ~/.docker/cli-plugins/docker-compose
+          chmod +x ~/.docker/cli-plugins/docker-compose
+          docker compose version
       - name: Install the shared kernel (no tests) — feeds ~/.m2 and the security jar
         run: ./mvnw -B -q --no-transfer-progress -pl microservice-security/security-infrastructure -am install -DskipTests
         working-directory: shared
