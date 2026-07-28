@@ -107,6 +107,16 @@ jobs:
           token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v4
         with:
+          repository: jrobertgardzinski/transactional-outbox
+          path: shared/transactional-outbox
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jrobertgardzinski/infrastructure-spring-outbox
+          path: shared/infrastructure-spring-outbox
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v4
+        with:
           repository: jrobertgardzinski/voting
           path: shared/voting
           token: ${{ secrets.REPO_PAT }}
