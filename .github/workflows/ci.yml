@@ -141,6 +141,10 @@ jobs:
   # nightly and manual rather than per-PR, and says in its own header why.
   e2e:
     runs-on: ubuntu-latest
+    # The honest ceiling for building the kernel, the jars, eleven images and booting twenty-six
+    # containers, then driving a browser through them. Without it a wedged stack sits here for six
+    # hours; e2e-saga.yml has carried the same number, with the same reasoning, all along.
+    timeout-minutes: 60
     steps:
       - name: Checkout this workspace as portal/
         uses: actions/checkout@v4
@@ -300,9 +304,21 @@ jobs:
       - name: Drive the gallery through the browser (memes-ui)
         run: ./run-e2e.sh
         working-directory: portal/microservice-memes/memes-ui
-      - name: Upload service/UI logs on failure
+      # The old step uploaded /tmp/*-e2e-*.log — a pattern copied from security-ui, whose
+      # run-e2e.sh really does log there. This one has driven the full compose stack since
+      # 2026-07-20 and writes nothing to /tmp, so the artefact from a failed run was empty. The
+      # sibling e2e-saga.yml already gets this right; the same two steps belong here.
+      - name: Collect the stack's logs on failure
+        if: failure()
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color --timestamps > /tmp/portal-stack.log 2>&1 || true
+          tail -n 200 /tmp/portal-stack.log
+        working-directory: portal
+      - name: Upload the stack's logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-logs
-          path: /tmp/*-e2e-*.log
+          name: e2e-stack-logs
+          path: /tmp/portal-stack.log
+          if-no-files-found: warn
