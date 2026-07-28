@@ -42,17 +42,25 @@ spec:
             # Mailpit speaks plain SMTP; the prod profile would demand STARTTLS
             - name: MAIL_SMTP_START_TLS
               value: DISABLED
+          # NOT tcpSocket. This service's work happens on a Kafka channel, and the channel can
+          # shut itself down while the HTTP port stays open — which is what a TCP probe measures.
+          # For months the only symptom of a dead mail pipeline would have been users reporting
+          # that no verification, reset or MFA mail arrives. quarkus-smallrye-health plus the
+          # reactive-messaging extension put every channel's state behind /q/health.
           startupProbe:
-            tcpSocket:
+            httpGet:
+              path: /q/health/started
               port: http
             periodSeconds: 5
             failureThreshold: 60
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /q/health/ready
               port: http
             periodSeconds: 10
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /q/health/live
               port: http
             periodSeconds: 15
             failureThreshold: 4
