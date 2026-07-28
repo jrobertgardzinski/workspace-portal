@@ -304,59 +304,11 @@ services:
       timeout: 3s
       retries: 15
 
-  # ── restart policy for the services that ride in through `include:` ───────────────────────────
-  # The blocks below add NOTHING but a restart policy: image, ports, healthchecks and everything
-  # else keep coming from ../shared/docker-compose.identity.yml and .observability.yml,
-  # which `include` merges under this file (the including file wins on conflict — `docker compose
-  # config` prints the merged result and is the proof).
-  #
-  # WHY it has to be said here: Docker brings a container back when the daemon starts only if its
-  # policy is `always` or `unless-stopped`. `depends_on` is a `compose up` concept and does nothing
-  # on a host reboot. The shared files declare no policy at all, so a 3 a.m. reboot (or a docker
-  # daemon restart after an update) used to come back HALF a stack: memes, comments,
-  # user-collections, offboarding, collections-ui, image-encoder and every database + MinIO (those
-  # carry `restart: always`) — but no kafka (the account-deletion saga dead, no PURGE_USER_CONTENT
-  # ever leaves), no security (every write introspects into a hole), no mailpit/email (no
-  # verification mail) and NO observability at all, so nothing left to notice it with. Fixing the
-  # shared files would be the tidier place, but they belong to another workspace; this override is
-  # the part the portal owns and can enforce.
-  #
-  # `unless-stopped`, not `always`, to match the portal's own services: a container somebody
-  # stopped on purpose stays stopped across a daemon restart — ./e2e-saga-outage.sh depends on
-  # that for user-collections, and an operator who stops the broker to investigate expects it to
-  # stay down.
-  security:
-    restart: unless-stopped
-  kafka:
-    restart: unless-stopped
-  email:
-    restart: unless-stopped
-  idp:
-    restart: unless-stopped
-  mailpit:
-    restart: unless-stopped
-  # the other two notification channels of the email chain: they are part of the same identity
-  # stack, and a stack that comes back missing two adapters is the same class of surprise
-  sms:
-    restart: unless-stopped
-  push:
-    restart: unless-stopped
-  # observability — the reason the half-empty stack above went unnoticed in the first place, so it
-  # has to come back BEFORE anything else needs explaining
-  prometheus:
-    restart: unless-stopped
-  grafana:
-    restart: unless-stopped
-  loki:
-    restart: unless-stopped
-  promtail:
-    restart: unless-stopped
-  tempo:
-    restart: unless-stopped
-  cadvisor:
-    restart: unless-stopped
-  node-exporter:
-    restart: unless-stopped
+  # NOTE: the identity and observability services are NOT repeated here. They are defined in
+  # ../shared/docker-compose.identity.yml and .observability.yml, carry their own
+  # `restart: unless-stopped` since 2026-07-28, and arrive through `include:` above. This file
+  # used to re-declare each of them just to bolt that policy on — which only newer Compose merges
+  # (the runner's refused it outright), and which formula, including the same files, never got.
 
 volumes:
   offboarding_pgdata:
