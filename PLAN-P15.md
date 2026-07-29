@@ -1,5 +1,52 @@
 # Plan pracy po przeglądzie — 2026-07-29
 
+> ## STAN REALIZACJI — czytaj to najpierw
+>
+> Przegląd: Fable 5, ultracode, 6 recenzentów + 3 przeciwstawne soczewki weryfikacji.
+> **26 znalezisk potwierdzonych (każde 3/3 głosy), 1 odrzucone. Po scaleniu duplikatów: 24 pozycje.**
+>
+> | | |
+> |---|---|
+> | ZROBIONE | **2** — poz. 1 (KRYTYCZNY) i poz. 4 (WYSOKI), commit `4150cb2` |
+> | ZOSTAJE | **22** |
+> | Blokuje wdrożenie na k3s | **nic** — Fable wskazał dokładnie dwa blokery, oba naprawione |
+>
+> ### Kolejność paczek (ustalona 2026-07-29, priorytet od góry)
+>
+> **PACZKA A — CI paktów** — poz. **2, 3, 8** (2×WYSOKI, 1×ŚREDNI)
+> Pierwsza NIE dlatego, że najcięższa, tylko dlatego, że każda kolejna poprawka przechodzi
+> przez bramkę, która dziś niczego nie dowodzi — a `dependabot-auto-merge` tej zieleni ufa.
+> Trzy kontrakty (`GET /me`, `ACCOUNT_DELETION_REQUESTED`, kaskada `COMMENTS_DELETED`) nie są
+> weryfikowane w żadnym CI, a strażnicy pominięć są ślepi tym samym błędem ścieżki.
+> Naprawa jest tania: głównie ścieżki checkoutów. **Dowód wykonania: przebieg CI pokazujący,
+> że testy providerowe SIĘ WYKONAŁY, a nie zostały pominięte.**
+>
+> **PACZKA B — realne zachowanie w runtime** — poz. **5, 13, 6, 12, 21, 19** (1×WYSOKI, 2×ŚREDNI, 3×NISKI)
+> Jedyne pozycje z realnym wpływem na użytkownika.
+> - poz. 5 — listener wyników jest at-most-once: treść wymazana, konto odblokowane, `ACCOUNT_DELETED` nigdy nie wychodzi.
+> - poz. 13 — **podnieść ponad ocenę Fable.** Znacznik lampy zdrowia postępuje wyłącznie przy
+>   PUSTYCH pollach. Przy drenażu zaległości po awarii brokera zdrowa pętla zapala readiness
+>   na czerwono i przy `replicas: 1` jedyny pod wypada z Service dokładnie wtedy, gdy system
+>   się leczy. Fable dał ŚREDNI; operacyjnie zachowuje się jak WYSOKI.
+>
+> **PACZKA C — uczciwość testów i komentarzy** — poz. **9, 10, 11, 14, 15, 16, 17, 18, 20, 22, 24** (11 pozycji)
+> Najliczniejsza, każda mała. Część wymaga DECYZJI „poprawić kod czy poprawić komentarz"
+> (poz. 14 — `GET /sessions` pokazuje wygasłe sesje jako aktywne; poz. 22 — kontrakt HTTP
+> obiecuje `refreshToken` w ciele, którego kod celowo nie wysyła).
+> **Poz. 9 i 16 to testy napisane 2026-07-29 przez Opusa** — `ProbeUrlsTest` sam sobie podaje
+> właściwości, które rzekomo weryfikuje.
+>
+> **PACZKA D — reszta k8s** — poz. **7, 23** (1×ŚREDNI, 1×NISKI). Może jechać razem z wdrożeniem.
+>
+> ### Zasady pracy nad tymi poprawkami
+> - Fable robi przegląd, Opus pisze kod — implementacja zawsze w głównej pętli, nie w subagencie.
+> - Każda naprawa to najmniejsza zmiana zamykająca wadę (Fable: „zwykle 1–5 linii plus test,
+>   który wcześniej nie mógł zawieść, a teraz może").
+> - **Test musi umieć paść** — po napisaniu cofnąć poprawkę i sprawdzić, że świeci na czerwono.
+>   Dwie pozycje w tym planie istnieją dlatego, że ten krok pominięto.
+> - Po każdej paczce: pełny `mvn verify` + e2e w przeglądarce, i dopiero wtedy push.
+
+
 **Podsumowanie.** Estate po dniu wielkich migracji jest zaskakująco zdrowy w warstwie domenowej — ani jedno znalezisko nie dotyczy logiki biznesowej; wszystkie 24 pozycje to bramki, które nie strzegą tego, co deklarują, manifesty k8s rozjechane z intencją oraz komentarze obiecujące więcej, niż robi kod. **Dwie rzeczy blokują wyjście na k3s**: ulubione są martwe w klastrze z zerowym śladem (poz. 1) i proxy `/memes/` w collections-ui nie zadziała w żadnym podzie (poz. 5). Reszta nie blokuje wdrożenia, ale dziury w CI paktów (poz. 2–3) trzeba zamknąć, zanim dependabot-auto-merge dostanie kolejną zieleń, której nie wolno ufać.
 
 ---
