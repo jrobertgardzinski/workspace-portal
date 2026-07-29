@@ -91,20 +91,33 @@ spec:
             # client-side, with nothing logged on this side. See CorsPreflightTest.
             - name: SECURITY_CORS_ORIGINS
               value: http://memes.portal.localhost:9080,http://comments.portal.localhost:9080,http://collections.portal.localhost:9080,http://security.portal.localhost:9080
+          # The groups, not the aggregate — the split the rest of this estate already made
+          # (offboarding and user-collections separated /alive from /health for the same reason,
+          # and the README says so of the Helidons).
+          #
+          # readiness carries OffboardingListenerHealth: a stopped outcome listener means every
+          # account deletion in the portal stops closing while sign-in keeps working perfectly, so
+          # "do not send me work" is the honest signal and a restart is not.
+          #
+          # liveness deliberately does NOT. All three probes pointed at the bare /health until
+          # 2026-07-29, which means every contributor — the database, Kafka's own cluster check,
+          # and now the listener lamp — was wired to a RESTART. An identity service that
+          # crash-loops through its dependencies' outages takes sign-in away from both products
+          # for faults a restart cannot mend.
           startupProbe:
             httpGet:
-              path: /health
+              path: /health/readiness
               port: http
             periodSeconds: 5
             failureThreshold: 60   # a JVM on a shared dev box may need minutes
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health/readiness
               port: http
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/liveness
               port: http
             periodSeconds: 15
             failureThreshold: 4

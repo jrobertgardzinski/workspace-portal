@@ -124,7 +124,11 @@ e2e is what proves them together.
   endpoints were built for.
 - **memes/comments** (Spring Boot): `/actuator/health/{liveness,readiness}` —
   auto-enabled when Spring detects Kubernetes.
-- **security** (Micronaut): `/health`; **email** (Quarkus):
+- **security** (Micronaut): `/health/{readiness,liveness}` — readiness carries
+  `OffboardingListenerHealth`, so a halted outcome listener (which is what
+  `stopOnExhaustedRetry` produces) stops traffic instead of restarting the pod.
+  All three probes pointed at the bare `/health` until 2026-07-29, which wired
+  the database and Kafka's cluster check to a RESTART; **email** (Quarkus):
   `/q/health/{started,ready,live}` — the image carries `quarkus-smallrye-health`,
   and with it the state of every messaging channel, so this service's whole job
   (a Kafka channel that can stop while the port stays open) is probeable. This

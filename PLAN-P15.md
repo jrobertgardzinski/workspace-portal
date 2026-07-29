@@ -97,16 +97,37 @@
 > 12 specyfikacji @ui, w tym `list-sessions` i `revoke-all-sessions`) — **36 scenariuszy / 234 kroki,
 > zielone**, dokładnie tyle co baseline z CI workspace-shared sprzed tych zmian.
 >
-> ### Co zostaje na P16 (nie było znaleziskiem Fable, wyszło przy naprawie)
+> ### Domknięcie: to, co miało czekać na P16 — ZROBIONE 2026-07-29
 >
-> - Po wyczerpaniu retry `OffboardingOutcomeListener` ZATRZYMUJE kontener (świadomie: lepiej
->   nieprzeczytany rekord, który odtworzy restart, niż po cichu wyrzucony). Ale security nie ma
->   lampy zdrowia listenera — tego, co comments/memes/collections/offboarding już mają. Zatrzymany
->   listener jest tam dziś niewidoczny.
-> - **Aktuator comments odpowiada na hoście ingressu.** memes ma osobny port management (9083),
->   którego nie routuje żaden Service ani ingress; comments nie ma takiego podziału, więc
->   `/actuator/health` i `/actuator/prometheus` są czytelne spod `comments.portal.localhost`.
->   Starsze niż dzisiejsze zmiany, ale dziś powiększone o szczegóły lampy.
+> Wszystkie trzy odłożone pozycje zamknięte, plus trzy, które wyszły przy ich zamykaniu.
+>
+> 1. **Security ma lampę listenera** (`OffboardingListenerHealth`, commit `fc14a95`). Pyta
+>    konsumenta o `last-poll-seconds-ago`. Dwa oczywistsze sygnały odrzucone po sprawdzeniu
+>    bajtkodu: `getConsumerIds()` **nigdy nie usuwa zatrzymanego konsumenta**, a liczenie rekordów
+>    nic nie mówi na topicu milczącym dniami. Readiness, nigdy liveness.
+> 2. **Sondy security przepięte na grupy.** Wszystkie trzy celowały w zbiorcze `/health` — czyli
+>    baza i sprawdzenie klastra Kafki były podpięte pod RESTART. Healthcheck w compose przestał
+>    być gołym TCP.
+> 3. **Aktuator comments zszedł z ingressu** na 9085 (commit `c53ce0e`), plus strażnik czytający
+>    manifest, żeby numer portu nie rozjechał się po cichu.
+> 4. **Prometheus scrape'ował memes na 8083**, a aktuator przeniósł się na 9083 tego samego dnia
+>    o 07:17 — cały dzień bez metryk memes. `TargetDown` co prawda *fires*, ale bez Alertmanagera
+>    do nikogo nie dociera. Potwierdzone na żywo: 4 targety `up`, memes znów z 364 seriami.
+> 5. **memes-ui mówi prawdę o Node** — `pretest` zamiast crasha w undici.
+> 6. **Dwie awarie, które sam wprowadziłem, obie przy ZIELONYM `mvn verify`:**
+>    - `reactor-core` zadeklarowany w zakresie `test` zawęził tranzytywny `runtime` (reguła
+>      najbliższej deklaracji) → jar wypadł z `target/lib` → serwis nie wstaje
+>      (`NoClassDefFoundError: reactor/core/CorePublisher`). Testy tego nie widzą, bo mają własny
+>      classpath. Bramka: CI uruchamia spakowany jar i pyta go o trzy ścieżki sond.
+>    - dwa konstruktory lampy, żaden z `@Inject` → Micronaut szuka bezargumentowego → `HealthEndpoint`
+>      500 → wszystkie trzy sondy padają. **Bramka z punktu wyżej TEGO BY NIE ZŁAPAŁA** (w środowisku
+>      `test` lampa nie powstaje) — i tak jest napisane w komentarzu przy niej, zamiast pozwolić,
+>      by zielony ptaszek sugerował więcej. Osobny test niezmiennika.
+>
+> **Weryfikacja na żywym stacku** (bo obie awarie z p. 6 były niewidoczne dla `mvn verify`):
+> security healthy przez nowe `/health/readiness`, comments healthy przez 9085, a
+> `/actuator/health` na 8085 zwraca 404. Trzy suity e2e: galeria 18/166, saga 4/21,
+> tożsamość 36/234 — wszystko zielone.
 >
 > ### Kolejność paczek (ustalona 2026-07-29, priorytet od góry)
 >

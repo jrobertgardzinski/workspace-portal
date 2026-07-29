@@ -30,6 +30,11 @@ spec:
         - name: comments
           image: security-comments:latest
           ports:
+            # the actuator answers on its own connector (management.server.port=9085) and NO
+            # Service or ingress rule routes it: this host is published with a single `/` rule,
+            # so anything on 8085 is answerable from a browser
+            - name: management
+              containerPort: 9085
             - name: http
               containerPort: 8085
           envFrom:
@@ -62,18 +67,18 @@ spec:
           startupProbe:
             httpGet:
               path: /actuator/health/readiness
-              port: http
+              port: management
             periodSeconds: 5
             failureThreshold: 60
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
-              port: http
+              port: management
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
-              port: http
+              port: management
             periodSeconds: 15
             failureThreshold: 4
           resources:
