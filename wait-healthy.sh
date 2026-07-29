@@ -33,13 +33,26 @@ fi
 # A service with no healthcheck of its own (grafana, loki, tempo, promtail, prometheus, cadvisor,
 # node-exporter) reports an EMPTY health field. For those "running" is the whole truth docker has,
 # and demanding "healthy" would wait out the timeout on a perfectly good stack.
+#
+# And a ONE-SHOT service — kafka-topics-init, which declares the dead-letter topic and stops — is
+# ready precisely BECAUSE it is no longer running. Demanding "running" of it waits out the timeout
+# on a stack that is completely fine, which is exactly what happened when that service was added on
+# 2026-07-29. Exit code 0 means it did its job; any other exit code is a genuine failure and must
+# still be reported.
 not_ready() {
-    local snapshot svc state health
+    local snapshot svc state health exit_code
     # a failure here means docker itself went away mid-wait; treat it as "nothing is ready yet"
     # rather than as "everything is ready", which is what an unguarded empty answer would mean
-    snapshot=$(docker compose ps --format '{{.Service}} {{.State}} {{.Health}}' 2>/dev/null || true)
+    # '|' rather than spaces: a service with no healthcheck reports an EMPTY Health, and
+    # whitespace-split reading collapses that empty field — the exit code then lands in the health
+    # variable and every healthcheck-less service (grafana, loki, prometheus, promtail, tempo,
+    # cadvisor, node-exporter) is declared unwell. An explicit separator keeps the columns apart.
+    snapshot=$(docker compose ps -a --format '{{.Service}}|{{.State}}|{{.Health}}|{{.ExitCode}}' 2>/dev/null || true)
     for svc in "${expected[@]}"; do
-        read -r _ state health <<<"$(grep -m1 -- "^$svc " <<<"$snapshot" || true)"
+        IFS='|' read -r _ state health exit_code <<<"$(grep -m1 -- "^$svc|" <<<"$snapshot" || true)"
+        if [ "$state" = "exited" ] && [ "$exit_code" = "0" ]; then
+            continue          # a one-shot that finished its work
+        fi
         if [ "$state" != "running" ] || { [ -n "$health" ] && [ "$health" != "healthy" ]; }; then
             printf '%s\n' "$svc"
         fi
