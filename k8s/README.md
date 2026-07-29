@@ -91,16 +91,21 @@ probe stays green, and nobody can sign in.
   before the module bundle, and `base/memes.yaml` sets `MEMES_UI_*` to the
   ingress host names. Unset, it answers with compose's addresses, so nothing
   about a compose run changes.
-- **Where security accepts a call FROM** — CORS is judged on the Origin the
-  browser reports, so the ingress host names have to be in security's allowed
-  list. `SECURITY_CORS_ORIGINS` (set in `base/security.yaml`) replaces the whole
-  list; `allow-credentials: true` is now explicit, because Micronaut 5 flipped
-  that default and every sign-in travels with `credentials: 'include'` for the
-  refresh cookie.
+- **Where each service accepts a call FROM** — CORS is judged on the Origin the
+  browser reports, and there are THREE surfaces, not one. `SECURITY_CORS_ORIGINS`
+  (`base/security.yaml`), `UI_ORIGIN` (`base/comments.yaml`, for the thread under
+  a meme) and `COLLECTIONS_ALLOWED_ORIGINS` (`base/user-collections.yaml`, for the
+  gallery's star button as well as the favourites UI). All three defaulted to
+  compose's localhost ports and none were set here, so sign-in, comments and
+  favourites would each have died the same silent death. security additionally
+  needs `allow-credentials: true`, now explicit, because Micronaut 5 flipped that
+  default and every sign-in travels with `credentials: 'include'`.
 
-**These two must agree.** One names where the browser calls, the other names
-where that call is accepted from. `CorsPreflightTest` and `UiConfigTest` guard
-each half in seconds; the browser e2e is what proves them together.
+**These must agree, pairwise.** One side names where the browser calls, the
+other names where that call is accepted from; a mismatch is invisible until a
+real browser tries it. `CorsPreflightTest` (security), `CorsOriginsTest`
+(comments) and `UiConfigTest` (memes) guard the halves in seconds; the browser
+e2e is what proves them together.
 
 ## Probes — readiness and liveness are different questions
 
@@ -147,11 +152,9 @@ each half in seconds; the browser e2e is what proves them together.
   (see `base/security.yaml`).
 - **Browser-side social login** — the stub IdP runs (server-side token/userinfo
   calls work) but its `/authorize` form has no Ingress in this scope.
-- **collections-ui API base URLs** — collections-ui still bakes
-  `VITE_SECURITY_URL`/`VITE_COLLECTIONS_URL` at Vite build time, so the page it
-  serves from the cluster still aims its **browser** calls at the compose stack.
-  memes-ui no longer does (see below); collections-ui wants the same treatment.
-  API-level flows through the Ingress are fully functional either way.
+- *(closed 2026-07-29 — collections-ui used to bake its API base URLs at Vite
+  build time; ui-config.sh now writes them at container start, like memes-ui's
+  /ui-config.js.)*
 - **Resources**: modest requests (~2.9 GiB total) and memory limits
   (~7.3 GiB total — memes alone carries 1.5 GiB for its 3-decode burst
   budget) per HOSTING-K3S.md's small-node budget; CPU limits are omitted on

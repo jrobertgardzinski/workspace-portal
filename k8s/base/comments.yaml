@@ -49,6 +49,14 @@ spec:
               value: offline
             - name: MEMES_URL
               value: http://memes:8083
+            # The origin the gallery's BROWSER reports when it asks for a thread. comments has its
+            # own CORS registration (CommentsConfig#corsForTheGalleryUi) defaulting to compose's
+            # http://localhost:8083 — meaningless in a cluster, where the gallery is served from the
+            # ingress. Unset, every thread request is refused BY THE BROWSER: nothing reaches this
+            # service, nothing is logged, the pod stays Ready and the page simply shows no comments.
+            # Comma-separated; see CorsOriginsTest.
+            - name: UI_ORIGIN
+              value: http://memes.portal.localhost:9080
             - name: KAFKA_ENABLED
               value: "true"
           startupProbe:

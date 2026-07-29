@@ -49,6 +49,13 @@ spec:
           env:
             - name: COLLECTIONS_PORT
               value: "8092"
+            # Origins allowed to call this service from a BROWSER (CorsFilter, read from exactly this
+            # variable in Main). TWO of them: the favourites UI is one caller and the gallery's star
+            # button is the other — it saves and removes favourites straight from the meme page. The
+            # code's defaults are compose's localhost ports; unset here, both callers are refused by
+            # the browser with nothing logged on this side.
+            - name: COLLECTIONS_ALLOWED_ORIGINS
+              value: http://memes.portal.localhost:9080,http://collections.portal.localhost:9080
             - name: DB_URL
               value: jdbc:postgresql://collections-postgres:5432/collections
             - name: DB_USER

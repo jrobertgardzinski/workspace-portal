@@ -1,10 +1,16 @@
 # collections-ui — the favourites UI on its OWN origin (react-native-web built
-# by Vite, served by nginx). NOTE the dev-parity caveat: the compose-built image
-# BAKES the API base URLs at Vite build time (VITE_SECURITY_URL /
-# VITE_COLLECTIONS_URL, defaulting to http://localhost:8080 / :8092), so the
-# page this cluster serves still calls the compose stack's host ports from the
-# browser. A k8s-native UI needs a rebuild with the Ingress URLs baked in —
-# out of scope here, documented in k8s/README.md.
+# by Vite, served by nginx).
+#
+# The API addresses used to be baked at Vite build time, so one image carried one
+# set of them and the page served here still called the compose stack's host
+# ports from the browser. ui-config.sh now writes them at container start (the
+# nginx image runs /docker-entrypoint.d/*.sh before starting), index.html loads
+# the result before the module bundle, and the UI_* variables below are what a
+# deployment sets. Unset, they fall back to compose's addresses.
+#
+# These must agree with COLLECTIONS_ALLOWED_ORIGINS in user-collections.yaml and
+# SECURITY_CORS_ORIGINS in security.yaml: one names where the browser calls, the
+# others name where that call is accepted from.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,6 +34,17 @@ spec:
           ports:
             - name: http
               containerPort: 80
+          env:
+            - name: UI_SECURITY_URL
+              value: http://security.portal.localhost:9080
+            - name: UI_COLLECTIONS_URL
+              value: http://collections.portal.localhost:9080
+            # deliberately empty: the gallery is reached SAME-ORIGIN through the nginx proxy in
+            # front of this bundle (nginx.conf.template), which is what lets the favourites view
+            # tell "this meme is gone" apart from "the gallery did not answer". An absolute URL
+            # here would make that call cross-origin, and the gallery sends no CORS headers.
+            - name: UI_MEMES_URL
+              value: ""
           readinessProbe:
             httpGet:
               path: /
