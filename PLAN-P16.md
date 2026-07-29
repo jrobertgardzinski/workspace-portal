@@ -9,9 +9,22 @@
 >
 > | | |
 > |---|---|
-> | ZROBIONE | **0 z 12** |
-> | ZOSTAJE | **12** |
-> | Blokuje wdrożenie na k3s | **poz. 2** — readiness security sprzężone z brokerem; naprawa to jedna zmienna env w dwóch plikach. Poz. 1 nie blokuje samego wdrożenia, ale do czasu naprawy lampa listenera offboardingu NIE jest sygnałem — trzeba o tym wiedzieć, wychodząc na klaster. |
+> | ZROBIONE | **12 z 12** — paczki A, B, C, D zamknięte 2026-07-29 wieczorem |
+> | ZOSTAJE | **0** |
+> | Blokuje wdrożenie na k3s | **nic.** Blokowała poz. 2 (readiness security sprzężone z brokerem) — naprawione przez `kafka.health.enabled=false` w application.yml, czyli w jednym miejscu zamiast w każdym manifeście z osobna. Zmierzone po naprawie: przy martwym brokerze readiness odpowiada 200, `kafka` zniknął z grupy, lampa została. |
+
+> ### Jak zamknięto (2026-07-29, wieczór)
+>
+> | paczka | commit | uwaga |
+> |---|---|---|
+> | A | security `cc39e7d` | lampa pyta `isPaused`; `kafka.health.enabled=false` |
+> | B | comments `d32a772`, memes `bca7be4` | bramki z włączoną Kafką; strażnik portu w memes |
+> | C | email `2138fd0` + `dd7fc9a` | klucz per rekord; guard na każdy nieodtwarzalny kształt |
+> | D | security `35251f8`, comments `c772f38`, portal `36093a0` | `ORDER BY` w blokadach, `thenCallRealMethod`, trzy sprostowania |
+>
+> **Uwaga do samego siebie:** commit `2138fd0` poszedł przy CZERWONYM `mvn verify` — powiązałem
+> go z wynikiem `grep`, nie testów. Naprawione w `dd7fc9a` w ciągu kilku minut, ale to jest ta
+> sama klasa błędu co reszta tego planu: bramka, która nie sprawdza tego, co się wydaje.
 >
 > ### Los twierdzeń z ZAKRES-P16
 >
