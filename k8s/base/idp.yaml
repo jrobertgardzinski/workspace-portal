@@ -30,6 +30,13 @@ spec:
               value: "8091"
             - name: IDP_ISSUER
               value: http://idp:8091
+            # The allowlist the stub checks redirect_uri against. It MUST list what security is
+            # configured to send (see security.yaml), and it is spelled out here rather than left
+            # to the stub's own default, which points at localhost:8080 — an address that does not
+            # exist in the cluster. Without this, the 2026-07-28 open-redirect fix would refuse
+            # every real sign-in in k3s while passing every test on a laptop.
+            - name: IDP_REDIRECT_URIS
+              value: http://security.portal.localhost:9080/oauth/callback
             - name: IDP_CLIENT_ID
               value: demo-client
             - name: IDP_CLIENT_SECRET

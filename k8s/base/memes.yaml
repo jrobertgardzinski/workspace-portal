@@ -32,6 +32,8 @@ spec:
         - name: memes
           image: security-memes:latest
           ports:
+            - name: management
+              containerPort: 9083
             - name: http
               containerPort: 8083
           envFrom:
@@ -84,18 +86,21 @@ spec:
           startupProbe:
             httpGet:
               path: /actuator/health/readiness
-              port: http
+              port: management
+            timeoutSeconds: 3
             periodSeconds: 5
             failureThreshold: 60
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
-              port: http
+              port: management
+            timeoutSeconds: 3
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
-              port: http
+              port: management
+            timeoutSeconds: 3
             periodSeconds: 15
             failureThreshold: 4
           # sized for MEMES_DECODE_CONCURRENCY=3: three worst-case decodes are

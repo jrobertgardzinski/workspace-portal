@@ -21,6 +21,12 @@ metadata:
     app.kubernetes.io/part-of: portal
 spec:
   replicas: 1
+  # Recreate, for the same reasons as memes and comments: this service runs an outbox relay whose
+  # poll is a plain SELECT (no FOR UPDATE SKIP LOCKED, no lease) and two @Scheduled reapers. Two
+  # instances alive at once both poll and both send, and RollingUpdate guarantees that overlap on
+  # EVERY deploy — the new pod starts before the old one goes.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: security
