@@ -8,7 +8,10 @@
 #    must reach itself THROUGH the Service to become ready would deadlock.
 #  - data on emptyDir, not a PVC (scope: postgresy + minio get PVCs; losing
 #    broker state on reschedule is acceptable for a dev cluster — topics are
-#    auto-created and every consumer copes with a fresh broker).
+#    auto-created and every consumer copes with a fresh broker). One exception,
+#    and it is not covered by "auto-created": mail-requests-dlq is a COMPACTED
+#    ledger, so kafka-topics-init.yaml creates it with the right config rather
+#    than letting the broker defaults quietly give it seven-day deletion.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

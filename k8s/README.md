@@ -2,7 +2,8 @@
 
 Kustomize manifests for the whole portal product **plus the minimal identity
 core it cannot live without**: security, email, the stub IdP, Kafka (single-node
-KRaft), security's Postgres and Mailpit. Everything in one `portal` namespace —
+KRaft) with the `kafka-topics-init` Job that gives the mail DLQ ledger its
+compaction, security's Postgres and Mailpit. Everything in one `portal` namespace —
 the k8s mirror of the single compose project. Validated end to end on a local
 k3d cluster (all pods Ready; registration → Mailpit → verify → authenticate →
 upload → comment → favourite → account-deletion saga, all green).
@@ -78,6 +79,29 @@ with the same plaintext defaults compose uses: `secret` (all Postgres),
 client). Acceptable for a throwaway local cluster only — a hosted overlay
 (HOSTING-K3S.md) must bring SealedSecrets/ExternalSecrets instead of literals.
 
+## Two things the browser decides, and neither is baked into an image
+
+Both were found on 2026-07-29, and both fail the same way: the page loads, every
+probe stays green, and nobody can sign in.
+
+- **Where the browser calls** — memes-ui reads `import.meta.env.VITE_*`, which
+  Vite substitutes at BUILD time, so the jar (and the image carrying it) had
+  compose's `localhost:8080` in it permanently. `microservice-memes` now serves
+  `/ui-config.js` (`UiConfigController`), a classic script `index.html` loads
+  before the module bundle, and `base/memes.yaml` sets `MEMES_UI_*` to the
+  ingress host names. Unset, it answers with compose's addresses, so nothing
+  about a compose run changes.
+- **Where security accepts a call FROM** — CORS is judged on the Origin the
+  browser reports, so the ingress host names have to be in security's allowed
+  list. `SECURITY_CORS_ORIGINS` (set in `base/security.yaml`) replaces the whole
+  list; `allow-credentials: true` is now explicit, because Micronaut 5 flipped
+  that default and every sign-in travels with `credentials: 'include'` for the
+  refresh cookie.
+
+**These two must agree.** One names where the browser calls, the other names
+where that call is accepted from. `CorsPreflightTest` and `UiConfigTest` guard
+each half in seconds; the browser e2e is what proves them together.
+
 ## Probes — readiness and liveness are different questions
 
 - **offboarding** and **user-collections**: **readiness on `/health`** (503
@@ -123,12 +147,11 @@ client). Acceptable for a throwaway local cluster only — a hosted overlay
   (see `base/security.yaml`).
 - **Browser-side social login** — the stub IdP runs (server-side token/userinfo
   calls work) but its `/authorize` form has no Ingress in this scope.
-- **UI API base URLs** — memes-ui and collections-ui bake
-  `VITE_SECURITY_URL`/`VITE_COLLECTIONS_URL` at build time, defaulting to the
-  compose host ports (`localhost:8080`/`8092`). The pages served from the
-  cluster therefore still aim their **browser** calls at the compose stack; a
-  k8s-native UI build (and security CORS entries for the new origins) is a
-  follow-up. API-level flows through the Ingress are fully functional.
+- **collections-ui API base URLs** — collections-ui still bakes
+  `VITE_SECURITY_URL`/`VITE_COLLECTIONS_URL` at Vite build time, so the page it
+  serves from the cluster still aims its **browser** calls at the compose stack.
+  memes-ui no longer does (see below); collections-ui wants the same treatment.
+  API-level flows through the Ingress are fully functional either way.
 - **Resources**: modest requests (~2.9 GiB total) and memory limits
   (~7.3 GiB total — memes alone carries 1.5 GiB for its 3-decode burst
   budget) per HOSTING-K3S.md's small-node budget; CPU limits are omitted on

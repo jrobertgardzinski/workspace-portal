@@ -83,6 +83,14 @@ spec:
               value: http://security.portal.localhost:9080/oauth/callback
             - name: SECURITY_OAUTH_ALLOWED_RETURN_PREFIXES
               value: http://memes.portal.localhost:9080/
+            # The origins a BROWSER reports when it calls this service. The shipped defaults are
+            # compose's localhost ports, which are meaningless here: in the cluster the same UIs are
+            # served from ingress host names, and CORS is judged on the origin, not on where the
+            # request lands. Every sign-in travels with credentials: 'include' (HttpOnly refresh
+            # cookie), so a missing entry does not degrade anything - it blocks sign-in outright,
+            # client-side, with nothing logged on this side. See CorsPreflightTest.
+            - name: SECURITY_CORS_ORIGINS
+              value: http://memes.portal.localhost:9080,http://comments.portal.localhost:9080,http://collections.portal.localhost:9080,http://security.portal.localhost:9080
           startupProbe:
             httpGet:
               path: /health

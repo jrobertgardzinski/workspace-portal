@@ -1,0 +1,54 @@
+# The one topic that must NOT be left to auto-creation: the mail DLQ ledger.
+#
+# Everything else on this broker is a normal event stream, and kafka.yaml is right that a fresh
+# broker with auto-created topics is fine for them. `mail-requests-dlq` is not one of them: it is a
+# LEDGER, keyed by request id, and the DLQ resource reads it to answer "what is parked right now?"
+# and writes a tombstone when an operator redrives an entry. That only works under
+# cleanup.policy=compact with retention.ms=-1 — the same configuration
+# ../../../shared/docker-compose.identity.yml gives it through its kafka-topics-init one-shot.
+#
+# Auto-created, it would come up with the broker defaults: delete policy, seven days. Nothing would
+# fail, nothing would log, and parked mail would simply stop existing after a week while
+# /mail/dlq kept answering 200 with a shorter and shorter list. That silence is why this Job exists
+# rather than a line in a README.
+#
+# OnFailure + backoffLimit is the k8s spelling of compose's `restart: on-failure`: there is no
+# depends_on here, so the first attempts race the broker's startup and simply retry.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topics-init
+  labels:
+    app: kafka-topics-init
+    app.kubernetes.io/part-of: portal
+spec:
+  backoffLimit: 30
+  template:
+    metadata:
+      labels:
+        app: kafka-topics-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: topics-init
+          image: apache/kafka:3.9.1
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+                --topic mail-requests-dlq --partitions 1 --replication-factor 1 \
+                --config cleanup.policy=compact --config retention.ms=-1 --config min.cleanable.dirty.ratio=0.1
+              # --alter as well as --create: the topic may already exist from an earlier run of the
+              # cluster (or from a consumer that auto-created it before this Job won the race), and
+              # --create --if-not-exists would then leave the WRONG config in place silently
+              /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:9092 --alter \
+                --entity-type topics --entity-name mail-requests-dlq \
+                --add-config cleanup.policy=compact,retention.ms=-1
+              /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:9092 --describe \
+                --entity-type topics --entity-name mail-requests-dlq
+          resources:
+            requests:
+              memory: 128Mi
+            limits:
+              memory: 512Mi

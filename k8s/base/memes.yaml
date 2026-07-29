@@ -75,6 +75,19 @@ spec:
             # stack enough decodes to take the heap down; the 4th concurrent
             # decode now waits briefly and is refused with 429 + Retry-After.
             # The memory limit below is sized for exactly this worst case.
+            # Where the BROWSER should send its calls. The bundle inside this image baked compose's
+            # addresses at build time (Vite substitutes import.meta.env.VITE_* during the build), so
+            # without these three the page served from this cluster tells the browser to call
+            # localhost:8080 — the developer's own laptop. Served by UiConfigController as
+            # /ui-config.js and read before the module bundle runs. These must agree with
+            # SECURITY_CORS_ORIGINS in security.yaml: one names where the browser calls, the other
+            # names where security will accept a call from.
+            - name: MEMES_UI_SECURITY_URL
+              value: http://security.portal.localhost:9080
+            - name: MEMES_UI_COMMENTS_URL
+              value: http://comments.portal.localhost:9080
+            - name: MEMES_UI_COLLECTIONS_URL
+              value: http://collections.portal.localhost:9080
             - name: MEMES_DECODE_CONCURRENCY
               value: "3"
             # let the heap actually reach the decode budget: the default 25%
