@@ -67,12 +67,46 @@
 > - Każda naprawa ma test, który sprawdzono, że pada po cofnięciu poprawki (metoda z sekcji „Zasady
 >   pracy" niżej).
 >
+> ### Własny przegląd dzisiejszego kodu (2026-07-29, po zamknięciu paczek)
+>
+> Sześć rzeczy, z czego **jeden prawdziwy regres wprowadzony przez samą naprawę**:
+>
+> 1. **REGRES — poz. 6 miała drugą stronę.** Nadanie każdemu bezidowemu mailowi UUID naprawiło
+>    niszczenie rekordów przez kompakcję i otworzyło lustrzaną dziurę: nieudany redrive parkował
+>    ponownie pod ŚWIEŻYM id, więc jeden niedostarczony mail rósł o wpis na każdą próbę.
+>    `process(payload, parkedIdIfItFails)` — nadpisanie zamiast mnożenia. Test czerwony bez tego.
+> 2. **Mój własny komentarz obiecywał więcej niż kod** — javadoc listenera security kończył się
+>    „a stopped listener is visible". Nie jest: security jako jedyny uczestnik sagi nie ma lampy.
+>    To ta sama klasa wady, którą ten plan usuwa, popełniona w commicie zamykającym cztery takie.
+> 3. **Test mógł przejść z niewłaściwego powodu** — `InMemorySessionLineageTest` sprawdzał „wątek
+>    rewokujący wciąż żyje po 500 ms", co jest prawdą także dla wątku, którego scheduler nie
+>    uruchomił. Latch dowodzi, że wątek naprawdę biegnie i jest zablokowany.
+> 4. **Test wiringu godził się na „jakiś interceptor"** — teraz porównuje z tym, który faktycznie
+>    buduje customizer. Przy okazji sprawdzone: konkurencyjny bean `RecordInterceptor` przegrywa,
+>    bo customizer kontenera biegnie ostatni.
+> 5. **Cadence heartbeatu opisany fałszywie** („co najmniej tak często jak idle") — poprawione na
+>    to, co jest prawdą i z czego wyprowadzono tolerancję 150 s.
+> 6. **`show-details=always` w comments jest czytelne z ingressu** — memes ma osobny port
+>    management, comments nie. Napisane wprost w properties zamiast przemilczane; samo wystawienie
+>    aktuatora na ingressie to starsze pytanie, do P16.
+>
+> Hook `postStart` mówi teraz, CO padło, gdy broker się spóźni (wcześniej pod pod event trafiał
+> błąd kafka-topics.sh, czyli nie ta wina).
+>
+> **Dodatkowa weryfikacja z przeglądu:** e2e tożsamości przez przeglądarkę (`security-ui/run-e2e.sh`,
+> 12 specyfikacji @ui, w tym `list-sessions` i `revoke-all-sessions`) — **36 scenariuszy / 234 kroki,
+> zielone**, dokładnie tyle co baseline z CI workspace-shared sprzed tych zmian.
+>
 > ### Co zostaje na P16 (nie było znaleziskiem Fable, wyszło przy naprawie)
 >
 > - Po wyczerpaniu retry `OffboardingOutcomeListener` ZATRZYMUJE kontener (świadomie: lepiej
 >   nieprzeczytany rekord, który odtworzy restart, niż po cichu wyrzucony). Ale security nie ma
 >   lampy zdrowia listenera — tego, co comments/memes/collections/offboarding już mają. Zatrzymany
 >   listener jest tam dziś niewidoczny.
+> - **Aktuator comments odpowiada na hoście ingressu.** memes ma osobny port management (9083),
+>   którego nie routuje żaden Service ani ingress; comments nie ma takiego podziału, więc
+>   `/actuator/health` i `/actuator/prometheus` są czytelne spod `comments.portal.localhost`.
+>   Starsze niż dzisiejsze zmiany, ale dziś powiększone o szczegóły lampy.
 >
 > ### Kolejność paczek (ustalona 2026-07-29, priorytet od góry)
 >
