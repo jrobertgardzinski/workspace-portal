@@ -104,13 +104,21 @@ spec:
                   - -c
                   - |
                     set -e
+                    up=0
                     for attempt in $(seq 1 60); do
                       if /opt/kafka/bin/kafka-broker-api-versions.sh \
                           --bootstrap-server localhost:9092 >/dev/null 2>&1; then
+                        up=1
                         break
                       fi
                       sleep 5
                     done
+                    if [ "$up" != 1 ]; then
+                      # say WHICH thing failed: without this the next line dies with a CLI usage
+                      # error and the pod event blames kafka-topics.sh for the broker being late
+                      echo "the broker did not answer within 300s; mail-requests-dlq is NOT configured" >&2
+                      exit 1
+                    fi
                     /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists \
                       --topic mail-requests-dlq --partitions 1 --replication-factor 1 \
                       --config cleanup.policy=compact --config retention.ms=-1 --config min.cleanable.dirty.ratio=0.1
