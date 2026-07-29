@@ -302,12 +302,13 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: portal/microservice-memes/memes-ui
       - name: Drive the gallery through the browser (memes-ui)
-        run: ./run-e2e.sh
+        # KEEP_STACK, and it is the whole point: run-e2e.sh installs a trap that takes the compose
+        # stack DOWN when it exits, failure included. So the collection step below used to arrive
+        # after every container was already removed and uploaded a 148-byte artefact - which is
+        # exactly the emptiness the comment here used to claim had been fixed. Leaving the stack up
+        # is what makes a failed run diagnosable; the teardown moves to its own always() step.
+        run: KEEP_STACK=1 ./run-e2e.sh
         working-directory: portal/microservice-memes/memes-ui
-      # The old step uploaded /tmp/*-e2e-*.log — a pattern copied from security-ui, whose
-      # run-e2e.sh really does log there. This one has driven the full compose stack since
-      # 2026-07-20 and writes nothing to /tmp, so the artefact from a failed run was empty. The
-      # sibling e2e-saga.yml already gets this right; the same two steps belong here.
       - name: Collect the stack's logs on failure
         if: failure()
         run: |
@@ -322,3 +323,7 @@ jobs:
           name: e2e-stack-logs
           path: /tmp/portal-stack.log
           if-no-files-found: warn
+      - name: Take the stack down
+        if: always()
+        run: ./infra-down.sh -v || true
+        working-directory: portal
