@@ -99,7 +99,9 @@ i w które wierzę — a które ma konkretny, sprawdzalny kształt. Proszę je a
    gdzie jest adres wychodzącego użytkownika. Czego NIE sprawdziłem: `SagaListenersHealth.idOf` ma
    fallback `container.toString()` na wypadek `getListenerId() == null` — co dokładnie Spring Kafka
    tam wypisuje i czy ta gałąź jest w ogóle osiągalna dla naszych kontenerów. Aktuator comments
-   zszedł z ingressu na 9085, ale w compose jest czytelny z hosta.
+   zszedł z ingressu na 9085 — a zdanie „w compose jest czytelny z hosta", które tu pierwotnie
+   stało, jest nieprawdziwe (P16 poz. 12): compose publikuje wyłącznie 8085, więc 9085 widać tylko
+   z sieci kontenerów (healthcheck, Prometheus), nie z hosta.
 
 9. **„Zajęta pętla stempluje znacznik nie rzadziej niż raz na pełny budżet retry jednego rekordu."**
    (`SagaListenersHealth.recordDelivered`) Interceptor stempluje w `intercept` i `afterRecord`.
