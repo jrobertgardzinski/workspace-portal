@@ -2,8 +2,9 @@
 
 Kustomize manifests for the whole portal product **plus the minimal identity
 core it cannot live without**: security, email, the stub IdP, Kafka (single-node
-KRaft) with the `kafka-topics-init` Job that gives the mail DLQ ledger its
-compaction, security's Postgres and Mailpit. Everything in one `portal` namespace —
+KRaft, whose `postStart` hook gives the mail DLQ ledger its compaction on every
+pod start — it was a one-shot Job until 2026-07-29, which meant the guarantee
+lasted until the broker was first rescheduled), security's Postgres and Mailpit. Everything in one `portal` namespace —
 the k8s mirror of the single compose project. Validated end to end on a local
 k3d cluster (all pods Ready; registration → Mailpit → verify → authenticate →
 upload → comment → favourite → account-deletion saga, all green).
@@ -123,8 +124,13 @@ e2e is what proves them together.
   endpoints were built for.
 - **memes/comments** (Spring Boot): `/actuator/health/{liveness,readiness}` —
   auto-enabled when Spring detects Kubernetes.
-- **security** (Micronaut): `/health`; **email** (Quarkus): TCP only (the image
-  ships no health extension — same as compose); Python stubs: TCP or `/health`.
+- **security** (Micronaut): `/health`; **email** (Quarkus):
+  `/q/health/{started,ready,live}` — the image carries `quarkus-smallrye-health`,
+  and with it the state of every messaging channel, so this service's whole job
+  (a Kafka channel that can stop while the port stays open) is probeable. This
+  line said "TCP only, the image ships no health extension" until 2026-07-29;
+  the probes had been HTTP since 82c26bd and compose has always GET-ed
+  `/q/health/ready`; Python stubs: TCP or `/health`.
 - JVMs get a generous `startupProbe` (36 × 5s = up to 3 min) instead of huge
   initialDelays.
 

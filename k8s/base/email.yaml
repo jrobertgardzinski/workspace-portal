@@ -1,6 +1,12 @@
 # microservice-email (Quarkus) — consumes mail-request events off Kafka and
-# delivers over SMTP to Mailpit. No /health endpoint in the image (compose
-# probes bare TCP too), so the k8s probes are TCP as well.
+# delivers over SMTP to Mailpit. The probes are HTTP against /q/health/* (see
+# the comment on startupProbe below): the image carries quarkus-smallrye-health
+# and every messaging channel's state with it, so a dead mail pipeline behind a
+# live HTTP port is visible here. This header used to say the opposite — "no
+# /health endpoint in the image, so the k8s probes are TCP as well" — which
+# commit 82c26bd made false forty lines further down and left standing. A
+# reader who believed it would conclude that a stopped Kafka channel is
+# invisible to the cluster, and might "fix" the manifest back to tcpSocket.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -10,8 +10,20 @@
 #    broker state on reschedule is acceptable for a dev cluster — topics are
 #    auto-created and every consumer copes with a fresh broker). One exception,
 #    and it is not covered by "auto-created": mail-requests-dlq is a COMPACTED
-#    ledger, so kafka-topics-init.yaml creates it with the right config rather
+#    ledger, so the postStart hook below creates it with the right config rather
 #    than letting the broker defaults quietly give it seven-day deletion.
+#
+#    That hook used to be a one-shot Job (kafka-topics-init.yaml), and the
+#    exception above was therefore only true until the first reschedule. A Job
+#    runs ONCE: re-applying the kustomization does not re-run it and nothing
+#    tied it to the pod's lifecycle, while emptyDir means every reboot,
+#    eviction or `k3d stop/start` takes the topics with it. The broker then
+#    auto-created mail-requests-dlq with delete/7d, parked verification, reset
+#    and MFA mails started expiring out of the ledger, and /mails/dlq kept
+#    answering 200 with a shorter list. Compose never had this hole because it
+#    re-asserts the config on every `up` — which is exactly what a postStart
+#    hook is: it runs at every pod start, and the script is idempotent by
+#    design (--if-not-exists, then --alter).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -66,6 +78,50 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /tmp/kraft-combined-logs
+          # The one topic that must NOT be left to auto-creation: the mail DLQ ledger.
+          #
+          # Everything else on this broker is a normal event stream and a fresh broker with
+          # auto-created topics is fine for them. `mail-requests-dlq` is not one of them: it is a
+          # LEDGER, keyed by request id, which DlqResource reads to answer "what is parked right
+          # now?" and writes a tombstone to when an operator redrives an entry. That only works
+          # under cleanup.policy=compact with retention.ms=-1 — the same configuration
+          # ../../../shared/docker-compose.identity.yml asserts on every `up`.
+          #
+          # Auto-created, it comes up with the broker defaults: delete policy, seven days. Nothing
+          # fails and nothing logs; parked mail simply stops existing after a week while /mails/dlq
+          # keeps answering 200 with a shorter and shorter list. That silence is why this is here
+          # rather than in a README.
+          #
+          # postStart, so it runs on EVERY pod start — the data lives on an emptyDir, so every
+          # reschedule is a fresh broker that needs the assertion again. It runs concurrently with
+          # the broker's own startup, hence the wait loop; the whole script is idempotent, so a
+          # restart re-asserting it costs nothing.
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/bash
+                  - -c
+                  - |
+                    set -e
+                    for attempt in $(seq 1 60); do
+                      if /opt/kafka/bin/kafka-broker-api-versions.sh \
+                          --bootstrap-server localhost:9092 >/dev/null 2>&1; then
+                        break
+                      fi
+                      sleep 5
+                    done
+                    /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists \
+                      --topic mail-requests-dlq --partitions 1 --replication-factor 1 \
+                      --config cleanup.policy=compact --config retention.ms=-1 --config min.cleanable.dirty.ratio=0.1
+                    # --alter as well as --create: the topic may already exist (a consumer that
+                    # auto-created it before this hook won the race), and --create --if-not-exists
+                    # would then leave the WRONG config in place silently
+                    /opt/kafka/bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter \
+                      --entity-type topics --entity-name mail-requests-dlq \
+                      --add-config cleanup.policy=compact,retention.ms=-1
+                    /opt/kafka/bin/kafka-configs.sh --bootstrap-server localhost:9092 --describe \
+                      --entity-type topics --entity-name mail-requests-dlq
           startupProbe:
             exec:
               command: ["/bin/sh", "-c", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]

@@ -13,7 +13,6 @@ resources:
   - configmap-common.yaml
   # identity core — the portal signs in through these
   - kafka.yaml
-  - kafka-topics-init.yaml
   - mailpit.yaml
   - security-postgres.yaml
   - security.yaml
