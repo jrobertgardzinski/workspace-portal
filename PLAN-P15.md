@@ -7,9 +7,72 @@
 >
 > | | |
 > |---|---|
-> | ZROBIONE | **2** — poz. 1 (KRYTYCZNY) i poz. 4 (WYSOKI), commit `4150cb2` |
-> | ZOSTAJE | **22** |
-> | Blokuje wdrożenie na k3s | **nic** — Fable wskazał dokładnie dwa blokery, oba naprawione |
+> | ZROBIONE | **24 z 24** — paczki A, B, C, D zamknięte 2026-07-29 |
+> | ZOSTAJE | **0** |
+> | Blokuje wdrożenie na k3s | **nic** |
+>
+> ### Commity zamykające
+>
+> | paczka | repo | commit |
+> |---|---|---|
+> | (przed planem) | portal | `4150cb2` — poz. 1, 4 |
+> | A | shared/microservice-security | `48be701` |
+> | A | portal/microservice-comments | `30e6dc4` |
+> | A | portal/microservice-offboarding | `db8ec20` |
+> | B+C | shared/microservice-security | `3f26baa` — poz. 5, 10, 14, 22 |
+> | B+C | shared/microservice-email | `48e92fa` — poz. 6, 17, 20, 21 |
+> | B+C | portal/microservice-comments | `98e3ab9` — poz. 9, 13, 18, 19 |
+> | B+C | portal/microservice-memes | `a60e16d` — poz. 11, 12, 15, 16, 19 |
+> | D | portal | `4f3f6cc` — poz. 7, 23, 24 |
+>
+> ### Czego Fable nie doszacował (wyszło przy wdrażaniu)
+>
+> - **poz. 2 i 8 — „najmniejsza naprawa" była za mała.** Dopisanie dwóch linii `path:` nie
+>   wystarcza: przy PŁASKIM checkoucie samego siebie `../../../portal/…` i tak celuje POWYŻEJ
+>   `$GITHUB_WORKSPACE`. Musiał się przenieść również checkout własnego repo
+>   (`shared/microservice-security`, `portal/microservice-offboarding`) — dopiero cały układ
+>   workspace'owy sprawia, że ścieżki testów mają jedno znaczenie w CI i lokalnie. Przy okazji
+>   dwie ścieżki, które w płaskim układzie działały PRZYPADKIEM (`offline-jwt`,
+>   `microservice-email`), działają teraz z premedytacją.
+> - **poz. 17 — podpowiedź Fable była błędna.** „Konektor in-memory rejestruje kanał w profilu
+>   testowym" — nie rejestruje: pod `%test` raport zdrowia nie ma `data` w ogóle, więc asercji
+>   o kanale nie da się tam napisać. Powstał `ChannelReadinessTest` z własnym profilem, który
+>   podstawia konektor Kafki i wskazuje go na martwy broker — kanał jest wtedy NAZWANY w raporcie
+>   (DOWN, i o to chodzi: test jest o enrollmencie, nie o zdrowiu).
+> - **poz. 13 — potwierdzone, że to WYSOKI, nie ŚREDNI.** Interceptor rekordów trzeba było wpiąć
+>   przez `ContainerCustomizer`, bo goły bean `RecordInterceptor` nie wie, KTÓREGO kontenera
+>   dotyczy — a znacznik jest per kontener. Test wiringu (`ListenerHeartbeatTest`) sprawdza, że
+>   interceptor faktycznie siedzi na kontenerach; bez tego `recordDelivered` byłoby martwym kodem,
+>   czyli dokładnie klasą wady z poz. 10.
+> - **Nowy test potrafi zepsuć cudzy.** `DlqLedgerKeysTest` zostawiał wpis we wspólnym (na całą
+>   suitę `@QuarkusTest`) ledgerze i wywracał `DlqRedriveTest`. Sprząta po sobie retrakcją, czyli
+>   ścieżką produkcyjną.
+> - **`npm test` w memes-ui nie idzie na Node 20** (undici/jsdom: `markAsUncloneable`). Działa na
+>   Node 22 — tym z `memes-ui/target/node`, czyli tym samym, którego używa CI. Nie jest to regres.
+> - **Strażnik manifestu z poz. 18 nie mógł być bezwarunkowy.** `k8s/base/comments.yaml` leży
+>   w repo WORKSPACE'u, a własne CI comments klonuje tylko rodzeństwo — bez `assumeTrue` test
+>   świeciłby na czerwono przy każdym pushu tam, za plik, którego nigdy nie miało tam być. Biegnie
+>   lokalnie i w CI reaktora (który układa repa workspace'owo).
+>
+> ### Dowód wykonania
+>
+> - `mvn verify` zielony w każdym ruszanym repo: security 107, email 42, comments 134, memes 157,
+>   offboarding — bez pominięć.
+> - `memes-ui` vitest: 5/5 (Node 22 z `target/node`).
+> - **e2e w przeglądarce na żywym stacku** (`memes-ui/run-e2e.sh`, cucumber-js + Playwright,
+>   docker compose): **18 scenariuszy, 166 kroków, wszystko zielone.**
+> - **e2e sagi usuwania konta** (`e2e-saga.sh`, HTTP po żywym stacku): **4 scenariusze, 21 kroków,
+>   zielone** — to jest realna weryfikacja poz. 5, bo listener wyników biegnie tam z nową strategią
+>   offsetów i błędów.
+> - Każda naprawa ma test, który sprawdzono, że pada po cofnięciu poprawki (metoda z sekcji „Zasady
+>   pracy" niżej).
+>
+> ### Co zostaje na P16 (nie było znaleziskiem Fable, wyszło przy naprawie)
+>
+> - Po wyczerpaniu retry `OffboardingOutcomeListener` ZATRZYMUJE kontener (świadomie: lepiej
+>   nieprzeczytany rekord, który odtworzy restart, niż po cichu wyrzucony). Ale security nie ma
+>   lampy zdrowia listenera — tego, co comments/memes/collections/offboarding już mają. Zatrzymany
+>   listener jest tam dziś niewidoczny.
 >
 > ### Kolejność paczek (ustalona 2026-07-29, priorytet od góry)
 >
