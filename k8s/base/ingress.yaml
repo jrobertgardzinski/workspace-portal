@@ -38,6 +38,21 @@ spec:
     - host: collections.portal.localhost
       http:
         paths:
+          # BEFORE the catch-all, and this rule is the whole reason favourites work at all. Two
+          # different things answer on this host: the favourites API and the bundle that draws it.
+          # Without this rule the host resolved only to the static nginx, so every browser call to
+          # /collections/... — from the gallery's star button as well as from this UI — landed on
+          # the SPA fallback: a 200 text/html for GET, a 405 for PUT/DELETE, no CORS headers, and
+          # nothing whatsoever in user-collections' log, because no request ever reached it.
+          # COLLECTIONS_ALLOWED_ORIGINS in user-collections.yaml was configured for exactly these
+          # callers and was dead configuration until this rule existed.
+          - path: /collections
+            pathType: Prefix
+            backend:
+              service:
+                name: user-collections
+                port:
+                  name: http
           - path: /
             pathType: Prefix
             backend:

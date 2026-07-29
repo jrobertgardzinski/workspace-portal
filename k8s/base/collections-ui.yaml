@@ -45,6 +45,18 @@ spec:
             # here would make that call cross-origin, and the gallery sends no CORS headers.
             - name: UI_MEMES_URL
               value: ""
+            # The nginx proxy in front of this bundle resolves the gallery through these two, and
+            # the image's defaults are Docker's: the embedded resolver at 127.0.0.11 and the bare
+            # name `memes`. Neither exists in a pod — there is no DNS on 127.0.0.11, and nginx's
+            # resolver ignores search domains, so a bare name would not resolve even against a
+            # correct one. Left unset, every /memes/ request 502s and the favourites view renders
+            # that as "couldn't check" forever: the read-repair of deleted memes silently never
+            # runs, which is the entire reason the proxy exists. The Dockerfile says a k8s
+            # deployment must override the resolver; until now nothing did.
+            - name: MEMES_RESOLVER
+              value: kube-dns.kube-system.svc.cluster.local
+            - name: MEMES_UPSTREAM
+              value: http://memes.portal.svc.cluster.local:8083
           readinessProbe:
             httpGet:
               path: /
