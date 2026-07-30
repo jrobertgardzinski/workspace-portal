@@ -86,76 +86,76 @@ jobs:
       # compiles; `docker compose up --build` also needs a BUILD CONTEXT for every service in the
       # merged file — including the four that carry no Java at all (idp, sms, push, image-encoder).
       - name: Checkout this workspace as portal/
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: portal
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/workspace-shared
           path: shared
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/adjustable-clock
           path: shared/adjustable-clock
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/infrastructure-micronaut-clock
           path: shared/infrastructure-micronaut-clock
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/transactional-outbox
           path: shared/transactional-outbox
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/infrastructure-spring-outbox
           path: shared/infrastructure-spring-outbox
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/voting
           path: shared/voting
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/offline-jwt
           path: shared/offline-jwt
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/test-starter
           path: shared/test-starter
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/libs   # the constraint lib lives in repo "libs"
           path: shared/constraint
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/config
           path: shared/config
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/email
           path: shared/email
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/password
           path: shared/password
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-security
           path: shared/microservice-security
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-email
           path: shared/microservice-email
@@ -163,17 +163,17 @@ jobs:
       # the three identity services the Maven jobs never touch, because they are Python — but
       # `docker compose up --build` needs their Dockerfiles, and without them the BUILD fails
       # before a single container starts
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-idp
           path: shared/microservice-idp
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-sms
           path: shared/microservice-sms
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-push
           path: shared/microservice-push
@@ -181,41 +181,41 @@ jobs:
 
       # the portal's own children — microservice-image is Python for the same reason, and memes
       # calls it for WebP, so its context has to be here too
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-memes
           path: portal/microservice-memes
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-comments
           path: portal/microservice-comments
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-user-collections
           path: portal/microservice-user-collections
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-offboarding
           path: portal/microservice-offboarding
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-image
           path: portal/microservice-image
           token: ${{ secrets.REPO_PAT }}
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
           cache: maven
 
       - name: Set up Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -271,7 +271,7 @@ jobs:
 
       - name: Upload the stack's logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: saga-e2e-stack-logs
           path: /tmp/portal-stack.log

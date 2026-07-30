@@ -3,7 +3,11 @@ name: CI
 # The PORTAL product workspace. CI recreates the local three-workspace layout — shared/ (the
 # kernel) next to portal/ (this repo) — because the e2e harnesses reach the security jar via
 # ../../../shared/... exactly like on a developer's disk. The kernel installs first with tests
-# skipped (workspace-shared's own CI owns those); the portal reactor then builds WITH tests.
+# skipped; the portal reactor then builds WITH tests. The kernel's tests run in workspace-shared's
+# CI on ITS pushes and on its nightly schedule — NOT on pushes to the eight library repos that
+# carry no workflow of their own — so "the tests ran elsewhere" holds within a day, not per
+# commit. This job's business is the portal, and re-running the kernel suite here would test the
+# neighbour's code, not this PR's.
 #
 # Sub-repos are checked out with REPO_PAT — a fine-grained PAT with Contents:read — because
 # some are private and the default GITHUB_TOKEN only reads this repo.
@@ -19,112 +23,112 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout this workspace as portal/
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: portal
 
       # the shared kernel, laid out exactly as on disk: shared/ + its children
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/workspace-shared
           path: shared
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/adjustable-clock
           path: shared/adjustable-clock
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/infrastructure-micronaut-clock
           path: shared/infrastructure-micronaut-clock
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/transactional-outbox
           path: shared/transactional-outbox
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/infrastructure-spring-outbox
           path: shared/infrastructure-spring-outbox
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/voting
           path: shared/voting
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/offline-jwt
           path: shared/offline-jwt
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/test-starter
           path: shared/test-starter
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/libs   # the constraint lib lives in repo "libs"
           path: shared/constraint
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/config
           path: shared/config
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/email
           path: shared/email
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/password
           path: shared/password
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-security
           path: shared/microservice-security
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-email
           path: shared/microservice-email
           token: ${{ secrets.REPO_PAT }}
 
       # the portal's own children
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-memes
           path: portal/microservice-memes
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-comments
           path: portal/microservice-comments
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-user-collections
           path: portal/microservice-user-collections
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-offboarding
           path: portal/microservice-offboarding
           token: ${{ secrets.REPO_PAT }}
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
           cache: maven
 
-      - name: Install the shared kernel (tests live in workspace-shared's CI)
+      - name: Install the shared kernel (tested in workspace-shared's CI — its pushes + nightly)
         run: ./mvnw -B --no-transfer-progress install -DskipTests
         working-directory: shared
 
@@ -133,6 +137,23 @@ jobs:
       - name: Build and test the portal reactor
         run: ./mvnw -B --no-transfer-progress clean install
         working-directory: portal
+
+      # Security is the PROVIDER of two contracts whose consumers live HERE: memes' GET /me
+      # introspection pact (microservice-memes/pacts-http) and offboarding's
+      # ACCOUNT_DELETION_REQUESTED fact pact (microservice-offboarding/pacts). Their provider
+      # tests sit in security-infrastructure and @EnabledIf-skip unless the portal workspace is
+      # checked out next door — which it never is in workspace-shared's CI, and the kernel
+      # install above runs -DskipTests. Until this step existed, a portal PR changing either
+      # consumer contract merged with no verification against security anywhere. It runs AFTER
+      # the portal reactor, so the pacts it reads are the ones this PR's consumer tests just
+      # regenerated. SilentlySkippedPactTest rides along as the witness that neither provider
+      # test can skip silently in this very layout.
+      - name: Verify portal's consumer pacts against security (provider side)
+        run: >
+          ./mvnw -B --no-transfer-progress -pl microservice-security/security-infrastructure test
+          -Dtest='MeIntrospectionPactProviderTest,OffboardingFactsPactProviderTest,SilentlySkippedPactTest'
+          -DfailIfNoTests=true
+        working-directory: shared
 
   # The gallery driven through a real browser (cucumber-js + Playwright): the memes-ui harness
   # boots the REAL compose stack (run-e2e.sh -> ../../infra-up.sh) and drives the gallery in it.
@@ -147,95 +168,95 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout this workspace as portal/
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: portal
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/workspace-shared
           path: shared
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/adjustable-clock
           path: shared/adjustable-clock
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/infrastructure-micronaut-clock
           path: shared/infrastructure-micronaut-clock
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/transactional-outbox
           path: shared/transactional-outbox
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/infrastructure-spring-outbox
           path: shared/infrastructure-spring-outbox
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/voting
           path: shared/voting
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/offline-jwt
           path: shared/offline-jwt
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/test-starter
           path: shared/test-starter
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/libs   # the constraint lib lives in repo "libs"
           path: shared/constraint
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/config
           path: shared/config
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/email
           path: shared/email
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/password
           path: shared/password
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-security
           path: shared/microservice-security
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-email
           path: shared/microservice-email
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-memes
           path: portal/microservice-memes
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-comments
           path: portal/microservice-comments
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-user-collections
           path: portal/microservice-user-collections
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-offboarding
           path: portal/microservice-offboarding
@@ -246,29 +267,29 @@ jobs:
       # service in the merged file. Without these four contexts on disk the build fails before a
       # single container starts, so a job that had been passing on four jars cannot pass any more
       # without them.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-image
           path: portal/microservice-image
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-idp
           path: shared/microservice-idp
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-sms
           path: shared/microservice-sms
           token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-push
           path: shared/microservice-push
           token: ${{ secrets.REPO_PAT }}
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
@@ -290,7 +311,7 @@ jobs:
         working-directory: portal
 
       - name: Set up Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -318,7 +339,7 @@ jobs:
         working-directory: portal
       - name: Upload the stack's logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-stack-logs
           path: /tmp/portal-stack.log

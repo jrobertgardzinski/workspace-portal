@@ -35,8 +35,8 @@ k3d image import -c portal-dev \
   security-memes:latest security-comments:latest \
   security-user-collections:latest security-collections-ui:latest \
   security-offboarding:latest security-image-encoder:latest \
-  postgres:16-alpine minio/minio:RELEASE.2024-06-13T22-53-53Z \
-  apache/kafka:3.9.1 axllent/mailpit:latest
+  postgres:18-alpine minio/minio:RELEASE.2025-09-07T16-13-09Z \
+  apache/kafka:4.3.1 axllent/mailpit:latest
 
 # 4. apply — ALWAYS through the overlay (the base has no Secrets)
 kubectl apply -k k8s/overlays/dev

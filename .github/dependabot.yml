@@ -1,0 +1,65 @@
+version: 2
+
+# WHY THIS FILE EXISTS (2026-07-30)
+#
+# Every third-party container image and every GitHub Action in this workspace was pinned by hand and
+# watched by nobody. Dependabot was configured for maven, npm and pip in the SERVICE repositories,
+# so the Java and JavaScript trees stayed current — while the images sat where they were typed:
+# postgres:16-alpine (released September 2023), apache/kafka:3.9.1, minio from June 2024, the whole
+# Grafana/Prometheus stack from mid-2024, and actions/checkout@v4 in 141 places. The k8s manifests
+# were WRITTEN on 2026-07-25 and carried a 2023 database image on day one, which is the tell: those
+# versions are not this project's history, they are the writing hand's memory of "current".
+#
+# The fix is mechanical, not vigilance. Everything below is a directory whose image tags or action
+# pins nobody was ever going to notice going stale.
+#
+# Same rhythm as the service repositories: weekly, patches grouped into ONE pull request so the
+# auto-merge workflow has a single thing to decide about; minor and major stay ungrouped, because
+# they change behaviour and behaviour is a person's call. Limit 10, not 5 — a truncated queue looks
+# exactly like an empty one (the lesson of 2026-07-29, when a five-PR cap silently swallowed a
+# cucumber bump for a year).
+updates:
+  # The workflows of this repository: 141 action pins across ci.yml and e2e-saga.yml lived on
+  # actions/checkout@v4 while v7 was current.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]
+    groups:
+      patches:
+        patterns: ["*"]
+        update-types: ["patch"]
+
+  # docker-compose.yml at the root — the portal's five Postgres instances, MinIO and the images the
+  # dev stack runs on. Dependabot's docker ecosystem has covered Docker Compose since February 2025.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]
+
+  # The k8s manifests. The docker ecosystem needs ONE ENTRY PER DIRECTORY holding manifests, so this
+  # covers k8s/base; the dev overlay carries no image tags of its own.
+  - package-ecosystem: docker
+    directory: "/k8s/base"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]
+    ignore:
+      # The portal's own images are built locally by the up-scripts and tagged :latest — there is no
+      # registry release for Dependabot to follow, and it would open a pull request every week
+      # about a tag that never changes.
+      - dependency-name: "security-*"
