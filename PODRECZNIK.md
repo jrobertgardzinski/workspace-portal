@@ -1177,20 +1177,63 @@ jednorazowego, kworum i werdyktu, arytmetyki timeoutów, ADR-ów i wdrożenia je
 Żadne znalezisko nie podważyło **mechaniki** opisanej w tym dokumencie. To ważne przy nauce:
 uczysz się poprawnego modelu systemu, tylko w trzech miejscach model działa gorzej, niż kod obiecuje.
 
+**WAŻNE, jeśli czytasz to później:** wszystkie defekty z tabeli poniżej zostały **naprawione tego
+samego dnia** (41 pozycji z PLAN-P18, w tym cztery krytyczne). Zostawiam je opisane, bo do nauki
+systemu warto wiedzieć, **jak wyglądała wada i czym różni się od poprawki** — a nie dlatego, że
+kod nadal tak działa. Przy każdej pozycji piszę, co jest teraz.
+
 **Co się zmienia:**
 
 | Gdzie | Korekta |
 |---|---|
-| **§4 (step-up)** | Cytowane zdanie o złodzieju sesji jest **nieprawdziwe**. `StepUpGuard` używa nazwy akcji **tylko** do zbudowania odpowiedzi 403, a elewacja jest kluczowana **samym tokenem** — więc elewacja zdobyta pod dowolną tanią (albo nieznaną) akcją odblokowuje `/account/delete`. Dla nieznanej akcji polityka to `SECOND_FACTORS`, przy którym hasło **nie jest weryfikowane**, a konto bez zapisanych czynników dostaje elewację natychmiast. Skutek: **skradziony access token wystarcza, by usunąć konto i całą treść** — bez znajomości hasła. Sprawdziłem to ręcznie, nie tylko przez agenta. |
-| **§4, punkt „trzy rzeczy, które zaskakują"** | Dochodzi czwarta i najważniejsza: **trzy z czterech wrażliwych endpointów nigdy nie zostały za tę bramkę wpięte.** `grep requireElevation` daje dwa trafienia (usunięcie konta, reset czynników przez admina). Zapis i usunięcie czynnika MFA oraz zmiana hasła są chronione samą żywą sesją — a `FactorsController` bierze `target` czynnika **z ciała żądania**, więc skradziona sesja wstawia ofierze drugi czynnik na adres napastnika. |
-| **§8.4 i §12.2 (przeciwne polityki retry)** | Nazwałem to „nazwanym kompromisem". To **defekt**: scenariusz utraty danych w `user-collections` jest osiągalny, a u koordynatora istnieje drugi, niezależny mechanizm o tym samym skutku (przeterminowanie liczone od `created_at`). Patrz korekta w §8.4. |
-| **§13 (co zostaje po użytkowniku)** | Tabela jest poprawna, ale **za łagodna**. Dochodzą dwie pozycje: (1) `password_resets` **nie ma kolumny czasowej**, więc token resetu nie wygasa nigdy i przeżywa konto — po ponownej rejestracji tego adresu przez inną osobę stary link **przejmuje jej konto**; (2) zmiana adresu e-mail **gubi całe MFA** (czynniki, kody odzyskiwania, flagę passwordless są kluczowane adresem i nikt ich nie przenosi), a dla konta federacyjnego **na zawsze blokuje usunięcie siebie**. |
-| **§14 (czym to jest udowodnione)** | Do tabeli „co zepsute → co wyłapie" dochodzi wiersz: **push do ośmiu bibliotek w `shared` nie uruchamia nigdzie ani jednego testu** (te repozytoria nie mają własnego CI, a workflow agregatora nie reaguje na pushe do nich; portal instaluje je z `-DskipTests`). |
+| **§4 (step-up)** | Cytowane zdanie o złodzieju sesji jest **nieprawdziwe**. `StepUpGuard` używa nazwy akcji **tylko** do zbudowania odpowiedzi 403, a elewacja jest kluczowana **samym tokenem** — więc elewacja zdobyta pod dowolną tanią (albo nieznaną) akcją odblokowuje `/account/delete`. Dla nieznanej akcji polityka to `SECOND_FACTORS`, przy którym hasło **nie jest weryfikowane**, a konto bez zapisanych czynników dostaje elewację natychmiast. Skutek: **skradziony access token wystarcza, by usunąć konto i całą treść** — bez znajomości hasła. Sprawdziłem to ręcznie, nie tylko przez agenta. **NAPRAWIONE:** elewacja jest teraz kluczowana parą token+akcja, nieznana akcja dostaje najostrzejsze wymaganie (fail-closed), a konto bez czynników musi podać hasło zamiast dostawać elewację milcząco. Zdanie z javadoca stało się prawdziwe — ale dopiero po naprawie, nie w dniu, w którym je napisano. |
+| **§4, punkt „trzy rzeczy, które zaskakują"** | Dochodzi czwarta i najważniejsza: **trzy z czterech wrażliwych endpointów nigdy nie zostały za tę bramkę wpięte.** `grep requireElevation` daje dwa trafienia (usunięcie konta, reset czynników przez admina). Zapis i usunięcie czynnika MFA oraz zmiana hasła są chronione samą żywą sesją — a `FactorsController` bierze `target` czynnika **z ciała żądania**, więc skradziona sesja wstawia ofierze drugi czynnik na adres napastnika. **NAPRAWIONE:** zapis i usunięcie czynnika stoją za step-upem, a kod `EMAIL_CODE` idzie wyłącznie na własny, już zweryfikowany adres wołającego. Ta naprawa zmieniła też przepływ w interfejsie — pierwszy czynnik potwierdza się hasłem — co złapał dopiero test przeglądarkowy, nie build. |
+| **§8.4 i §12.2 (przeciwne polityki retry)** | Nazwałem to „nazwanym kompromisem". To **defekt**: scenariusz utraty danych w `user-collections` jest osiągalny, a u koordynatora istnieje drugi, niezależny mechanizm o tym samym skutku (przeterminowanie liczone od `created_at`). Patrz korekta w §8.4. **NAPRAWIONE:** wszyscy trzej uczestnicy mają teraz ten sam budżet 90 s, a zamiatacz liczy przeterminowanie od `updated_at`, czyli od OSTATNIEJ dostarczonej próby — dzięki czemu kompensacja nie wyprzedza już uczestnika, który wciąż pracuje. |
+| **§13 (co zostaje po użytkowniku)** | Tabela jest poprawna, ale **za łagodna**. Dochodzą dwie pozycje: (1) `password_resets` **nie ma kolumny czasowej**, więc token resetu nie wygasa nigdy i przeżywa konto — po ponownej rejestracji tego adresu przez inną osobę stary link **przejmuje jej konto**; (2) zmiana adresu e-mail **gubi całe MFA** (czynniki, kody odzyskiwania, flagę passwordless są kluczowane adresem i nikt ich nie przenosi), a dla konta federacyjnego **na zawsze blokuje usunięcie siebie**. **NAPRAWIONE:** porty dostały operacje przeniesienia i czyszczenia, `password_resets` kolumnę czasową, a rodzinę zamyka generyczny `AddressKeyedStoresTest` — wylicza osiem magazynów kluczowanych adresem i egzekwuje dwa prawa: dane idą za kontem, nic nie zostaje po usunięciu. |
+| **§14 (czym to jest udowodnione)** | Tabela „co zepsute → co wyłapie" miała **dwie luki, obie już zamknięte tego samego dnia** — opis niżej. |
+
+### §14 po naprawach — co się zmieniło w bramkach
+
+Errata w pierwszej wersji mówiła, że **push do ośmiu bibliotek w `shared` nie uruchamia nigdzie ani
+jednego testu**. To była prawda przez kilka godzin. Naprawy z tej samej rundy zmieniły dwa wiersze
+tabeli z §14:
+
+| Co zepsute | Co wyłapie — **stan aktualny** |
+|---|---|
+| regresja w bibliotece `shared` bez własnego CI (`voting`, `config`, `password`, `email`, `constraint`, `test-starter`, `adjustable-clock`, `infrastructure-micronaut-clock`) | **nocny reaktor agregatora** (`schedule` w CI `shared`). Gwarancja jest **dzienna, nie per commit** — wybrano ten wariant, bo 6 z 8 bibliotek nie zbuduje się samodzielnie: zależą od siostrzanych SNAPSHOT-ów, które istnieją tylko w reaktorze |
+| zmiana kształtu paktu konsumenckiego portal→security | **portal CI, per PR** — nowy krok uruchamia testy providerskie w `security` na paktach właśnie zregenerowanych przez ten PR. Wcześniej te dwa pakty nie były weryfikowane w **żadnym** CI: `shared` nie klonuje portalu, więc `@EnabledIf` pomijał je i tam |
+
+Do tabeli dochodzi też **nowy wiersz**, którego w etapie 1 nie było, bo mechanizm wtedy nie istniał:
+
+| Co zepsute | Co wyłapie |
+|---|---|
+| przestarzały obraz kontenera albo pin akcji GitHuba | **Dependabot** — od 2026-07-30 pilnuje ekosystemów `docker` i `github-actions`. Wcześniej **nie pilnował ich nikt**, i to dlatego cały stos kontenerów stał na wersjach z połowy 2024, podczas gdy zależności Mavena były bieżące. Nie obejmuje tagów w `Testcontainers` (są w kodzie Javy) ani plików compose o niestandardowych nazwach w `shared` |
 
 **Morał do zapamiętania — ten sam, który ten podręcznik powtarza w §16:** javadoc jest świadkiem,
 nie źródłem prawdy. Cztery z powyższych korekt to miejsca, w których **komentarz opisywał ochronę,
 której kod nie realizuje**. Przy nauce tego systemu warto to traktować jako regułę: jeśli javadoc
 mówi „X nie może się zdarzyć", sprawdź w kodzie, **co konkretnie** temu zapobiega.
+
+### Jedna zmiana w mechanice, o której warto wiedzieć przy §4
+
+Poza naprawami powyżej doszła jedna rzecz, która **zmienia model**, a nie tylko go poprawia:
+licznik nieudanych logowań przestał być kluczowany samym adresem IP.
+
+Wada wyszła bocznymi drzwiami. Naprawa jednej z pozycji P18 zamknęła realną lukę — udane logowanie
+czyściło rekord całego adresu, więc jedno znane dobre hasło było przyciskiem RESET dla każdego konta
+za tym adresem — ale zrobiła to przez wycięcie czyszczenia w całości. Skutek: trzy pomyłki na
+piętnaście minut blokowały wszystkich za jednym adresem. Pierwszą ofiarą nie był napastnik, tylko
+**własna suita testowa tego projektu**, która zablokowała samą siebie w połowie przebiegu.
+
+Teraz próby liczone są na **parę (źródło, konto)**, z drugim, znacznie wyższym licznikiem per adres,
+który łapie rozsiewanie po wielu kontach. Konto zapisywane jest jako odcisk z sekretem serwera, nie
+jako adres — do liczenia wystarczy równość, a adres przy każdej nieudanej próbie byłby rejestrem do
+enumeracji. Warto zapamiętać kształt tej lekcji: **naprawa luki potrafi otworzyć drugą, jeśli
+zamyka się ją przez usunięcie mechanizmu zamiast przez zawężenie go.**
+
+**I morał drugi, świeższy:** ta errata zdążyła się zestarzeć **w ciągu jednego dnia**, bo opisywała
+stan bramek, a bramki naprawiliśmy. Dokument o systemie żyjącym starzeje się szybciej niż sam system
+— dlatego w §14 warto ufać tabeli, a nie zapamiętanemu zdaniu.
 
 ---
 
