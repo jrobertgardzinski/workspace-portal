@@ -175,6 +175,12 @@ hasło plus kolejne czynniki — trudniej. Komentarz w kontrolerze mówi to jedn
 > stepped up (the thief of a live session would have to pass the chain too)"*
 > — `shared/microservice-security/security-infrastructure/.../DeleteAccountController.java:43`
 
+> ⚠️ **To zdanie z kodu jest NIEPRAWDZIWE — przegląd P18 (2026-07-30) to udowodnił, a ja
+> potwierdziłem ręcznie.** Elewacja step-upu nie jest wiązana z akcją, więc złodziej żywej sesji
+> **nie musi** przejść łańcucha skonfigurowanego dla `delete-account`. Czytaj ten rozdział jako
+> opis **zamiaru** projektowego, nie stanu faktycznego — szczegóły w §20 (Errata) i w
+> `portal/PLAN-P18.md` poz. 1.
+
 **Jak to działa mechanicznie** (trzy klasy, warto je zapamiętać razem):
 
 1. `POST /account/step-up` z `{action:"delete-account", password:"…"}` → `StepUp.start(...)`.
@@ -623,9 +629,14 @@ advancing and /health (readiness) turns 503"*.
 
 **Rozstrzygnięcie napięcia:** javadoc `SagaRetryBudget` w comments **wprost krytykuje** podejście
 siostrzanego serwisu (*„it cannot simply be copied here"*), ale collections **nie zostało
-zmienione**. Czyli: ryzyko opisane w comments formalnie **dotyczy collections nadal**. To nie jest
-niedopatrzenie do ukrycia — to realny, nazwany kompromis, w którym dwie usługi wybrały przeciwne
-strony tego samego dylematu: *zgubić potwierdzenie* kontra *wyczyścić konto po kompensacji*.
+zmienione**. Czyli: ryzyko opisane w comments formalnie **dotyczy collections nadal**.
+
+> ⚠️ **Korekta po przeglądzie P18:** nazwałem to wyżej „nazwanym kompromisem". Po weryfikacji to
+> jest **defekt**, nie kompromis — scenariusz utraty danych w collections jest osiągalny
+> (30-minutowa awaria bazy → kolekcje kasowane po tym, jak saga oddała konto), a u koordynatora
+> istnieje **drugi, niezależny** mechanizm dający ten sam skutek (zamiatacz liczy przeterminowanie
+> od `created_at`, więc kapituluje ~45 s po progu, gdy uczestnik ma jeszcze ~120 s budżetu).
+> Patrz §20 (Errata) oraz `portal/PLAN-P18.md` poz. 11 i 12.
 
 ### 8.5 Jeden wspólny odruch: pusty adres **nie jest** potwierdzany
 
@@ -1152,6 +1163,34 @@ Kolejność zaproponowana — do zmiany, jeśli któryś temat jest pilniejszy:
 | 4 | **Komentarz i głos** | jedyne dwa **zadeklarowane wyjątki** od prawa idempotencji z ADR 0006 |
 | 5 | **Kaskada `MEME_DELETED`** | trzeci wzorzec spójności: sprzątanie best-effort **bez** sagi, i dlaczego tu wolno inaczej |
 | 6 | **Obserwowalność** | jak przejść jeden `cid` przez cztery serwisy w logach i trace'ach; co mierzą ręczne eksportery Prometheusa |
+
+---
+
+## 20. Errata — co zmienił przegląd P18 (2026-07-30)
+
+Tego samego dnia, po napisaniu etapu 1, kod przeszedł osobny przegląd nastawiony na **defekty**
+(9 agentów szukających + 9 adwersaryjnych weryfikatorów; pełna lista w `portal/PLAN-P18.md`).
+Wynik dla tego podręcznika jest taki: **szkielet się nie zmienia, trzy miejsca wymagają korekty.**
+
+**Co zostaje bez zmian** (§1–3, §5–7, §9–11, §15–19): opis sagi, transactional outboxu, zatrzasku
+jednorazowego, kworum i werdyktu, arytmetyki timeoutów, ADR-ów i wdrożenia jest zgodny z kodem.
+Żadne znalezisko nie podważyło **mechaniki** opisanej w tym dokumencie. To ważne przy nauce:
+uczysz się poprawnego modelu systemu, tylko w trzech miejscach model działa gorzej, niż kod obiecuje.
+
+**Co się zmienia:**
+
+| Gdzie | Korekta |
+|---|---|
+| **§4 (step-up)** | Cytowane zdanie o złodzieju sesji jest **nieprawdziwe**. `StepUpGuard` używa nazwy akcji **tylko** do zbudowania odpowiedzi 403, a elewacja jest kluczowana **samym tokenem** — więc elewacja zdobyta pod dowolną tanią (albo nieznaną) akcją odblokowuje `/account/delete`. Dla nieznanej akcji polityka to `SECOND_FACTORS`, przy którym hasło **nie jest weryfikowane**, a konto bez zapisanych czynników dostaje elewację natychmiast. Skutek: **skradziony access token wystarcza, by usunąć konto i całą treść** — bez znajomości hasła. Sprawdziłem to ręcznie, nie tylko przez agenta. |
+| **§4, punkt „trzy rzeczy, które zaskakują"** | Dochodzi czwarta i najważniejsza: **trzy z czterech wrażliwych endpointów nigdy nie zostały za tę bramkę wpięte.** `grep requireElevation` daje dwa trafienia (usunięcie konta, reset czynników przez admina). Zapis i usunięcie czynnika MFA oraz zmiana hasła są chronione samą żywą sesją — a `FactorsController` bierze `target` czynnika **z ciała żądania**, więc skradziona sesja wstawia ofierze drugi czynnik na adres napastnika. |
+| **§8.4 i §12.2 (przeciwne polityki retry)** | Nazwałem to „nazwanym kompromisem". To **defekt**: scenariusz utraty danych w `user-collections` jest osiągalny, a u koordynatora istnieje drugi, niezależny mechanizm o tym samym skutku (przeterminowanie liczone od `created_at`). Patrz korekta w §8.4. |
+| **§13 (co zostaje po użytkowniku)** | Tabela jest poprawna, ale **za łagodna**. Dochodzą dwie pozycje: (1) `password_resets` **nie ma kolumny czasowej**, więc token resetu nie wygasa nigdy i przeżywa konto — po ponownej rejestracji tego adresu przez inną osobę stary link **przejmuje jej konto**; (2) zmiana adresu e-mail **gubi całe MFA** (czynniki, kody odzyskiwania, flagę passwordless są kluczowane adresem i nikt ich nie przenosi), a dla konta federacyjnego **na zawsze blokuje usunięcie siebie**. |
+| **§14 (czym to jest udowodnione)** | Do tabeli „co zepsute → co wyłapie" dochodzi wiersz: **push do ośmiu bibliotek w `shared` nie uruchamia nigdzie ani jednego testu** (te repozytoria nie mają własnego CI, a workflow agregatora nie reaguje na pushe do nich; portal instaluje je z `-DskipTests`). |
+
+**Morał do zapamiętania — ten sam, który ten podręcznik powtarza w §16:** javadoc jest świadkiem,
+nie źródłem prawdy. Cztery z powyższych korekt to miejsca, w których **komentarz opisywał ochronę,
+której kod nie realizuje**. Przy nauce tego systemu warto to traktować jako regułę: jeśli javadoc
+mówi „X nie może się zdarzyć", sprawdź w kodzie, **co konkretnie** temu zapobiega.
 
 ---
 
