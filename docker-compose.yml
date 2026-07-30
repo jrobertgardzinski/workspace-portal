@@ -136,7 +136,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
       POSTGRES_DB: memes
     volumes:
-      - memes_pgdata:/var/lib/postgresql/data
+      - memes_pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d memes"]
       interval: 3s
@@ -195,7 +195,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
       POSTGRES_DB: comments
     volumes:
-      - comments_pgdata:/var/lib/postgresql/data
+      - comments_pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d comments"]
       interval: 3s
@@ -263,7 +263,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
       POSTGRES_DB: collections
     volumes:
-      - collections_pgdata:/var/lib/postgresql/data
+      - collections_pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d collections"]
       interval: 3s
@@ -313,7 +313,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
       POSTGRES_DB: offboarding
     volumes:
-      - offboarding_pgdata:/var/lib/postgresql/data
+      - offboarding_pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d offboarding"]
       interval: 3s
