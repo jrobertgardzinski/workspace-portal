@@ -81,15 +81,18 @@ Given('the favourites service is down', { timeout: 120_000 }, async function () 
  * and polling Mailpit costs nothing, while polling sign-in during limbo reads as a wrong
  * password and three of those from one address trip the brute-force block.
  *
- * The deadline covers the arithmetic with margin: capitulation at ~172s after the request
- * (120s purge timeout from the saga's start + 3 sweeps of re-commands + the give-up sweep,
- * 15s apart), plus the outbox -> Kafka -> email -> SMTP road for the mail itself.
+ * The deadline covers the arithmetic with margin, and the arithmetic is NOT the one this comment
+ * used to state. A silent participant costs 120s per DELIVERED command (the timeout is measured
+ * from the last one it received, P18), so with three re-commands the portal takes about eight
+ * minutes — which means security's own 5-minute net gets there first and sends this very mail.
+ * Seven minutes of budget covers the mail either way; the meme's return is a separate wait,
+ * because RESTORE_USER_CONTENT rides the portal's later verdict.
  */
-When('the portal gives up waiting for the favourites service', { timeout: 300_000 },
+When('the portal gives up waiting for the favourites service', { timeout: 480_000 },
   async function () {
     this.apologyMail = await this.eventually(
       () => this.newestMail(this.leaver.email, { matching: /could not delete your account/i }),
-      { timeoutMs: 240_000, everyMs: 2_000 });
+      { timeoutMs: 420_000, everyMs: 5_000 });
   });
 
 // ---------------------------------------------------------------------------------------------
@@ -140,7 +143,7 @@ Then('a mail apologises that the deletion could not be completed', function () {
   assert.match(this.apologyMail, /could not delete your account/i);
 });
 
-Then('their meme is back in the gallery', async function () {
+Then('their meme is back in the gallery', { timeout: 420_000 }, async function () {
   // the compensation, end to end and from the outside: memes confirmed a MARK, not a deletion,
   // so the orchestrator's RESTORE_USER_CONTENT puts the picture back where it was. It is
   // asynchronous — the same sweep that announces the failure publishes the command — hence the
@@ -152,7 +155,10 @@ Then('their meme is back in the gallery', async function () {
     const wall = await this.wallIds();
     assert.ok(wall.includes(this.ownMemeId),
       'the compensated meme is not back on the public wall');
-  }, { timeoutMs: 60_000, everyMs: 3_000 });
+    // minutes, not seconds: the mail above is SECURITY's 5-minute net, while the restore rides the
+    // PORTAL's own verdict at about eight — so this step routinely waits out the gap between two
+    // timeouts that were never configured with each other in mind
+  }, { timeoutMs: 360_000, everyMs: 5_000 });
 });
 
 // ---------------------------------------------------------------------------------------------

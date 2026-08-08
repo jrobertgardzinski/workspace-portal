@@ -763,38 +763,60 @@ odgadnąć z kodu jednego serwisu.
 | offboarding | `OFFBOARDING_MAX_PURGE_RETRIES` | **3** | ile razy ponowić rozkaz przed kapitulacją |
 | offboarding | `OFFBOARDING_OUTCOME_REPUBLISH_SEC` | **30 s** | po tym czasie nieogłoszony werdykt jest wysyłany ponownie |
 | offboarding | `OFFBOARDING_RETENTION_DAYS` | **30 dni** | po tym czasie zakończone sagi są usuwane (dane osobowe) |
-| security | `account-deletion.purge-timeout` | **5 min** | siatka bezpieczeństwa: brak werdyktu → kompensacja |
+| security | `account-deletion.purge-timeout` | **5 min** | siatka bezpieczeństwa: brak werdyktu → kompensacja. **Po P18 to ONA odpala pierwsza** — patrz przebieg niżej |
 | security | tick `AccountDeletionTimeouts` | **30 s** | jak często security sprawdza przeterminowane sagi |
 | security | listener werdyktów | **10 prób**, 1 s wykładniczo | ponowienia przy błędzie obsługi werdyktu |
 
-**Jak to razem gra** (przebieg kapitulacji, zmierzony w teście `e2e-saga-outage.sh`):
+**Jak to razem gra** (przebieg kapitulacji — poniższe znaczniki są ZMIERZONE na żywym stosie
+2026-08-08, z logów `microservice-offboarding`, a nie wyliczone na kartce):
 
 ```
 t=0      żądanie usunięcia; konto zablokowane; rozkaz purge wychodzi
-t≈0      memes i comments czyszczą i potwierdzają; collections nie odpowiada (leży)
-t=120 s  saga przeterminowana
-t≈127 s  zamiatacz: 1. ponowienie rozkazu     (co 15 s, nie co 120 s — patrz niżej)
-t≈142 s  2. ponowienie
-t≈157 s  3. ponowienie  → budżet wyczerpany
-t≈172 s  KAPITULACJA: stan COMPENSATED, werdykt PORTAL_PURGE_FAILED z confirmed=[comments,memes]
-t≈172 s  security: odblokowuje konto, wysyła przeprosiny
-t=300 s  (siatka security nigdy się nie odpala — werdykt portalu wygrał wyścig)
+t≈0      memes i comments OZNACZAJĄ treść i potwierdzają; collections nie odpowiada (leży)
+t=120 s  saga przeterminowana → 1. ponowienie rozkazu
+t=240 s  2. ponowienie
+t=360 s  3. ponowienie → budżet wyczerpany
+t=300 s  ⚠ SIATKA SECURITY ODPALA PIERWSZA: konto odblokowane, mail „nie udało się"
+t≈480 s  KAPITULACJA PORTALU: RESTORE_USER_CONTENT do wszystkich uczestników (treść wraca),
+         potem werdykt PORTAL_PURGE_FAILED — który w security trafia już na sagę COMPENSATED
 ```
+
+Zwróć uwagę na `t=300 s`: **security wygrywa ten wyścig, nie portal.** Tak nie było zawsze i nikt
+tego nie zaprojektował — to suma dwóch niezależnie konfigurowanych timeoutów po naprawie z P18
+(patrz „Druga" niżej). Praktyczny skutek dla użytkownika: konto wraca ok. 5 minuty, a treść ok. 8 —
+najpierw dostaje z powrotem drzwi, potem to, co za nimi.
 
 Dwie rzeczy do zapamiętania z tej tabelki:
 
-**Pierwsza — dlaczego security czeka 5 minut, a portal 2.** Komentarz przy parametrze mówi:
+**Pierwsza — dlaczego security czeka 5 minut, a portal 2 (i dlaczego to już nie wystarcza).**
+Komentarz przy parametrze mówi:
 *„the safety net fires well AFTER the portal's own timeout (2m), so the portal's failure
 announcement normally wins the race"*. Siatka bezpieczeństwa security istnieje na wypadek
 **śmierci koordynatora**, nie zwykłej porażki. Gdyby oba timeouty były równe, wyścig
 rozstrzygałby się losowo, a wtedy w bazie sagi security mógłby wylądować stan `COMPENSATED`
 w momencie, gdy portal właśnie ogłasza sukces — dokładnie ta katastrofa z rozdziału 12.
 
-**Druga — pułapka, którą warto znać.** Przeterminowanie liczone jest od `created_at`, nie od
-`updated_at`. Po pierwszym przekroczeniu progu saga jest przeterminowana **na zawsze**, więc
-ponowienia nie wychodzą co 120 s, ale na **każdym** przebiegu zamiatacza — czyli **co 15 s**.
-Trzy ponowienia i kapitulacja mieszczą się w ~minucie po upływie dwuminutowego progu, a nie
-po ośmiu minutach, jak sugerowałby sam próg.
+**Ale ten argument mówi o progu 2 minut, a po P18 portal potrzebuje ośmiu.** Pięciominutowa siatka
+nie jest już „dobrze PO" timeoucie portalu — jest przed nim. Wyścig, który miał rozstrzygać się
+deterministycznie na korzyść portalu, rozstrzyga się teraz deterministycznie na korzyść security,
+i nikt tego nie zapisał jako decyzji. Do rozstrzygnięcia: albo podnieść siatkę security ponad
+`purgeTimeout × (retries + 1)`, albo świadomie przyjąć, że przy długiej ciszy uczestnika to
+tożsamość oddaje konto, a portal tylko sprząta po sobie kilka minut później. Dziś skutek jest
+nieszkodliwy (spóźniony werdykt trafia na sagę `COMPENSATED` i jest odrzucany), ale to zbieg
+okoliczności, nie projekt.
+
+**Druga — pułapka, którą warto znać, i to w wersji ODWRÓCONEJ po P18.** Do lipca 2026
+przeterminowanie liczono od `created_at`: po pierwszym przekroczeniu progu saga była
+przeterminowana **na zawsze**, więc ponowienia wychodziły na KAŻDYM przebiegu zamiatacza — co 15 s
+— i cała kapitulacja mieściła się w ~172 s. Brzmiało to sprytnie, a było błędem: zamiatacz
+kapitulował, gdy uczestnik jeszcze pracował (jego własny budżet ponowień to 90 s na rozkaz), więc
+purge mógł się wykonać PO tym, jak konto oddano właścicielowi z przeprosinami.
+
+Naprawa (P18) liczy przeterminowanie od `updated_at` — od OSTATNIEJ dostarczonej próby. Skutek
+arytmetyczny: ponowienia co 120 s, a cała sprawa to `purgeTimeout × (retries + 1) = 120 × 4 ≈
+8 minut`. Komentarz w `Main` mówi to wprost. **Uwaga na dokumenty starsze niż ta zmiana** — scenariusz
+e2e kapitulacji nosił starą arytmetykę (~172 s) w prozie i w timeoutach kroków jeszcze 2026-08-08,
+i nie wykrył tego nikt, bo ten scenariusz nie był uruchamiany w żadnym CI.
 
 I jeszcze jedna subtelność, ładna: **licznik ponowień nie jest naliczany w momencie wysłania
 rozkazu**, tylko dopiero po **udowodnionej dostawie** do brokera. Uzasadnienie:

@@ -15,14 +15,24 @@ Feature: A participant's outage — the promise of deletion is kept honest, not 
 
   This scenario stages the CAPITULATION path, because it is the one that can be arranged
   deterministically: while the favourites service stays stopped, nothing can confirm its purge,
-  so the saga's give-up is guaranteed by arithmetic alone — purge timeout 120s from the saga's
-  start, sweeper every 15s, 3 re-commands (each delivered instantly, the broker is up) at
-  ~127s/~142s/~157s, capitulation on the next sweep at ~172s; security's own 5-minute safety
-  net never enters the race. The HAPPY-AFTER-RETURN variant (restart the service in time, the
-  saga completes: meme gone, sign-in 401 for good) is real too, but proving it needs the
-  restarted container to boot, rejoin the consumer group and purge BEFORE the ~157s retry wall
-  — a race against container and rebalance timing, not a fact of arithmetic — so it is
-  described here and staged nowhere.
+  so the give-up is guaranteed by arithmetic alone. The arithmetic, though, is NOT what this
+  paragraph claimed until 2026-08-08, and the difference is minutes. The purge timeout is measured
+  from the last command the participant actually RECEIVED, not from the saga's birth (P18: "the
+  sweeper stops capitulating while a participant is still working"), so a silent participant costs
+  120s per delivered command and the whole case takes 120s x 4 = about EIGHT MINUTES. The
+  sweeper's 15s cadence only decides how promptly each deadline is noticed.
+
+  That has a consequence the old text got backwards: security's own 5-minute safety net no longer
+  loses the race — it fires FIRST. So the apology mail this scenario waits for is security's, at
+  around five minutes, and the portal's own RESTORE_USER_CONTENT follows about three minutes
+  later. The content therefore comes back AFTER the account does, and the steps below wait for
+  each in that order. Nobody designed that ordering; it is what two independently configured
+  timeouts add up to, and seeing it stated is worth more than a scenario that pretends otherwise.
+
+  The HAPPY-AFTER-RETURN variant (restart the service in time, the saga completes: meme gone,
+  sign-in 401 for good) is real too, but proving it needs the restarted container to boot, rejoin
+  the consumer group and purge before the next 120s wall — a race against container and rebalance
+  timing, not a fact of arithmetic — so it is described here and staged nowhere.
 
   The steps sample the sign-in door sparingly on purpose: an account in deletion limbo answers
   like a wrong password, and three wrong passwords from one address trip the brute-force block

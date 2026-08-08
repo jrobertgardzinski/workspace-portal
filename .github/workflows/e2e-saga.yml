@@ -40,15 +40,29 @@ name: Saga e2e (full stack)
 # thing that would go red for the weather instead of for the diff, and no timeout can be raised to
 # fix it, because the budget IS what is under test.
 #
-# @outage (participant-outage.feature) stays out of the scheduled run: it stops and starts a real
-# container and spends minutes watching the retry budget burn down on purpose. Ask for it by hand
-# with the `outage` input. To have the nightly cover the compensation path too, add a second cron
-# or flip that input's default — deliberately left to the owner, because it doubles the runtime.
+# @outage (participant-outage.feature) is the COMPENSATION path: it stops a real container and
+# spends minutes watching the retry budget burn down on purpose. It used to run nowhere but by
+# hand, and that was defensible while compensation was a word rather than an act — the scenario's
+# last step literally asserted "their meme stays gone", i.e. that the leaver got their account back
+# WITHOUT their content.
+#
+# ADR 0007 changed what that scenario is worth. Participants now MARK before they erase, the
+# orchestrator's compensation puts the content back, and the step asserts the opposite: the meme is
+# in the gallery again. That makes this the only end-to-end proof of the portal's headline
+# behaviour — and a proof that runs nowhere proves nothing. So it now has a WEEKLY cron of its own
+# rather than joining the nightly: it doubles a run's length, the failure it guards against
+# (a lost RESTORE command, a participant that stopped obeying it) does not appear overnight, and
+# keeping it separate means the nightly's duration stays the measurement this file is waiting for.
+# The `outage` input still forces it on demand, for whoever is touching the saga right now.
 
 on:
   schedule:
     # 02:17 UTC — deliberately off the top of the hour, where every other cron on GitHub queues
     - cron: '17 2 * * *'
+    # Sundays 03:17 UTC — the same suite PLUS the compensation path. An hour after the nightly on
+    # purpose: if both fire on a Sunday, the concurrency group below queues the second rather than
+    # cancelling it, and an hour is comfortably more than a full run.
+    - cron: '17 3 * * 0'
   workflow_dispatch:
     inputs:
       outage:
@@ -256,8 +270,13 @@ jobs:
 
       # only on request: this one stops a real container and spends minutes watching the retry
       # budget burn down until the account is handed back
+      # on request, and every Sunday: this one stops a real container and spends minutes watching
+      # the retry budget burn down until the account is handed back — WITH its content, which is
+      # the assertion that makes the whole two-phase design worth its complexity (ADR 0007).
+      # Matching on the cron string is how a workflow with two schedules tells them apart; a
+      # weekday nightly leaves this step skipped exactly as before.
       - name: The saga under a participant's outage (@outage)
-        if: ${{ inputs.outage }}
+        if: ${{ inputs.outage || github.event.schedule == '17 3 * * 0' }}
         run: ./e2e-saga-outage.sh
         working-directory: portal
 
