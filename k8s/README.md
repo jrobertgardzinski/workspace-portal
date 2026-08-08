@@ -152,7 +152,16 @@ e2e is what proves them together.
 ## Deliberately missing vs compose
 
 - **Observability** (Prometheus, Grafana, Tempo, Loki, Promtail, exporters) —
-  a future overlay of its own.
+  a future overlay of its own. **It owes a debt now**: since ADR 0007 the saga's
+  worst failure is SILENT — a lost closure command leaves a leaver's content
+  hidden but not erased, and nothing throws, nothing goes red, a query just
+  returns fewer rows for ever. The only thing that surfaces it is the
+  `ErasureBacklogStuck` rule in `../../shared/observability/alert-rules.yml`
+  (with `OffboardingSagaCompensated` and `SagaRecordsDropped` beside it). Those
+  rules exist in the compose stack ONLY. Whoever builds this overlay: the gauges
+  are already exported by all three participants (`*_erasure_backlog`) — bring
+  the rules with the Prometheus, or the deployed portal runs the one failure
+  mode it cannot notice.
 - **OTel javaagent** — compose attaches it via `JAVA_TOOL_OPTIONS`; here there
   is no Tempo to export to, so no `JAVA_TOOL_OPTIONS` is set at all (a
   `-javaagent` pointing at a missing jar would abort every JVM).
