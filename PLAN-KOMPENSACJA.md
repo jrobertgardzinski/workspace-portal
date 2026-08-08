@@ -120,3 +120,17 @@ Uzupełnione dziury w pokryciu (znalezione przy odpowiadaniu na pytanie „czy t
 - **`microservice-security` był CZERWONY na main od 30 lipca** — zmiana `LockoutSubject` ominęła
   dubler portu w `security-application`. Naprawione, CI zielone. Portal też przez to czerwieniał,
   bo jego reaktor buduje kernel.
+
+### Domknięcie CI (ta sama sesja)
+
+- **CI portalu ZIELONE** (reaktor + e2e). Po drodze dwie przyczyny, obie ciekawsze niż wyglądały:
+  - `CommentControllerTest` padał tylko w CI, bo testy modułu dzielą jedną bazę H2, a testy purge
+    kasują głosy odchodzącego; o kolejności decyduje domyślny `runOrder` surefire, czyli system
+    plików. Test dostał własną bazę.
+  - Harness galerii dostawał 403, a potem 429: kody odzyskiwania mają własną akcję step-upu,
+    więc każdy zasiewany account kupuje teraz dwie elewacje — a limit liczy per źródło i cała
+    suita jest jednym źródłem. Limit poluzowany w compose deweloperskim.
+- **CI `shared`: reaktor zielony, browser e2e nadal czerwony** (4 scenariusze MFA). Przycisk
+  „wygeneruj kody odzyskiwania" był martwy i dla testu, i dla użytkownika — UI nie pytał
+  o step-up; to naprawione. Zostaje czynnikowa połowa step-upu w UI, z dokładnym śladem sieciowym
+  w `shared/microservice-security/todo.md`.
