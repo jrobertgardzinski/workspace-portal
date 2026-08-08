@@ -28,7 +28,7 @@ w `PurgeUserContent` (memes). Za nim tylko ponawianie.
 | 6 | Reaper = zapytanie po statusie (`pendingOf`, `pendingSince`) + alarm `StuckErasureWatch` | ZROBIONE (w drzewie) |
 | 7 | ADR 0007 (3 akapity: status/nie byt, domknięcie/nie czas, pivot) | ZROBIONE (`shared`, untracked) |
 | 8 | Gherkin kompensacji i ścieżki szczęśliwej (`account-erasure.feature`, memes) | ZROBIONE (w drzewie) |
-| 9 | Zielony build całego reaktora portalu | **W TOKU** (patrz „Co poprawiłem" niżej) |
+| 9 | Zielony build całego reaktora portalu | ZROBIONE — `./mvnw -o verify` BUILD SUCCESS, 4 moduły (patrz „Co poprawiłem" niżej) |
 | 10 | Diagram: dwie fazy + pivot + droga kompensacji w `microservice-memes/docs/account-deletion-across-services.md` | ZROBIONE |
 | 11 | e2e `participant-outage`: „their meme stays gone" → „their meme is back in the gallery" (+ krok w `.steps.mjs`) | ZROBIONE |
 | 12 | `PODRECZNIK.md`: §2 opisuje dwie fazy i pivot, §15 dostaje ADR 0007, §18 zdanie nr 1 poprawione | ZROBIONE |
