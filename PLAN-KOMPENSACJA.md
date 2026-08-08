@@ -99,3 +99,24 @@ Uzupełnione dziury w pokryciu (znalezione przy odpowiadaniu na pytanie „czy t
 - **Nazwa `PURGE_USER_CONTENT` na drucie bez zmian** — pakty uczestników ją pinują, a znaczenie
   („spraw, żeby treść zniknęła, i powiedz kiedy") się nie zmieniło. Nowe typy są addytywne
   w wersji 1 koperty (ADR 0004).
+
+
+## Runda 3 (ta sama sesja): dowody, alarmy i długi z innych rewirów
+
+- **E2E kompensacji PRZESZEDŁ na żywym stosie** — 1 scenariusz, 9 kroków, 8m17s. Zanim przeszedł,
+  trzeba było poprawić jego arytmetykę: zakładał kapitulację po ~172 s (stan sprzed P18), a jest
+  `120 s × 4 ≈ 8 minut`. Ścieżka szczęśliwa też zielona (4 scenariusze, 21 kroków, 11,7 s).
+  Do nocnego biegu dołożony **niedzielny cron z `@outage`**.
+- **Znalezisko przy okazji, warte rozmowy kwalifikacyjnej:** pięciominutowa siatka security odpala
+  się teraz PRZED ośmiominutową kapitulacją portalu. Konto wraca ok. 5 minuty, treść ok. 8.
+  Nikt tego nie zaprojektował — to suma dwóch niezależnie konfigurowanych timeoutów. Opisane
+  w §10 podręcznika; podniesienie siatki security ponad `purgeTimeout × (retries + 1)` zostaje
+  jako decyzja do podjęcia, nie zrobione po cichu.
+- **Alarmy Prometheusa** na zaległość wymazywania (trzy serwisy jedną regułą), kapitulację sagi
+  i porzucone rekordy — `shared/observability/alert-rules.yml`.
+- **24 PR-y Dependabota** zamknięte: łatki wzięte z PR-ów, zaaplikowane lokalnie, po jednym
+  buildzie na repo. Kafka 4 wymagała poprawki harnessu (`MockProducer` stracił konstruktor).
+  Odrzucony świadomie: cucumber 7.34 w collections (JUnit Platform 6 wywraca harness).
+- **`microservice-security` był CZERWONY na main od 30 lipca** — zmiana `LockoutSubject` ominęła
+  dubler portu w `security-application`. Naprawione, CI zielone. Portal też przez to czerwieniał,
+  bo jego reaktor buduje kernel.
