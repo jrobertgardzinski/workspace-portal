@@ -10,7 +10,8 @@ Decyzje projektowe: `../shared/docs/adr/0007-soft-delete-by-status-for-a-compens
 
 Saga usuwania konta jest dwufazowa. Uczestnik na `PURGE_USER_CONTENT` **oznacza** treści
 (`status = PENDING_ERASURE` + `markedForErasureAt`) — nic nie ginie, a treść znika ze wszystkich
-publicznych odczytów, bo te idą przez widok (`active_memes`, `active_comments`). Potwierdzenie
+publicznych odczytów, bo te idą przez widok (`active_memes`, `active_comments`,
+`active_collection_items`). Potwierdzenie
 znaczy „zarezerwowane". Gdy potwierdzą wszyscy, orkiestrator wysyła **`ERASE_USER_CONTENT`**
 (domknięcie) — dopiero to kasuje. Gdy się poddaje, wysyła **`RESTORE_USER_CONTENT`** (kompensacja)
 do WSZYSTKICH uczestników, także tych bez potwierdzenia. **Pivot:** usunięcie bloba z MinIO/S3
@@ -32,8 +33,9 @@ w `PurgeUserContent` (memes). Za nim tylko ponawianie.
 | 10 | Diagram: dwie fazy + pivot + droga kompensacji w `microservice-memes/docs/account-deletion-across-services.md` | ZROBIONE |
 | 11 | e2e `participant-outage`: „their meme stays gone" → „their meme is back in the gallery" (+ krok w `.steps.mjs`) | ZROBIONE |
 | 12 | `PODRECZNIK.md`: §2 opisuje dwie fazy i pivot, §15 dostaje ADR 0007, §18 zdanie nr 1 poprawione | ZROBIONE |
-| 13 | `todo.md` w memes/comments/offboarding | **DO ZROBIENIA** |
-| 14 | Commit + push w czterech repach (shared, memes, comments, offboarding) | **DO ZROBIENIA** |
+| 13 | `todo.md` w memes/comments/offboarding | ZROBIONE |
+| 14 | Commit + push (shared, portal, memes, comments, offboarding) | ZROBIONE |
+| 15 | **Runda 2:** collections dwufazowy + uzupełnione pokrycie testowe | patrz sekcja niżej |
 
 ## Co poprawiłem w tej sesji (poza checkpointami)
 
@@ -65,13 +67,32 @@ zapytanie SQL, więc idzie przez ten sam widok. **Cache'a też nie ma** — ani 
 `@Cacheable`/Caffeine w kodzie — więc nie ma trzeciej kopii prawdy do unieważnienia. Gdyby kiedyś
 doszła, to jest miejsce, w którym filtr przestaje wystarczać.
 
+## Runda 2 (ta sama sesja): collections przerobiony, pokrycie uzupełnione
+
+`microservice-user-collections` **jest przerobiony** — dług z ADR 0007 zamknięty tego samego dnia.
+`ItemStatus` + `SavedItem` (przejścia metodami, ten sam niezmiennik), port `ItemErasure`,
+`JdbcItemErasure`, V3 z widokiem `active_collection_items`, trzy komendy w konsumencie,
+`ErasureBacklogWatch` + gauge `collections_erasure_backlog`, pakt rozszerzony o `ERASE`/`RESTORE`
+(i weryfikacja po stronie orkiestratora). **`CollectionStore.purgeUser` USUNIĘTY** — hurtowe
+kasowanie było właśnie tym, przez co ten uczestnik był nieodwracalny.
+
+Uzupełnione dziury w pokryciu (znalezione przy odpowiadaniu na pytanie „czy to jest przetestowane"):
+
+- **Testy domenowe wszystkich trzech agregatów** (`MemeMetadataTest`, `CommentErasureStateTest`,
+  `SavedItemTest`) — niezmiennik status⇔znacznik, „drugie oznaczenie zachowuje PIERWSZĄ chwilę",
+  `restore()` na ACTIVE jako no-op. Reguła o pierwszej chwili była wcześniej opisana w javadocu,
+  ADR-ze i CHECK-u, a **nieasertowana nigdzie**: testy przypadków użycia chodzą na zamrożonym
+  zegarze, więc tam jest niewidoczna.
+- **Alarm zaległości** (`StuckErasureWatchTest`, `ErasureBacklogWatchTest`) — wcześniej ZERO testów.
+  W tym najważniejszy: nieczytelny rejestr **zachowuje ostatnią wartość** zamiast raportować zero.
+- **Prawo idempotencji w collections** obejmuje teraz trzy komendy sagi, a odcisk stanu widzi też
+  rezerwacje — bez tego każda komenda erasure przechodziłaby to prawo trywialnie, bo oznaczenie
+  jest niewidoczne w listingu Z ZAŁOŻENIA.
+- **Test JDBC na dwóch fazach** (collections): oznaczenie nie kasuje, kompensacja wraca z tą samą
+  kolejnością, domknięcie nie rusza tego, co zapisano PO oznaczeniu.
+
 ## Świadomie NIE zrobione
 
-- **`microservice-user-collections` nie jest przerobiony.** Nadal kasuje ulubione na komendę
-  oznaczenia, więc skompensowana saga przywraca memy i komentarze, ale nie zapisaną listę.
-  Zapisane w ADR 0007 jako jawny dług, nie przeoczenie. Kształt zmiany jest ten sam
-  (kolumna statusu, widok filtrujący, trzy komendy). Uczestnik ignoruje `ERASE`/`RESTORE`
-  po `type`, więc nowe komendy go nie wywracają.
 - **Brak osobnego `.feature` dla comments** — scenariusz kompensacji w memes gra rolą
   „comments-service pada", czyli pokrywa wymaganie; osobny plik byłby tym samym zdaniem
   z drugiej strony.

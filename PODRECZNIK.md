@@ -624,11 +624,26 @@ znać, zanim ktoś o nie zapyta.
 
 ### 8.3 user-collections — hurtem, bo referencje są nieprzejrzyste
 
-Jeden `DELETE FROM collection_items WHERE user_email = ?`. Żadnej reguły — javadoc mówi wprost:
-*„there is no per-item policy to honour, because the refs are opaque"*. Kolekcja trzyma
-**referencje** do cudzych treści, nie treść. Nie ma czego anonimizować: albo lista jest, albo jej
-nie ma. Migracja komentuje nawet indeks: *„The user_email index makes the account-deletion purge
-cheap"*.
+Żadnej reguły — javadoc mówi wprost: *„there is no per-item policy to honour, because the refs are
+opaque"*. Kolekcja trzyma **referencje** do cudzych treści, nie treść. Nie ma czego anonimizować:
+albo lista jest, albo jej nie ma.
+
+Ten uczestnik był **ostatnim, który nauczył się kompensacji**, i przez chwilę było to zapisane jako
+jawny dług w ADR 0007: memy i komentarze wracały po kapitulacji sagi, a lista ulubionych nie — bo tu
+`DELETE` szedł już na pierwszą komendę. Warto zapamiętać dlaczego to była najgorsza z trzech strat:
+**prywatnej listy nikt poza właścicielem nie widzi**, więc nikt nie zgłosiłby, że zniknęła.
+
+Dziś jest jak u bliźniaków: `PURGE_USER_CONTENT` oznacza (`status = PENDING_ERASURE`), listy
+natychmiast wyglądają na puste (widok `active_collection_items`), `RESTORE_USER_CONTENT` cofa,
+`ERASE_USER_CONTENT` kasuje. **Jedna świadoma różnica:** domknięcie to nadal jedno zdanie SQL —
+`DELETE FROM collection_items WHERE user_email = ? AND status = 'PENDING_ERASURE'` — a nie pętla po
+agregatach, bo skoro nie ma reguły, to nie ma decyzji per wiersz. Warunek statusu w `WHERE` jest tu
+całą precyzją: to, co użytkownik zapisał PO oznaczeniu, nie należało do tej sagi i domknięcia nie
+dotyczy.
+
+Przy okazji z portu **zniknęło `purgeUser(user)`** — nie zostało jako nieużywane. Hurtowe „skasuj
+wszystko tego użytkownika" jest dokładnie tą operacją, przez którą ten uczestnik był
+nieodwracalny; zostawienie jej w zasięgu ręki zaprasza następnego wołającego do ominięcia sagi.
 
 ### 8.4 Dwie **przeciwne** polityki ponowień — i to jest najlepszy materiał na rozmowę
 
