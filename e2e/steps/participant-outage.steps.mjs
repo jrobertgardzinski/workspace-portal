@@ -81,18 +81,17 @@ Given('the favourites service is down', { timeout: 120_000 }, async function () 
  * and polling Mailpit costs nothing, while polling sign-in during limbo reads as a wrong
  * password and three of those from one address trip the brute-force block.
  *
- * The deadline covers the arithmetic with margin, and the arithmetic is NOT the one this comment
- * used to state. A silent participant costs 120s per DELIVERED command (the timeout is measured
- * from the last one it received, P18), so with three re-commands the portal takes about eight
- * minutes — which means security's own 5-minute net gets there first and sends this very mail.
- * Seven minutes of budget covers the mail either way; the meme's return is a separate wait,
- * because RESTORE_USER_CONTENT rides the portal's later verdict.
+ * The deadline covers the arithmetic with margin. A silent participant costs 120s per DELIVERED
+ * command (the timeout is measured from the last one it received, P18), so with three re-commands
+ * the portal capitulates at about eight minutes and THAT is what sends this mail — security's own
+ * net now sits at 12 minutes, deliberately behind it, so it never enters the race. Ten minutes of
+ * budget covers the capitulation plus the outbox -> Kafka -> email -> SMTP road.
  */
-When('the portal gives up waiting for the favourites service', { timeout: 480_000 },
+When('the portal gives up waiting for the favourites service', { timeout: 720_000 },
   async function () {
     this.apologyMail = await this.eventually(
       () => this.newestMail(this.leaver.email, { matching: /could not delete your account/i }),
-      { timeoutMs: 420_000, everyMs: 5_000 });
+      { timeoutMs: 660_000, everyMs: 5_000 });
   });
 
 // ---------------------------------------------------------------------------------------------
@@ -155,10 +154,9 @@ Then('their meme is back in the gallery', { timeout: 420_000 }, async function (
     const wall = await this.wallIds();
     assert.ok(wall.includes(this.ownMemeId),
       'the compensated meme is not back on the public wall');
-    // minutes, not seconds: the mail above is SECURITY's 5-minute net, while the restore rides the
-    // PORTAL's own verdict at about eight — so this step routinely waits out the gap between two
-    // timeouts that were never configured with each other in mind
-  }, { timeoutMs: 360_000, everyMs: 5_000 });
+    // the restore rides the same capitulation that sent the mail above, so this is usually quick —
+    // the budget is for the broker hop and the participants' own retry, not for another timeout
+  }, { timeoutMs: 180_000, everyMs: 5_000 });
 });
 
 // ---------------------------------------------------------------------------------------------

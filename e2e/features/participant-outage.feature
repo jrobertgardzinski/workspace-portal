@@ -22,12 +22,12 @@ Feature: A participant's outage — the promise of deletion is kept honest, not 
   120s per delivered command and the whole case takes 120s x 4 = about EIGHT MINUTES. The
   sweeper's 15s cadence only decides how promptly each deadline is noticed.
 
-  That has a consequence the old text got backwards: security's own 5-minute safety net no longer
-  loses the race — it fires FIRST. So the apology mail this scenario waits for is security's, at
-  around five minutes, and the portal's own RESTORE_USER_CONTENT follows about three minutes
-  later. The content therefore comes back AFTER the account does, and the steps below wait for
-  each in that order. Nobody designed that ordering; it is what two independently configured
-  timeouts add up to, and seeing it stated is worth more than a scenario that pretends otherwise.
+  For a few hours on 2026-08-08 that had a consequence worth remembering: security's own safety
+  net still stood at five minutes, so it fired FIRST and the account came back three minutes before
+  its content. Nobody designed that — it was the sum of two independently configured timeouts, one
+  of which had moved. The net now sits at twelve minutes, deliberately behind the portal's worst
+  case, so the mail this scenario waits for is the PORTAL's verdict again and the content comes
+  back with it.
 
   The HAPPY-AFTER-RETURN variant (restart the service in time, the saga completes: meme gone,
   sign-in 401 for good) is real too, but proving it needs the restarted container to boot, rejoin

@@ -763,7 +763,7 @@ odgadnąć z kodu jednego serwisu.
 | offboarding | `OFFBOARDING_MAX_PURGE_RETRIES` | **3** | ile razy ponowić rozkaz przed kapitulacją |
 | offboarding | `OFFBOARDING_OUTCOME_REPUBLISH_SEC` | **30 s** | po tym czasie nieogłoszony werdykt jest wysyłany ponownie |
 | offboarding | `OFFBOARDING_RETENTION_DAYS` | **30 dni** | po tym czasie zakończone sagi są usuwane (dane osobowe) |
-| security | `account-deletion.purge-timeout` | **5 min** | siatka bezpieczeństwa: brak werdyktu → kompensacja. **Po P18 to ONA odpala pierwsza** — patrz przebieg niżej |
+| security | `account-deletion.purge-timeout` | **12 min** | siatka bezpieczeństwa: brak werdyktu → kompensacja. Podniesiona z 5 min 2026-08-08, żeby znów odpalała PO portalu — patrz „Pierwsza" niżej |
 | security | tick `AccountDeletionTimeouts` | **30 s** | jak często security sprawdza przeterminowane sagi |
 | security | listener werdyktów | **10 prób**, 1 s wykładniczo | ponowienia przy błędzie obsługi werdyktu |
 
@@ -776,15 +776,15 @@ t≈0      memes i comments OZNACZAJĄ treść i potwierdzają; collections nie 
 t=120 s  saga przeterminowana → 1. ponowienie rozkazu
 t=240 s  2. ponowienie
 t=360 s  3. ponowienie → budżet wyczerpany
-t=300 s  ⚠ SIATKA SECURITY ODPALA PIERWSZA: konto odblokowane, mail „nie udało się"
 t≈480 s  KAPITULACJA PORTALU: RESTORE_USER_CONTENT do wszystkich uczestników (treść wraca),
-         potem werdykt PORTAL_PURGE_FAILED — który w security trafia już na sagę COMPENSATED
+         potem werdykt PORTAL_PURGE_FAILED → security odblokowuje konto i wysyła „nie udało się"
+t=720 s  (siatka security nigdy się nie odpala — werdykt portalu wygrał wyścig)
 ```
 
-Zwróć uwagę na `t=300 s`: **security wygrywa ten wyścig, nie portal.** Tak nie było zawsze i nikt
-tego nie zaprojektował — to suma dwóch niezależnie konfigurowanych timeoutów po naprawie z P18
-(patrz „Druga" niżej). Praktyczny skutek dla użytkownika: konto wraca ok. 5 minuty, a treść ok. 8 —
-najpierw dostaje z powrotem drzwi, potem to, co za nimi.
+**Ten przebieg był przez chwilę inny i warto wiedzieć dlaczego.** Przy siatce 5-minutowej to
+tożsamość odpalała pierwsza: konto wracało ok. 5 minuty, a treść dopiero ok. 8. Nikt tego nie
+zaprojektował — po P18 portal potrzebuje ośmiu minut, a próg po drugiej stronie został na pięciu.
+2026-08-08 siatka poszła na 12 minut i kolejność wróciła do zamierzonej.
 
 Dwie rzeczy do zapamiętania z tej tabelki:
 
@@ -796,14 +796,14 @@ announcement normally wins the race"*. Siatka bezpieczeństwa security istnieje 
 rozstrzygałby się losowo, a wtedy w bazie sagi security mógłby wylądować stan `COMPENSATED`
 w momencie, gdy portal właśnie ogłasza sukces — dokładnie ta katastrofa z rozdziału 12.
 
-**Ale ten argument mówi o progu 2 minut, a po P18 portal potrzebuje ośmiu.** Pięciominutowa siatka
-nie jest już „dobrze PO" timeoucie portalu — jest przed nim. Wyścig, który miał rozstrzygać się
-deterministycznie na korzyść portalu, rozstrzyga się teraz deterministycznie na korzyść security,
-i nikt tego nie zapisał jako decyzji. Do rozstrzygnięcia: albo podnieść siatkę security ponad
-`purgeTimeout × (retries + 1)`, albo świadomie przyjąć, że przy długiej ciszy uczestnika to
-tożsamość oddaje konto, a portal tylko sprząta po sobie kilka minut później. Dziś skutek jest
-nieszkodliwy (spóźniony werdykt trafia na sagę `COMPENSATED` i jest odrzucany), ale to zbieg
-okoliczności, nie projekt.
+**Ten argument mówił o progu 2 minut, a po P18 portal potrzebuje ośmiu** — więc pięciominutowa
+siatka przestała być „dobrze PO" i zaczęła odpalać PRZED. **Rozstrzygnięte 2026-08-08: siatka
+poszła na 12 minut**, czyli ponad `purgeTimeout × (retries + 1)` plus zamiatanie i drogę maila.
+Reguła jest zapisana przy samym parametrze, bo to jedyne miejsce, w którym ktoś zmieniający tamtą
+stronę ma szansę ją przeczytać. Wariant odrzucony: „przyjmijmy, że przy długiej ciszy konto oddaje
+tożsamość" — brzmi niewinnie, ale zamienia siatkę na martwego koordynatora w drugi, równoległy
+mechanizm kompensacji, a wtedy spóźniony werdykt portalu trafia na sagę `COMPENSATED` i jest
+odrzucany. To jest dokładnie katastrofa z rozdziału 12, tylko wpisana w projekt.
 
 **Druga — pułapka, którą warto znać, i to w wersji ODWRÓCONEJ po P18.** Do lipca 2026
 przeterminowanie liczono od `created_at`: po pierwszym przekroczeniu progu saga była
