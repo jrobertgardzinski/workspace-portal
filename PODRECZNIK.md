@@ -83,12 +83,34 @@ Zostają dwa wyjścia:
 Ten system wybrał sagę. I tu zaczyna się rzecz, którą trzeba zrozumieć, żeby zrozumieć resztę:
 
 > **Kompensacja tego, co nieodwracalne, nie istnieje.** Usunięty mem nie wraca. Dlatego cała
-> konstrukcja jest ustawiona tak, żeby **nieodwracalny krok był ostatni**: najpierw czyszczą
-> uczestnicy (to i tak przepadnie), a użytkownik jest usuwany **dopiero po ich potwierdzeniu**.
-> Jeśli sprzątanie nie wyjdzie, kompensacja oddaje **konto** — i to jest wszystko, co można oddać.
+> konstrukcja jest ustawiona tak, żeby **nieodwracalny krok był ostatni** — i to nie tylko
+> w kolejności uczestników, ale **w kolejności faz**.
 
-Zapamiętaj to zdanie, bo z niego wynika każdy timeout w rozdziale 10 i cała katastrofa
-z rozdziału 12.
+I tu jest zmiana, którą trzeba zrozumieć osobno, bo wywraca intuicję (2026-08-08, ADR 0007).
+Uczestnik na komendę czyszczenia **nic nie kasuje**. Ustawia status `PENDING_ERASURE` na swoim
+agregacie (mem, komentarz) i to wszystko. Treść w tej samej chwili znika ze świata — z galerii,
+z wyszukiwarki tagów, z rankingu, z wątku, z każdego URL-a obrazka — bo **wszystkie** odczyty idą
+przez widok `active_memes` / `active_comments`, który statusu innego niż `ACTIVE` nie widzi. Ale
+wiersz stoi, blob stoi, głosy stoją. Potwierdzenie, które zbiera orkiestrator, znaczy więc
+**„zarezerwowane"**, a nie „zniszczone" — a rezerwację da się oddać.
+
+Z tego wynikają trzy rzeczy:
+
+- **Domknięcie kasuje, nie komenda.** Gdy potwierdzą wszyscy uczestnicy — czyli gdy sprawa nie
+  może już się nie udać — orkiestrator wysyła `ERASE_USER_CONTENT` i dopiero to niszczy.
+- **Kompensacja to `RESTORE_USER_CONTENT`**: statusy wracają na `ACTIVE`, użytkownik dostaje konto
+  **razem z treściami**. Przedtem kompensacja oddawała konto puste i przepraszała za usunięcie,
+  które w istocie się odbyło.
+- **Nic nie kasuje z upływu czasu.** Uczestnik nie ma własnego timeoutu na oznaczeniu: saga stojąca
+  godzinę, bo padł sąsiad, to saga, która wciąż może kompensować. Czas kupuje wyłącznie **alarm**
+  (`StuckErasureWatch`: „ukryte, ale NIE wymazane, i nic tego nie skasuje samo").
+
+**Pivot** — punkt bez powrotu — leży w jednym miejscu: `PurgeUserContent` w memes, w chwili gdy
+obrazek opuszcza MinIO/S3. Za nim saga nie ma kompensacji, ma tylko **ponawianie**.
+
+Zapamiętaj to, bo z tego wynika każdy timeout w rozdziale 10 i cała katastrofa z rozdziału 12 —
+tyle że po tej zmianie katastrofa z §12.1 kosztuje treść tylko wtedy, gdy zdążyła przekroczyć
+pivot.
 
 ---
 
@@ -1015,7 +1037,7 @@ This workflow is the missing red mark."*
 ## 15. Decyzje zapisane (ADR) i jak to się uruchamia
 
 **ADR-y** (Architecture Decision Record — zapis decyzji architektonicznej) w `../shared/docs/adr`,
-sześć sztuk. Dla tego przepływu istotne są cztery:
+siedem sztuk. Dla tego przepływu istotne jest pięć:
 
 - **0002 — podkreślnik dla kroków przypadku użycia.** Klasa `_NazwaKlasy` to **package-private
   krok** wewnętrzny (use-case step). Uzasadnienie: modyfikatory dostępu Javy *„are invisible in
@@ -1030,6 +1052,14 @@ sześć sztuk. Dla tego przepływu istotne są cztery:
   was the default upgrade plan, „which stops being a plan the moment two services deploy
   independently"*.
 - **0006 — idempotencja jako prawo domyślne** (opisane wyżej).
+- **0007 — miękkie usuwanie przez status, żeby saga miała czym kompensować** (2026-08-08, opisane
+  w §2). Trzy rozstrzygnięcia warte zapamiętania: **status na agregacie, nie osobny byt**
+  (`ToDelete<T>` ani tabela-kolejka — fakt jest własnością jednego wiersza i miałby własną kaskadę,
+  własną idempotencję i join w każdym odczycie); **kasowanie z domknięcia sagi, nie z upływu czasu**
+  (reaper to zapytanie `WHERE status = 'PENDING_ERASURE'`, nie scheduler; czas kupuje alarm);
+  **pivot w `PurgeUserContent`**, gdy obrazek opuszcza MinIO. Filtr `ACTIVE` jest zapisany raz na
+  serwis — jako widok bazodanowy — a strażnik (`MemeReadFilterTest`, `CommentReadFilterTest`)
+  wywala build, jeśli jakikolwiek SQL poza adapterem świadomym wymazywania nazwie tabelę bazową.
 
 **Uruchomienie lokalne** — jeden stack `docker compose`, sklejony z trzech plików mechanizmem
 `include:`, z nazwą projektu **przypiętą** do `security`, żeby portal i gra F1 dzieliły jeden
@@ -1141,8 +1171,10 @@ To nie przypadkowa lista wad — to praktyczna zasada: **kod jest źródłem pra
 ## 18. Trzy zdania, które warto umieć powiedzieć z pamięci
 
 1. **„Usunięcie konta to saga, bo dane leżą w pięciu bazach i nie ma jednej transakcji; tożsamość
-   ogłasza fakt i czeka, portal koordynuje, a nieodwracalny krok jest ostatni — bo kompensacja
-   oddaje konto, nie treść."**
+   ogłasza fakt i czeka, portal koordynuje, a nieodwracalny krok jest ostatni — uczestnicy najpierw
+   **oznaczają** treść (`PENDING_ERASURE`, niewidoczna, nietknięta), kasują dopiero na domknięcie
+   sagi, więc kompensacja oddaje konto **razem z treścią**, a punktem bez powrotu jest dopiero
+   skasowanie obrazka z MinIO."**
 2. **„Fakt nie jest wysyłany do brokera w trakcie transakcji, tylko zapisywany jako wiersz outboxu
    w tej samej transakcji co blokada konta — dzięki temu blokada i fakt nigdy się nie rozjadą,
    a ceną jest at-least-once, czyli obowiązkowa idempotencja u każdego odbiorcy."**

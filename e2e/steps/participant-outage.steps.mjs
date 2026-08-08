@@ -140,13 +140,19 @@ Then('a mail apologises that the deletion could not be completed', function () {
   assert.match(this.apologyMail, /could not delete your account/i);
 });
 
-Then('their meme stays gone', async function () {
-  // capitulation gives the ACCOUNT back, not the purged content: memes confirmed its purge
-  // long ago and the failure outcome names that partial purge — the meme must not resurrect
-  const direct = await boundedFetch(`${MEMES}/memes/${this.ownMemeId}`);
-  assert.equal(direct.status, 404, `the purged meme answers ${direct.status} again`);
-  const wall = await this.wallIds();
-  assert.ok(!wall.includes(this.ownMemeId), 'the purged meme is back on the public wall');
+Then('their meme is back in the gallery', async function () {
+  // the compensation, end to end and from the outside: memes confirmed a MARK, not a deletion,
+  // so the orchestrator's RESTORE_USER_CONTENT puts the picture back where it was. It is
+  // asynchronous — the same sweep that announces the failure publishes the command — hence the
+  // polling; and the assertion is deliberately the exact negation of the old "stays gone".
+  await this.eventually(async () => {
+    const direct = await boundedFetch(`${MEMES}/memes/${this.ownMemeId}`);
+    assert.equal(direct.status, 200,
+      `the compensated meme still answers ${direct.status}: it was erased, not merely hidden`);
+    const wall = await this.wallIds();
+    assert.ok(wall.includes(this.ownMemeId),
+      'the compensated meme is not back on the public wall');
+  }, { timeoutMs: 60_000, everyMs: 3_000 });
 });
 
 // ---------------------------------------------------------------------------------------------

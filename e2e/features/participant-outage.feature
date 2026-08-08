@@ -4,7 +4,14 @@ Feature: A participant's outage — the promise of deletion is kept honest, not 
   What does the person see when they ask to be forgotten while a piece of the portal is down?
   Their account goes into limbo: signing in is refused, no verdict has arrived, and behind the
   curtain the saga keeps re-asking the silent service. The portal does not pretend — it either
-  finishes the job or gives the account back and says so in writing.
+  finishes the job or gives the account back, WITH the content in it, and says so in writing.
+
+  That last clause is the whole point of ADR 0007, and this scenario is where it is proved. The
+  participants answer the purge command by MARKING the leaver's content, which takes it out of
+  the gallery immediately and destroys nothing; only the orchestrator's closure erases. So when
+  the sweeper capitulates, the compensation puts the memes back — where this scenario used to
+  end with a step named "their meme stays gone", i.e. an apology for a deletion that had, in
+  fact, happened to everything except the account.
 
   This scenario stages the CAPITULATION path, because it is the one that can be arranged
   deterministically: while the favourites service stays stopped, nothing can confirm its purge,
@@ -30,4 +37,4 @@ Feature: A participant's outage — the promise of deletion is kept honest, not 
     When the portal gives up waiting for the favourites service
     Then the account is handed back: signing in works again
     And a mail apologises that the deletion could not be completed
-    And their meme stays gone
+    And their meme is back in the gallery
