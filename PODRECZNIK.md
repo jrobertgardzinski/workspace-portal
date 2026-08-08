@@ -1221,9 +1221,22 @@ To nie przypadkowa lista wad — to praktyczna zasada: **kod jest źródłem pra
 
 ---
 
-## 19. Co w kolejnych etapach
+## 19. Kolejne etapy — NAPISANE
 
-Kolejność zaproponowana — do zmiany, jeśli któryś temat jest pilniejszy:
+Etapy 2–6 powstały 2026-08-08 i leżą obok:
+
+- **[PODRECZNIK-ETAP-2.md](PODRECZNIK-ETAP-2.md)** — rejestracja i logowanie: dlaczego rejestracja
+  odpowiada tak samo na adres wolny i zajęty, dwa liczniki brute-force i trzy wersje tego samego
+  kodu (z blokadą, którą własna suita e2e założyła sama sobie), łańcuch czynników z kodami
+  odzyskiwania jako ALTERNATYWĄ dla ogniwa, JWT plus JWKS jako świadomy handel, rodziny sesji
+  i wykrywanie kradzieży refresh tokenu (z wyścigiem, który rozwidlał sesję na dwie żywe linie).
+- **[PODRECZNIK-ETAP-3-4-5-6.md](PODRECZNIK-ETAP-3-4-5-6.md)** — wrzucenie mema (trzy adaptery
+  `ObjectStore`, dedup przez atomowe zajęcie hasha, kompensacja poza transakcją), komentarz i głos
+  (dwa ZADEKLAROWANE wyjątki od prawa idempotencji), kaskada `MEME_DELETED` jako trzeci wzorzec
+  spójności obok sagi i outboxu, obserwowalność (jeden `cid` przez cztery serwisy; dlaczego
+  zaległość wymazywania musi być gauge'em, a nie licznikiem).
+
+Pierwotna tabela zamiarów, dla porządku:
 
 | Etap | Przepływ | Co nowego wnosi |
 |---|---|---|
