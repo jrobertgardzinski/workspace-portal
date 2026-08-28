@@ -34,6 +34,10 @@ spec:
             - configMapRef:
                 name: portal-common
           env:
+            # the profile this service always ran under implicitly (Quarkus fallback);
+            # its ProfileGuard now wants the decision written down
+            - name: QUARKUS_PROFILE
+              value: prod
             - name: MAIL_API_KEY
               valueFrom:
                 secretKeyRef:

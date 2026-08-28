@@ -47,6 +47,8 @@ spec:
             - configMapRef:
                 name: portal-common
           env:
+            - name: COLLECTIONS_PROFILE
+              value: dev
             - name: COLLECTIONS_PORT
               value: "8092"
             # Origins allowed to call this service from a BROWSER (CorsFilter, read from exactly this

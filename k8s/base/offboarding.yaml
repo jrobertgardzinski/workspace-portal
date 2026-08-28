@@ -47,6 +47,8 @@ spec:
             - configMapRef:
                 name: portal-common
           env:
+            - name: OFFBOARDING_PROFILE
+              value: dev
             - name: OFFBOARDING_PORT
               value: "8094"
             - name: OFFBOARDING_PARTICIPANTS

@@ -41,6 +41,8 @@ spec:
             - configMapRef:
                 name: portal-common
           env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: dev
             - name: DB_URL
               value: jdbc:postgresql://comments-postgres:5432/comments
             - name: DB_USER

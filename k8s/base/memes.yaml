@@ -40,6 +40,9 @@ spec:
             - configMapRef:
                 name: portal-common
           env:
+            # ProfileGuard refuses an undeclared start; this k3s stack is the dev-hosted one
+            - name: SPRING_PROFILES_ACTIVE
+              value: dev
             - name: DB_URL
               value: jdbc:postgresql://memes-postgres:5432/memes
             - name: DB_USER

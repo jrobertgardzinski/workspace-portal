@@ -46,6 +46,9 @@ services:
     environment:
       <<: *otel-agent
       OTEL_SERVICE_NAME: memes
+      # every service refuses to start without a DECLARED deployment profile (ProfileGuard on the
+      # java -jar path): this stack is the dev one, and it says so instead of relying on defaults
+      SPRING_PROFILES_ACTIVE: dev
       # writes require a bearer token that security confirms; reads (and the UI at :8083) are public
       SECURITY_URL: http://security:8080
       # the gallery is durable: metadata and image bytes in its own Postgres
@@ -152,6 +155,7 @@ services:
     environment:
       <<: *otel-agent
       OTEL_SERVICE_NAME: comments
+      SPRING_PROFILES_ACTIVE: dev
       DB_URL: jdbc:postgresql://comments-postgres:5432/comments
       DB_USER: postgres
       DB_PASSWORD: ${POSTGRES_PASSWORD:-secret}
@@ -214,6 +218,7 @@ services:
     environment:
       <<: *otel-agent
       OTEL_SERVICE_NAME: user-collections
+      COLLECTIONS_PROFILE: dev
       COLLECTIONS_PORT: "8092"
       DB_URL: jdbc:postgresql://collections-postgres:5432/collections
       DB_USER: postgres
@@ -284,6 +289,7 @@ services:
     environment:
       <<: *otel-agent
       OTEL_SERVICE_NAME: offboarding
+      OFFBOARDING_PROFILE: dev
       OFFBOARDING_PORT: "8094"
       OFFBOARDING_PARTICIPANTS: memes=memes-events,comments=comments-events,collections=usercollections-events
       DB_URL: jdbc:postgresql://offboarding-postgres:5432/offboarding
