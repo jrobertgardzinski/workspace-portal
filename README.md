@@ -30,8 +30,9 @@ One service from the IDE, the rest in Docker — no image rebuild for a one-line
 
 The env files live in `dev/local/` (same variable names as the compose environment); the
 compose files publish the internal wiring for this — databases on 5434–5437, MinIO 9000, the
-encoder 8087, Kafka's host listener 29092. Known limit: a container calling the swapped service
-BY NAME (comments → `memes:8083`) will not find the host process; the browser will.
+encoder 8087, Kafka's host listener 29092. Services dial each other via
+`host.docker.internal:<published port>` (with a `host-gateway` mapping for native Linux/CI), so a
+client cannot tell whether the service it calls lives in Docker or in the IDE.
 
 Build order: `(cd ../shared && ./mvnw install)` → `./mvnw clean install` here.
 JDK 25, wrapper pinned to Maven 3.9.9.

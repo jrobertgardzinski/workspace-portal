@@ -44,6 +44,8 @@ services:
     build:
       context: microservice-memes
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # resolves on native Linux/CI too, not only Docker Desktop
     ports:
       - "8083:8083"
     environment:
@@ -52,8 +54,10 @@ services:
       # every service refuses to start without a DECLARED deployment profile (ProfileGuard on the
       # java -jar path): this stack is the dev one, and it says so instead of relying on defaults
       SPRING_PROFILES_ACTIVE: dev
-      # writes require a bearer token that security confirms; reads (and the UI at :8083) are public
-      SECURITY_URL: http://security:8080
+      # writes require a bearer token that security confirms; reads (and the UI at :8083) are public.
+      # host.docker.internal, not the compose name: security is a SWAPPABLE service (dev-swap.sh),
+      # and through the published port the same address reaches it in Docker AND in the IDE
+      SECURITY_URL: http://host.docker.internal:8080
       # the gallery is durable: metadata and image bytes in its own Postgres
       DB_URL: jdbc:postgresql://memes-postgres:5432/memes
       DB_USER: postgres
@@ -190,6 +194,8 @@ services:
     restart: unless-stopped
     ports:
       - "8085:8085"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # see memes
     environment:
       <<: *otel-agent
       OTEL_SERVICE_NAME: comments
@@ -197,11 +203,11 @@ services:
       DB_URL: jdbc:postgresql://comments-postgres:5432/comments
       DB_USER: postgres
       DB_PASSWORD: ${POSTGRES_PASSWORD:-secret}
-      SECURITY_URL: http://security:8080
+      SECURITY_URL: http://host.docker.internal:8080
       # the offline trade-off on display: comments verifies security's JWTs against its JWKS
       # instead of calling /me (memes keeps introspection — instant revocation awareness)
       SECURITY_VERIFY: offline
-      MEMES_URL: http://memes:8083
+      MEMES_URL: http://host.docker.internal:8083   # swappable service -> via the host, like SECURITY_URL
       # account-deletion saga (comments axis) + the MEME_DELETED thread cascade
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_ENABLED: "true"
@@ -255,6 +261,8 @@ services:
     restart: unless-stopped
     ports:
       - "8092:8092"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # see memes
     environment:
       <<: *otel-agent
       OTEL_SERVICE_NAME: user-collections
@@ -263,7 +271,7 @@ services:
       DB_URL: jdbc:postgresql://collections-postgres:5432/collections
       DB_USER: postgres
       DB_PASSWORD: ${POSTGRES_PASSWORD:-secret}
-      SECURITY_URL: http://security:8080
+      SECURITY_URL: http://host.docker.internal:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     healthcheck:
       # busybox wget against the real /health endpoint — a TCP-open check (nc -z) kept
