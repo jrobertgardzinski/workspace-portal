@@ -13,22 +13,30 @@ cd "$(dirname "$0")"
 # does not fetch the agent (the memes world starts no Tempo to receive traces — infra-up.sh
 # is the one that provisions it), so when the jar is absent just disable the flag; when
 # infra-up.sh fetched it earlier, the services come up traced as usual
-OTEL_AGENT=../shared/observability/otel/opentelemetry-javaagent.jar
-if [ ! -f "$OTEL_AGENT" ]; then
-    export OTEL_JAVA_TOOL_OPTIONS=""
-fi
+# `--observability` adds the monitoring context and the OTel agent (see infra-up.sh)
+ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        --observability) . ../shared/observability/enable.sh ;;
+        *) ARGS+=("$arg") ;;
+    esac
+done
+set -- "${ARGS[@]+"${ARGS[@]}"}"
 
 # shared kernel first (libs into ~/.m2 + identity jars; voting and purge-rule ride along —
 # the gallery and comments vote through one and close accounts by the other), then the memes jars
 (cd ../shared && ./mvnw -q -pl microservice-security/security-infrastructure,microservice-email,voting,purge-rule -am install -DskipTests)
 ./mvnw -q -pl microservice-memes/memes-infrastructure,microservice-comments/comments-infrastructure -am package -DskipTests
 
+OBS=()
+[ "${COMPOSE_PROFILES:-}" = observability ] && OBS=(prometheus grafana cadvisor node-exporter)
 docker compose up --build -d \
     security email memes comments idp \
-    prometheus grafana cadvisor node-exporter "$@"
+    "${OBS[@]+"${OBS[@]}"}" "$@"
 
 echo
 echo "memes     -> http://localhost:8083    comments -> http://localhost:8085"
 echo "security  -> http://localhost:8080    mail inbox (Mailpit) -> http://localhost:8025"
-echo "grafana   -> http://localhost:3000    prometheus -> http://localhost:9090"
+[ "${COMPOSE_PROFILES:-}" = observability ] && echo "grafana   -> http://localhost:3000    prometheus -> http://localhost:9090" \
+    || echo "(no observability — add --observability for Grafana/Prometheus/Tempo and tracing)"
 echo "Full-stack smoke (needs the formula world too): ../shared/infra-smoke.sh"

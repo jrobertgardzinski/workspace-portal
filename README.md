@@ -14,11 +14,17 @@ workspace `../shared` (repo `workspace-shared`) and is consumed through `~/.m2`
 and the included `docker-compose.identity.yml`.
 
 ```bash
-./infra-up.sh          # shared kernel install + portal jars + the whole stack up
-./memes-up.sh          # just the memes world (gallery + comments + identity)
+./infra-up.sh          # shared kernel install + portal jars + the SYSTEM up (identity + portal)
+./infra-up.sh --observability   # ...plus Prometheus/Grafana/Loki/Tempo and the OTel agent in every JVM
+./memes-up.sh          # just the memes world (gallery + comments + identity); --observability works here too
 ./infra-down.sh        # stop; -v drops the volumes
 ../shared/infra-smoke.sh   # full-stack proof over the whole stack
 ```
+
+Contexts: the system is the default; observability is a compose profile (`--observability` on the
+up-scripts, or `docker compose --profile observability up -d` plus
+`OTEL_JAVA_TOOL_OPTIONS=-javaagent:/otel/opentelemetry-javaagent.jar` for tracing). Without the
+profile no JVM carries the agent — there is no Tempo to send spans to.
 
 One service from the IDE, the rest in Docker — no image rebuild for a one-line change:
 

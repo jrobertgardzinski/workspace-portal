@@ -28,11 +28,12 @@ include:
   - ../shared/docker-compose.observability.yml
 
 x-otel-agent: &otel-agent
-  # infra-up.sh exports OTEL_JAVA_TOOL_OPTIONS="" when the agent jar could not be fetched:
-  # a -javaagent pointing at a missing file aborts the JVM, which would crash-loop every
-  # JVM service instead of the promised "start without tracing" (no-colon ${VAR-...} so an
-  # explicitly empty value disables the agent, absence keeps it)
-  JAVA_TOOL_OPTIONS: ${OTEL_JAVA_TOOL_OPTIONS--javaagent:/otel/opentelemetry-javaagent.jar}
+  # OPT-IN, together with the observability profile: the agent exports spans to Tempo, and
+  # without Tempo it would only log export failures. The up-scripts' --observability flag sets
+  # OTEL_JAVA_TOOL_OPTIONS=-javaagent:/otel/opentelemetry-javaagent.jar (after fetching the jar —
+  # a -javaagent pointing at a missing file aborts the JVM) alongside COMPOSE_PROFILES=observability;
+  # by hand, export both before `docker compose up`. Unset or empty = no agent.
+  JAVA_TOOL_OPTIONS: ${OTEL_JAVA_TOOL_OPTIONS-}
   OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
   OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
   OTEL_TRACES_EXPORTER: otlp
