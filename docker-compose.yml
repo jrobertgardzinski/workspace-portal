@@ -17,6 +17,9 @@
 #   8094  microservice-offboarding (the account-deletion saga's process manager)
 #   ----  image-encoder          (internal: PNG->WebP for memes; Python + Pillow)
 #   plus the identity stack's ports — see ../shared/docker-compose.identity.yml
+#   5434/5435/5436/5437  the memes/comments/collections/offboarding Postgres, 9000 MinIO,
+#   8087 image-encoder — internal wiring published so ONE service can run from the IDE against
+#   the rest of the stack: ./dev-swap.sh <service> (env files under dev/local/)
 
 name: security
 
@@ -138,6 +141,8 @@ services:
   minio:
     image: bitnamilegacy/minio:2025.7.23-debian-12-r5
     restart: always
+    ports:
+      - "9000:9000"   # for a memes started from the IDE (dev/local/memes.env)
     environment:
       MINIO_ROOT_USER: memes
       MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-supersecret}
@@ -153,6 +158,8 @@ services:
     build:
       context: microservice-image
     restart: unless-stopped
+    ports:
+      - "8087:8087"   # for a memes started from the IDE (dev/local/memes.env)
     # internal only — memes calls it; not published to the host
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8087), 2)"]
@@ -164,6 +171,8 @@ services:
   memes-postgres:
     image: postgres:18-alpine
     restart: always
+    ports:
+      - "5434:5432"   # for a memes started from the IDE (dev/local/)
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
       POSTGRES_DB: memes
@@ -224,6 +233,8 @@ services:
   comments-postgres:
     image: postgres:18-alpine
     restart: always
+    ports:
+      - "5435:5432"   # for a comments started from the IDE (dev/local/)
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
       POSTGRES_DB: comments
@@ -295,6 +306,8 @@ services:
   collections-postgres:
     image: postgres:18-alpine
     restart: always
+    ports:
+      - "5436:5432"   # for a user-collections started from the IDE (dev/local/)
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
       POSTGRES_DB: collections
@@ -346,6 +359,8 @@ services:
   offboarding-postgres:
     image: postgres:18-alpine
     restart: always
+    ports:
+      - "5437:5432"   # for a offboarding started from the IDE (dev/local/)
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
       POSTGRES_DB: offboarding

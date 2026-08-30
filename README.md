@@ -20,5 +20,18 @@ and the included `docker-compose.identity.yml`.
 ../shared/infra-smoke.sh   # full-stack proof over the whole stack
 ```
 
+One service from the IDE, the rest in Docker — no image rebuild for a one-line change:
+
+```bash
+./dev-swap.sh memes          # stops the container, prints the env to paste into the Run Configuration
+./dev-swap.sh run memes      # ...or runs the jar from target/ right here
+./dev-swap.sh back memes     # the container again (stop your IDE process first — same port)
+```
+
+The env files live in `dev/local/` (same variable names as the compose environment); the
+compose files publish the internal wiring for this — databases on 5434–5437, MinIO 9000, the
+encoder 8087, Kafka's host listener 29092. Known limit: a container calling the swapped service
+BY NAME (comments → `memes:8083`) will not find the host process; the browser will.
+
 Build order: `(cd ../shared && ./mvnw install)` → `./mvnw clean install` here.
 JDK 25, wrapper pinned to Maven 3.9.9.
