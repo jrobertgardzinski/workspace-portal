@@ -70,8 +70,8 @@ jobs:
           token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v7
         with:
-          repository: jrobertgardzinski/libs   # the constraint lib lives in repo "libs"
-          path: shared/constraint
+          repository: jrobertgardzinski/libs   # artifact "constraint"
+          path: shared/libs
           token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v7
         with:
@@ -213,8 +213,8 @@ jobs:
           token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v7
         with:
-          repository: jrobertgardzinski/libs   # the constraint lib lives in repo "libs"
-          path: shared/constraint
+          repository: jrobertgardzinski/libs   # artifact "constraint"
+          path: shared/libs
           token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v7
         with:
