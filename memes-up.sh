@@ -31,12 +31,13 @@ set -- "${ARGS[@]+"${ARGS[@]}"}"
 OBS=()
 [ "${COMPOSE_PROFILES:-}" = observability ] && OBS=(prometheus grafana cadvisor node-exporter)
 docker compose up --build -d \
-    security email memes comments idp \
+    security email memes comments idp adminer \
     "${OBS[@]+"${OBS[@]}"}" "$@"
 
 echo
 echo "memes     -> http://localhost:8083    comments -> http://localhost:8085"
 echo "security  -> http://localhost:8080    mail inbox (Mailpit) -> http://localhost:8025"
+echo "adminer   -> http://localhost:8088    (SQL console on the security database: postgres / secret / security)"
 [ "${COMPOSE_PROFILES:-}" = observability ] && echo "grafana   -> http://localhost:3000    prometheus -> http://localhost:9090" \
     || echo "(no observability — add --observability for Grafana/Prometheus/Tempo and tracing)"
 echo "Full-stack smoke (needs the formula world too): ../shared/infra-smoke.sh"
