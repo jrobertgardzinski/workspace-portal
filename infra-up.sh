@@ -19,8 +19,9 @@ set -- "${ARGS[@]+"${ARGS[@]}"}"
 # build order across workspaces: the shared kernel first (its install feeds ~/.m2 with the
 # libraries this reactor depends on AND packages the identity jars the compose build needs),
 # then the portal reactor; sms/push/image/idp are Python and need nothing
-(cd ../shared && ./mvnw -q install -DskipTests)
-./mvnw -q package -DskipTests
+# `clean`: target/lib only accumulates (see memes-up.sh) — stale jars from a renamed module would ride into the images
+(cd ../shared && ./mvnw -q clean install -DskipTests)
+./mvnw -q clean package -DskipTests
 
 docker compose up --build -d "$@"
 echo
