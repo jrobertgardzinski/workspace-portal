@@ -11,14 +11,13 @@ up/down scripts.
 The portal runs on the **shared kernel** — identity, mail chain, stub IdP,
 notification channels and every shared library — which lives in the sibling
 workspace `../shared` (repo `workspace-shared`) and is consumed through `~/.m2`
-and the included `docker-compose.identity.yml`. The F1 game is the OTHER product
-(`../formula`); the two share only identity — one account, one token.
+and the included `docker-compose.identity.yml`.
 
 ```bash
 ./infra-up.sh          # shared kernel install + portal jars + the whole stack up
 ./memes-up.sh          # just the memes world (gallery + comments + identity)
 ./infra-down.sh        # stop; -v drops the volumes
-../shared/infra-smoke.sh   # full-stack proof (needs the formula world up too)
+../shared/infra-smoke.sh   # full-stack proof over the whole stack
 ```
 
 Build order: `(cd ../shared && ./mvnw install)` → `./mvnw clean install` here.
