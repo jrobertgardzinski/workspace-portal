@@ -338,17 +338,16 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+      # The whole kernel, not a hand-picked closure. This step used to be three `-pl` installs
+      # (security-infrastructure, voting, then the outbox pair — each added the day the portal
+      # build died on a SNAPSHOT the previous list did not cover). It is the same drift as the
+      # checkout list and it has the same cure: stop maintaining a copy of the aggregator's module
+      # list. When observation/envelope/account-closure arrived on 2026-09-12 this list went stale
+      # in the usual silent way — the jars above resolved fine and memes-application died on
+      # "Could not find artifact com.jrobertgardzinski:observation". The reactor job and
+      # infra-up.sh have both always installed everything; this now matches them.
       - name: Install the shared kernel (no tests) — feeds ~/.m2 and the security jar
-        run: ./mvnw -B -q --no-transfer-progress -pl microservice-security/security-infrastructure -am install -DskipTests
-        working-directory: shared
-      - name: Install voting (the gallery and comments vote through it)
-        run: ./mvnw -B -q --no-transfer-progress -pl voting -am install -DskipTests
-        working-directory: shared
-      # memes and comments publish their saga events through the outbox, and neither module sits in
-      # the closure of security-infrastructure or voting — so without this step the jars above
-      # resolve fine and the portal build dies on a missing SNAPSHOT.
-      - name: Install the outbox (memes and comments publish their saga events through it)
-        run: ./mvnw -B -q --no-transfer-progress -pl transactional-outbox,infrastructure-spring-outbox -am install -DskipTests
+        run: ./mvnw -B -q --no-transfer-progress install -DskipTests
         working-directory: shared
       - name: Build the portal jars (deps closure, no tests)
         run: ./mvnw -B -q --no-transfer-progress -pl microservice-memes/memes-infrastructure,microservice-comments,microservice-user-collections -am package -DskipTests
