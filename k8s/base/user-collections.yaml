@@ -3,7 +3,8 @@
 #
 # Probes — two endpoints, two different questions:
 #   /health (READINESS)  503 when the purge-consumer loop stops COMPLETING
-#                        cycles (COLLECTIONS_CONSUMER_STALL_SEC, default 60s)
+#                        records (COLLECTIONS_CONSUMER_STALL_SEC, default 150s,
+#                        floored at the 90s record retry budget plus a minute)
 #                        — broker or database away. Readiness only takes the
 #                        pod out of traffic/gating; restarting would not fix
 #                        the dependency (a down Postgres used to restart-loop

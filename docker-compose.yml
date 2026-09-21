@@ -232,7 +232,9 @@ services:
       # busybox wget against the real /health endpoint — a TCP-open check (nc -z) kept
       # reporting healthy while the saga consumer thread was dead. /health itself now watches
       # that thread: it turns 503 once the purge-consumer loop stops completing cycles for
-      # longer than COLLECTIONS_CONSUMER_STALL_SEC (default 60s), so a dead consumer now
+      # longer than COLLECTIONS_CONSUMER_STALL_SEC (default 150s, and the service refuses to
+      # boot below that floor — it has to outlast the 90s a single record may legally be
+      # retried for), so a dead consumer now
       # flips the container unhealthy instead of hiding behind an open port
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8092/health"]
       interval: 3s
