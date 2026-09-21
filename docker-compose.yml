@@ -105,8 +105,11 @@ services:
         condition: service_healthy
 
   # object storage for the gallery's image bytes — the S3 ObjectStore adapter's home
+  # From quay.io: docker.io/minio/minio stopped answering anonymous pulls ("repository does not
+  # exist or may require 'docker login'"), so a machine without a cached copy — every CI runner —
+  # could not bring the stack up at all. Same release, same digest.
   minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     restart: always
     command: server /data
     environment:
