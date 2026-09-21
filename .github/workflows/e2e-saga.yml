@@ -141,6 +141,21 @@ jobs:
           token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v7
         with:
+          repository: jrobertgardzinski/observation
+          path: shared/observation
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v7
+        with:
+          repository: jrobertgardzinski/envelope
+          path: shared/envelope
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v7
+        with:
+          repository: jrobertgardzinski/account-closure
+          path: shared/account-closure
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v7
+        with:
           repository: jrobertgardzinski/test-starter
           path: shared/test-starter
           token: ${{ secrets.REPO_PAT }}
@@ -192,6 +207,13 @@ jobs:
           repository: jrobertgardzinski/microservice-push
           path: shared/microservice-push
           token: ${{ secrets.REPO_PAT }}
+
+      # Cheap, loud guard in front of a failure that cost twelve silent red nights: the checkout list
+      # above is hand-kept and the aggregator's module list is not, so they drift. Fail here, naming
+      # the module, instead of thirty lines deep in a Maven reactor error.
+      - name: The checkout list still covers every shared module
+        run: ./check-workflow-checkouts.sh ../shared
+        working-directory: portal
 
       # the portal's own children — microservice-image is Python for the same reason, and memes
       # calls it for WebP, so its context has to be here too
