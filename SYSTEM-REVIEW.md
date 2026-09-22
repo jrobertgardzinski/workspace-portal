@@ -24,7 +24,27 @@
 >
 > **Rodzina tożsamości ZAMKNIĘTA** — producent, trzej konsumenci, trzy pakty.
 >
-> **Zostaje otwarte:** ŚREDNIE i NISKIE z listy niżej. Wszystkie pozycje mają cytat `plik:linia` i werdykt weryfikatora;
+> ## WSZYSTKIE ZNALEZISKA ZAMKNIĘTE — 2026-09-22
+>
+> Osiem paczek napraw, jedna na serwis albo na warstwę, każda z testem, który pada bez poprawki,
+> i z zielonym `mvn clean verify` przed commitem. **Pięć pozycji z siedmiu w paczce ops okazało
+> się dotyczyć wyłącznie gałęzi `dev-env-ide`** (F-016, F-048, F-049, F-056, F-058): na `main`
+> obraz nie publikuje portu, `dev-swap.sh` nie istnieje, skrypty nie sourcują `enable.sh`, a nic
+> nie obiecuje profilu obserwowalności. Są prawdziwe i należą do tamtej gałęzi przy scalaniu.
+>
+> **Czego świadomie NIE zamknięto**, każda pozycja opisana w kodzie, nie tylko tutaj:
+> - zapis po domknięciu sagi (token żyje do godziny) — potrzeba sygnału unieważnienia z security,
+>   ta sama dziura u trzech uczestników; collections liczy teraz residuum i alarmuje,
+> - trzeci kształt błędu — własna odpowiedź Boota dla odmów, które nie docierają do handlera;
+>   to decyzja na skalę majątku, nie pozycja NISKA w jednym serwisie,
+> - `apiCallTimeout` na kliencie S3 w memes,
+> - tożsamość tego, kto USTAWIŁ politykę czyszczenia, ginie przy jej skasowaniu.
+>
+> **Jedna zmiana wymaga Twojej akceptacji albo cofnięcia:** F-017 zmienił sygnaturę portu
+> w `memes-application` (`clear()` → `clear(String clearedBy)`). To Twoja warstwa use-case,
+> a reguła mówi pytać. Bez tego adapter nie ma jak nazwać sprawcy. Cofnięcie to jeden parametr.
+>
+> **Zostaje otwarte:** nic z tej listy. Wszystkie pozycje mają cytat `plik:linia` i werdykt weryfikatora;
 > stan przebiegu w `.system-review/`.
 >
 > **Dwa ograniczenia, których ta runda NIE zamyka:** wyścig zmiany adresu z czyszczeniem jest
