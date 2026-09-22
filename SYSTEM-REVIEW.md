@@ -11,7 +11,7 @@
 > | **F-074** | trzy brakujące checkouty + strażnik `check-workflow-checkouts.sh`; osobno: instalacja jądra bez ręcznej listy `-pl`, MinIO z quay.io na `main`, limit logowań podniesiony w stosie dev |
 > | **F-062, F-063** | brakujące `catch` w memes-ui, nowy `serviceDown.test.tsx` |
 > | **F-020** | security czyta odsyłany `sagaId`; werdykt rozstrzyga swoją sagę, nie adres |
-> | **F-014, F-008** | `EMAIL_CHANGED` na `security-events`; memes i comments przekluczają wiersze, pakty zweryfikowane po obu stronach; `USER_CONTENT_PURGED` niesie `reserved` |
+> | **F-014, F-008** | `EMAIL_CHANGED` na `security-events`; **wszyscy trzej uczestnicy** przekluczają wiersze (memes, comments, collections), trzy pakty zweryfikowane u producenta; `USER_CONTENT_PURGED` niesie `reserved` we wszystkich trzech |
 > | **F-023, F-024, F-025** | żywotność konsumentów w collections: podłoga tolerancji, puls per rekord, shutdown hook |
 > | **F-071** | dwa scenariusze usuwania konta przepisane do kreatora, który portal ma dziś |
 >
@@ -22,8 +22,9 @@
 > nieistniejący produkt. **Martwa bramka nie tylko nie łapie regresji — ukrywa, ile ich się
 > nazbierało.**
 >
-> **Zostaje otwarte:** collections jako trzeci konsument `EMAIL_CHANGED` (w toku), oraz ŚREDNIE
-> i NISKIE z listy niżej. Wszystkie pozycje mają cytat `plik:linia` i werdykt weryfikatora;
+> **Rodzina tożsamości ZAMKNIĘTA** — producent, trzej konsumenci, trzy pakty.
+>
+> **Zostaje otwarte:** ŚREDNIE i NISKIE z listy niżej. Wszystkie pozycje mają cytat `plik:linia` i werdykt weryfikatora;
 > stan przebiegu w `.system-review/`.
 >
 > **Dwa ograniczenia, których ta runda NIE zamyka:** wyścig zmiany adresu z czyszczeniem jest
