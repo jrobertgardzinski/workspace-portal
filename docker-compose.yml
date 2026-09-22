@@ -77,9 +77,16 @@ services:
       # says so in as many words), so /actuator/health/readiness answers 200 or 503 in compose too,
       # never 404 — an earlier version of this comment claimed the opposite and would have sent a
       # reader debugging a health flap off to "fix" the k8s manifests. The bare endpoint is chosen
-      # because it AGGREGATES: for a compose healthcheck the useful question is "is anything this
-      # service needs down" — Postgres, MinIO, the listener lamp and all — while readiness answers
-      # the narrower "should traffic be routed here", which is a Kubernetes question. HTTP/1.0 so the
+      # because it AGGREGATES what there is to aggregate, while readiness answers the narrower
+      # "should traffic be routed here", which is a Kubernetes question. Be exact about what that
+      # aggregate holds, because an earlier version of this comment promised more than it can
+      # deliver and an operator would have read a green lamp as "nothing it needs is down":
+      # it is the DATASOURCE, diskSpace/ping/ssl, and the saga listener lamp. NOT the broker —
+      # that lamp answers "is my listener container running", says so in its own javadoc, and
+      # stays UP with Kafka gone. NOT MinIO either: the S3 blob store is a plain awssdk client
+      # with no health contributor, so an object store that is away shows here as nothing at all
+      # until an upload fails. Two of the three dependencies this service has are unmonitored by
+      # this probe. HTTP/1.0 so the
       # server closes the connection itself; the match is anchored on the status line and carries
       # no reason phrase, because Tomcat sends "HTTP/1.1 200 " with the phrase omitted.
       # 9083, not 8083: the actuator moved to its own connector on 2026-07-29 so a saturated
