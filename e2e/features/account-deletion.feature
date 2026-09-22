@@ -11,7 +11,7 @@ Feature: The right to be forgotten — leaving the portal takes the user's trace
   in microservice-offboarding's own features; here only the promise made to the person counts,
   and it is proven against the LIVE stack: real services, real broker, real mailbox.
 
-  Scenario: Deleting the account removes the person's traces under the default policy
+  Scenario: Deleting the account removes the person's traces, all of them
     Given a signed-in user with a meme, a comment and a favourite
     When the user asks for their account to be deleted
     Then their meme disappears from the gallery
