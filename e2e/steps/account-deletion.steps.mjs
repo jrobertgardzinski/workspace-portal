@@ -44,9 +44,9 @@ When('the user asks for their account to be deleted', async function () {
   await this.requestAccountDeletion(this.leaver, this.leaverToken);
 });
 
-When('the user asks for their account to be deleted, choosing that their comments be erased',
+When('the user asks for their account to be deleted, having written under it',
   async function () {
-    await this.requestAccountDeletion(this.leaver, this.leaverToken, { comments: 'DELETE' });
+    await this.requestAccountDeletion(this.leaver, this.leaverToken);
   });
 
 // ---------------------------------------------------------------------------------------------

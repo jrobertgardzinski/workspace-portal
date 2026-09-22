@@ -213,17 +213,23 @@ class SagaWorld {
    *  must not end an account), then ask for the deletion; the answer is a promise (202), the
    *  keeping of which the Then-steps watch. `purge` carries the wizard's explicit choice; no
    *  purge means every content service applies its deployment default. */
-  async requestAccountDeletion(account, token, purge = undefined) {
+  /**
+   * The account named in the PATH, by the DELETE verb, with no body. `POST /account/delete` with
+   * a {purge} body answered 405 here for ten nights: the two ways out of an account were
+   * separated, and a closure somebody asks for THEMSELVES now destroys everything and takes no
+   * conditions — those belong to an ADMIN closing somebody else's account, and are refused on
+   * this path rather than quietly ignored.
+   */
+  async requestAccountDeletion(account, token) {
     const elevated = await boundedFetch(`${SECURITY}/account/step-up`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ action: 'delete-account', password: account.password }),
     });
     if (!elevated.ok) throw new Error(`step-up before deletion refused: ${elevated.status}`);
-    const r = await boundedFetch(`${SECURITY}/account/delete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: purge ? JSON.stringify({ purge }) : undefined,
+    const r = await boundedFetch(`${SECURITY}/account/${encodeURIComponent(account.email)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
     });
     if (r.status !== 202) throw new Error(`deletion request expected 202, got ${r.status}`);
   }

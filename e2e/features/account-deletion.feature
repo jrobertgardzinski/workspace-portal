@@ -15,13 +15,13 @@ Feature: The right to be forgotten — leaving the portal takes the user's trace
     Given a signed-in user with a meme, a comment and a favourite
     When the user asks for their account to be deleted
     Then their meme disappears from the gallery
-    And their comment stays readable but is signed "deleted account"
+    And their comment disappears from the thread entirely
     And their list of favourites is empty
     And they can no longer sign in
     And a farewell mail tells them the account is deleted
 
-  Scenario: The leaver may choose that their words go too
+  Scenario: What they wrote under someone else's meme goes with them
     Given a signed-in user who commented on someone else's meme
-    When the user asks for their account to be deleted, choosing that their comments be erased
+    When the user asks for their account to be deleted, having written under it
     Then their comment disappears from the thread entirely
     And they can no longer sign in
