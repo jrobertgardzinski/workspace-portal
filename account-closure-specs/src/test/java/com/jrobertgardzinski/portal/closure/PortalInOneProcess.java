@@ -3,6 +3,7 @@ package com.jrobertgardzinski.portal.closure;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jrobertgardzinski.closure.ClosureCommand;
+import com.jrobertgardzinski.closure.ClosureConfirmation;
 import com.jrobertgardzinski.purge.PurgeRule;
 import com.jrobertgardzinski.closure.ClosureMessages;
 import com.jrobertgardzinski.collections.application.MarkUserItemsForErasure;
@@ -246,12 +247,19 @@ final class PortalInOneProcess {
                     ? refs : -1;
             default -> throw new IllegalStateException("no such participant: " + participant);
         };
-        // only the reversible step is answered: the closure and the compensation END the case
-        return reserved < 0
-                ? Optional.empty()
-                : Optional.of("{\"type\":\"" + ClosureMessages.USER_CONTENT_PURGED + "\","
-                + "\"email\":\"" + email + "\",\"sagaId\":\"" + sagaId + "\","
-                + "\"reserved\":" + reserved + ",\"version\":1}");
+        // only the reversible step is answered: the closure and the compensation END the case.
+        // Built from the same record the three deployed participants use, which is the only
+        // reason this transport cannot quietly carry a different message than they do — it did,
+        // for a few hours on the day it was written
+        if (reserved < 0) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(mapper.writeValueAsString(
+                    new ClosureConfirmation(sagaId, email, reserved).fields()));
+        } catch (Exception impossible) {
+            throw new IllegalStateException("could not serialise a confirmation", impossible);
+        }
     }
 
     /** Everything the portal has told security, in the order it said it. */
