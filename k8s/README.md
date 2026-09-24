@@ -35,7 +35,7 @@ k3d image import -c portal-dev \
   security-memes:latest security-comments:latest \
   security-user-collections:latest security-collections-ui:latest \
   security-offboarding:latest security-image-encoder:latest \
-  postgres:18-alpine minio/minio:RELEASE.2025-09-07T16-13-09Z \
+  postgres:18-alpine bitnamilegacy/minio:2025.7.23-debian-12-r5 \
   apache/kafka:4.3.1 axllent/mailpit:latest
 
 # 4. apply — ALWAYS through the overlay (the base has no Secrets)

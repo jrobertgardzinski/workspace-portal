@@ -112,18 +112,37 @@ services:
         condition: service_healthy
 
   # object storage for the gallery's image bytes — the S3 ObjectStore adapter's home
-  # From quay.io: docker.io/minio/minio stopped answering anonymous pulls ("repository does not
-  # exist or may require 'docker login'"), so a machine without a cached copy — every CI runner —
-  # could not bring the stack up at all. Same release, same digest.
+  #
+  # THE THIRD REGISTRY, and the reason is not a mirror going away: MinIO has put its own images
+  # behind a login. docker.io/minio/minio stopped answering anonymous pulls (2026-09-12, "repository
+  # does not exist"), we moved to quay.io, and on 2026-09-24 quay started answering 401 too — for
+  # the API as well as the registry, so there is no tag left there to fall back to. ghcr.io and
+  # public.ecr.aws never carried it. A machine without a cached copy — every CI runner — could not
+  # bring the stack up at all.
+  #
+  # bitnamilegacy/ is MinIO itself, built from source by Bitnami, and the only public copy left.
+  # Read the name: that namespace is FROZEN — Broadcom moved the maintained catalogue behind a
+  # paid subscription and parked the old images there — so this pin will never get a security
+  # update. It buys time, not a home. The version string the binary prints says DEVELOPMENT
+  # because Bitnami builds from source rather than shipping MinIO's release artefact.
+  #
+  # Bitnami's image is configured differently from upstream and the three differences are all here:
+  # no `command:` (its entrypoint runs the server), the data lives under /bitnami/minio/data, and
+  # it runs as uid 1001. The credentials env vars happen to be the same names.
+  #
+  # ONE-OFF on a machine that ran the old stack: the existing minio_data volume was written by a
+  # root MinIO, and uid 1001 cannot write into it — the container dies on
+  # "/bitnami/minio/data/.root_user: Permission denied". Drop it once (`./infra-down.sh -v`, or
+  # `docker volume rm security_minio_data`) and the gallery re-fills on the next upload; the dev
+  # stack's images are disposable, which is the only reason this is a comment and not a migration.
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
     restart: always
-    command: server /data
     environment:
       MINIO_ROOT_USER: memes
       MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-supersecret}
     volumes:
-      - minio_data:/data
+      - minio_data:/bitnami/minio/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 3s

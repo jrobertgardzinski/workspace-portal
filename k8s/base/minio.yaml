@@ -30,10 +30,19 @@ spec:
       labels:
         app: minio
     spec:
+      # Bitnami's image runs as uid 1001 and a PersistentVolume arrives owned by root, so without
+      # this the server cannot write its own data directory. Upstream's image ran as root and did
+      # not need it — one more line the registry change cost.
+      securityContext:
+        fsGroup: 1001
       containers:
         - name: minio
-          image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-          args: ["server", "/data"]
+          # bitnamilegacy/, because MinIO put its own images behind a login: Docker Hub stopped
+          # answering anonymous pulls, then quay.io started answering 401 (2026-09-24), and no
+          # other registry carries it. That namespace is frozen and will never be updated again —
+          # this pin buys time, not a home. No args: unlike upstream's, this entrypoint runs the
+          # server itself, and the data lives under /bitnami/minio/data.
+          image: bitnamilegacy/minio:2025.7.23-debian-12-r5
           ports:
             - name: s3
               containerPort: 9000
@@ -50,7 +59,7 @@ spec:
                   key: MINIO_ROOT_PASSWORD
           volumeMounts:
             - name: data
-              mountPath: /data
+              mountPath: /bitnami/minio/data
           readinessProbe:
             httpGet:
               path: /minio/health/live
