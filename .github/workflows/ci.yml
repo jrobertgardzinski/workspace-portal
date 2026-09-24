@@ -350,7 +350,7 @@ jobs:
         run: ./mvnw -B -q --no-transfer-progress install -DskipTests
         working-directory: shared
       - name: Build the portal jars (deps closure, no tests)
-        run: ./mvnw -B -q --no-transfer-progress -pl microservice-memes/memes-infrastructure,microservice-comments/comments-infrastructure,microservice-user-collections -am package -DskipTests
+        run: ./mvnw -B -q --no-transfer-progress -pl microservice-memes/memes-infrastructure,microservice-comments/comments-infrastructure,microservice-user-collections/collections-infrastructure -am package -DskipTests
         working-directory: portal
 
       - name: Set up Node 22
