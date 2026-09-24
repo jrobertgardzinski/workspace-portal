@@ -21,7 +21,7 @@ fi
 # shared kernel first (libs into ~/.m2 + identity jars; voting rides along — the gallery and
 # comments vote through it), then just the memes-world jars
 (cd ../shared && ./mvnw -q -pl microservice-security/security-infrastructure,microservice-email,voting -am install -DskipTests)
-./mvnw -q -pl microservice-memes/memes-infrastructure,microservice-comments -am package -DskipTests
+./mvnw -q -pl microservice-memes/memes-infrastructure,microservice-comments/comments-infrastructure -am package -DskipTests
 
 docker compose up --build -d \
     security email memes comments idp \
