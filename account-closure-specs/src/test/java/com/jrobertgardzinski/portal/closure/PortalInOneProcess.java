@@ -3,6 +3,7 @@ package com.jrobertgardzinski.portal.closure;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jrobertgardzinski.closure.ClosureCommand;
+import com.jrobertgardzinski.purge.PurgeRule;
 import com.jrobertgardzinski.closure.ClosureMessages;
 import com.jrobertgardzinski.collections.application.MarkUserItemsForErasure;
 import com.jrobertgardzinski.collections.application.PurgeUserItems;
@@ -110,7 +111,7 @@ final class PortalInOneProcess {
                 new PurgeUserContent(memes, memes, mock(VoteRepository.class),
                         mock(MemeContentIndex.class), mock(TagRepository.class),
                         mock(MemeEvents.class), mock(PurgePolicyOverride.class),
-                        new com.jrobertgardzinski.memes.config.PurgeRule.Delete()),
+                        new PurgeRule.Delete()),
                 // no outbox in here: the confirmation is what deliver() sends back
                 (sagaId, leaver, reserved) -> { },
                 Observations.silent(), Runnable::run);
@@ -119,7 +120,7 @@ final class PortalInOneProcess {
                 new MarkUserCommentsForErasure(comments, windUpClock()),
                 new RestoreUserComments(comments),
                 new PurgeUserComments(comments, comments, mock(CommentVotes.class),
-                        new com.jrobertgardzinski.comments.config.PurgeRule.Delete()),
+                        new PurgeRule.Delete()),
                 (sagaId, leaver, reserved) -> { },
                 Observations.silent(), Runnable::run);
 

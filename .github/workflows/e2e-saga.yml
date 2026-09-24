@@ -133,6 +133,10 @@ jobs:
         with:
           repository: jrobertgardzinski/voting
           path: shared/voting
+      - uses: actions/checkout@v7
+        with:
+          repository: jrobertgardzinski/purge-rule
+          path: shared/purge-rule
           token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v7
         with:

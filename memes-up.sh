@@ -18,9 +18,9 @@ if [ ! -f "$OTEL_AGENT" ]; then
     export OTEL_JAVA_TOOL_OPTIONS=""
 fi
 
-# shared kernel first (libs into ~/.m2 + identity jars; voting rides along — the gallery and
-# comments vote through it), then just the memes-world jars
-(cd ../shared && ./mvnw -q -pl microservice-security/security-infrastructure,microservice-email,voting -am install -DskipTests)
+# shared kernel first (libs into ~/.m2 + identity jars; voting and purge-rule ride along —
+# the gallery and comments vote through one and close accounts by the other), then the memes jars
+(cd ../shared && ./mvnw -q -pl microservice-security/security-infrastructure,microservice-email,voting,purge-rule -am install -DskipTests)
 ./mvnw -q -pl microservice-memes/memes-infrastructure,microservice-comments/comments-infrastructure -am package -DskipTests
 
 docker compose up --build -d \
