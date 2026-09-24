@@ -119,8 +119,8 @@ pivot.
 ```
    PRZEGLĄDARKA
    security-ui / memes-ui
-        │  POST /account/step-up      (dowiedź, że to ty)
-        │  POST /account/delete       (zamknij konto)
+        │  POST /account/step-up        (dowiedź, że to ty)
+        │  DELETE /account/{adres}      (zamknij konto — swoje albo, jako ADMIN, cudze)
         ▼
 ┌──────────────────────────┐
 │  microservice-security   │  TOŻSAMOŚĆ (identity). Micronaut.
@@ -177,13 +177,17 @@ serwisu security nie ma **ani jednego** typu, pola czy metody zawierającej sło
 
 ## 4. Akt I — przeglądarka i **step-up**
 
-Usunięcie konta jest w interfejsie w dwóch miejscach, z różnym zakresem:
+Usunięcie WŁASNEGO konta jest w interfejsie w dwóch miejscach i od czasu wprowadzenia strażnika
+z art. 17 ust. 3 robią dokładnie to samo — kreator w `memes-ui` miał kiedyś trzy opcje losu treści
+(w tym „zostaw popularne"), ale wybór należy dziś wyłącznie do ADMINA zamykającego CUDZE konto
+(ten sam `DELETE /account/{adres}`, tylko z cudzym adresem), bo tam nikt nie korzysta z prawa do
+bycia zapomnianym:
 
 | | `security-ui` | `memes-ui` |
 |---|---|---|
 | stos | React 19, bez biblioteki komponentów | React 19 + MUI 9 |
-| co wysyła | `POST /account/delete` **bez ciała** | `POST /account/delete` z ciałem `{purge:{...}}` |
-| wybór losu treści | brak — decyduje polityka serwera | kreator: usuń / wymaż wszystko / zostaw popularne |
+| co wysyła | `DELETE /account/{swój adres}` **bez ciała** | `DELETE /account/{swój adres}` **bez ciała** |
+| wybór losu treści | brak — leci wszystko | brak — leci wszystko |
 | po sukcesie | `signOut()` + „Account closing — you are signed out everywhere." | notka „…the goodbye mail will confirm" + wyczyszczenie `localStorage` |
 
 Oba przechodzą przez **step-up** (step-up authentication — *podniesienie uprawnień sesji*).
@@ -213,7 +217,9 @@ hasło plus kolejne czynniki — trudniej. Komentarz w kontrolerze mówi to jedn
 2. `POST /account/step-up/factor` z `{stepUpTicket, proof}` → kolejne ogniwo łańcucha, aż do
    `200 ELEVATED`. Sukces to `SessionElevation.elevate(accessToken)` — postawienie **krótkiego,
    jednorazowego znacznika** na access tokenie (mapa w pamięci, czas życia domyślnie 5 minut).
-3. `POST /account/delete` → `StepUpGuard.requireElevation(request, "delete-account")`. Bramka
+3. `DELETE /account/{adres}` → `StepUpGuard.requireElevation(request, "delete-account")` dla
+   własnego konta, a dla cudzego najpierw `RoleGuard.require(ADMIN)` i dopiero potem
+   `"admin-delete-account"`. Bramka
    przechodzi **tylko** gdy `elevation.consume(token)` zwróci `true`. `consume` **usuwa** wpis —
    znacznik jest jednorazowy. Bez niego: `403 {"status":"STEP_UP_REQUIRED","action":"delete-account"}`.
 
@@ -238,15 +244,26 @@ To najgęstsze 20 linii kodu w całym przepływie. Warto je znać na pamięć.
 ### 5.1 Kontrakt
 
 ```
-POST /account/delete
+DELETE /account/{adres}
 Authorization: Bearer <accessToken>
-Body (opcjonalne):  {"purge": {"memes": "DELETE", "comments": "KEEP_POPULAR_ANONYMIZED:50"}}
 
 202 Accepted  {"status":"ACCOUNT_DELETION_STARTED"}
+400           {"status":"INVALID_EMAIL"}             (w ścieżce nie ma adresu)
 403           {"status":"STEP_UP_REQUIRED","action":"delete-account"}
 403           {"error":"MFA_ENROLMENT_REQUIRED"}     (konto nie spełnia progu czynników)
 401                                                  (brak lub odrzucony token)
 ```
+
+**Jeden endpoint, dwa rodzaje żądania — decyduje adres w ścieżce**, porównany z adresem z tokenu
+(po normalizacji, tej samej, którą rejestracja uznaje dwa adresy za jedną osobę):
+
+- **własny adres** → to jest prawo do bycia zapomnianym. Ciała nie ma, warunków nie ma, leci
+  wszystko. Ciało wysłane mimo to jest ignorowane, bo `AccountClosure` i tak je odrzuca —
+  odmowa zostawiłaby kogoś bez możliwości zamknięcia konta przez pole, które niczego nie zmienia.
+- **cudzy adres** → rola `ADMIN` (403 `NOT_AN_ADMIN`), osobny step-up `admin-delete-account`,
+  nieistniejące konto to 404 `NO_SUCH_USER`, a ciało
+  `{"purge": {"memes": "KEEP_POPULAR_ANONYMIZED:100", "comments": "ANONYMIZE_AUTHOR"}}`
+  mówi, co zostaje. Przekroczone granice mapy: 422 `INVALID_PURGE_CHOICES`.
 
 **Kod 202, nie 200 ani 204** — i to jest cała semantyka tego endpointa. `202 Accepted` znaczy
 „przyjąłem żądanie, wynik nie jest jeszcze znany". Bo faktycznie nie jest: o usunięciu zadecyduje
