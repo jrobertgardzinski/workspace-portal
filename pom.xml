@@ -27,6 +27,8 @@
         <module>microservice-comments</module>
         <module>microservice-user-collections</module>
         <module>microservice-offboarding</module>
+        <!-- not a service: the runner for ../specs, the promises no single service can make -->
+        <module>account-closure-specs</module>
         <!-- microservice-image (the PNG->WebP encoder) is Python — no reactor seat -->
     </modules>
 
