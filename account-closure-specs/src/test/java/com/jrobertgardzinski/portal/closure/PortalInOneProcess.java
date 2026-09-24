@@ -214,7 +214,15 @@ final class PortalInOneProcess {
         }
     }
 
-    /** One participant's whole part in one command: the decision, and what it says back. */
+    /**
+     * One participant's whole part in one command: the decision, and what it says back.
+     *
+     * <p>The confirmation is built here because in a deployed portal each participant builds its
+     * own, and those three are the shape this one has to match — including {@code reserved},
+     * which is how a mark that found nothing is told apart from one that took forty things out
+     * of sight. A transport that quietly dropped a field would make every scenario in ../specs
+     * green about a message the portal does not send.
+     */
     private Optional<String> answerOf(String participant, JsonNode command) {
         String type = command.path(ClosureMessages.Field.TYPE).asText();
         String email = command.path(ClosureMessages.Field.EMAIL).asText();
@@ -224,20 +232,25 @@ final class PortalInOneProcess {
         ClosureCommand parsed = new ClosureCommand(type, sagaId, email, initiatedBy,
                 rule.isMissingNode() ? Optional.empty() : Optional.of(rule.asText()));
 
-        boolean reserved = switch (participant) {
+        // the count each participant reserved, or -1 for "this was not the reversible step"
+        int reserved = switch (participant) {
             case MEMES -> memesParticipant.handle(parsed)
-                    instanceof com.jrobertgardzinski.memes.closure.ClosureOutcome.Reserved;
+                    instanceof com.jrobertgardzinski.memes.closure.ClosureOutcome.Reserved(int memes)
+                    ? memes : -1;
             case COMMENTS -> commentsParticipant.handle(parsed)
-                    instanceof com.jrobertgardzinski.comments.closure.ClosureOutcome.Reserved;
+                    instanceof com.jrobertgardzinski.comments.closure.ClosureOutcome.Reserved(int said)
+                    ? said : -1;
             case COLLECTIONS -> collectionsParticipant.handle(parsed)
-                    instanceof com.jrobertgardzinski.collections.closure.ClosureOutcome.Reserved;
+                    instanceof com.jrobertgardzinski.collections.closure.ClosureOutcome.Reserved(int refs)
+                    ? refs : -1;
             default -> throw new IllegalStateException("no such participant: " + participant);
         };
         // only the reversible step is answered: the closure and the compensation END the case
-        return reserved
-                ? Optional.of("{\"type\":\"" + ClosureMessages.USER_CONTENT_PURGED + "\","
-                + "\"email\":\"" + email + "\",\"sagaId\":\"" + sagaId + "\",\"version\":1}")
-                : Optional.empty();
+        return reserved < 0
+                ? Optional.empty()
+                : Optional.of("{\"type\":\"" + ClosureMessages.USER_CONTENT_PURGED + "\","
+                + "\"email\":\"" + email + "\",\"sagaId\":\"" + sagaId + "\","
+                + "\"reserved\":" + reserved + ",\"version\":1}");
     }
 
     /** Everything the portal has told security, in the order it said it. */
