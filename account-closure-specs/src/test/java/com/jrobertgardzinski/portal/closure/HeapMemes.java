@@ -25,8 +25,12 @@ final class HeapMemes implements MemeErasure, MemeRepository {
 
     void posted(String author, int howMany) {
         for (int i = 1; i <= howMany; i++) {
-            rows.add(new MemeMetadata(author + "-meme-" + i, author, "png"));
+            posted(author + "-meme-" + i, author);
         }
+    }
+
+    void posted(String id, String author) {
+        rows.add(new MemeMetadata(id, author, "png"));
     }
 
     /** What is still held under this author, marked or not. */
@@ -64,7 +68,7 @@ final class HeapMemes implements MemeErasure, MemeRepository {
     @Override
     public List<MemeMetadata> pendingSince(Instant cutoff) {
         return rows.stream().filter(MemeMetadata::isPendingErasure)
-                .filter(row -> !row.markedForErasureAt().isAfter(cutoff)).toList();
+                .filter(row -> row.markedForErasureAt().isBefore(cutoff)).toList();
     }
 
     @Override

@@ -22,8 +22,12 @@ final class HeapComments implements CommentErasure, CommentRepository {
 
     void wrote(String author, int howMany) {
         for (int i = 1; i <= howMany; i++) {
-            rows.add(new Comment(author + "-comment-" + i, "someones-meme", author, "a comment"));
+            wrote(author + "-comment-" + i, author);
         }
+    }
+
+    void wrote(String id, String author) {
+        rows.add(new Comment(id, "someones-meme", author, "a comment"));
     }
 
     List<Comment> heldBy(String author) {
@@ -64,7 +68,7 @@ final class HeapComments implements CommentErasure, CommentRepository {
     @Override
     public List<Comment> pendingSince(Instant cutoff) {
         return rows.stream().filter(Comment::isPendingErasure)
-                .filter(row -> !row.markedForErasureAt().isAfter(cutoff)).toList();
+                .filter(row -> row.markedForErasureAt().isBefore(cutoff)).toList();
     }
 
     @Override
