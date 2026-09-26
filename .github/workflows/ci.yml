@@ -1,0 +1,32 @@
+name: CI
+
+# Depends on user-id only, checked out beside this repo and installed first. The reactor CI in
+# the aggregator repo validates it with every consumer; microservice-security verifies pacts/.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: author-directory
+      - uses: actions/checkout@v7
+        with:
+          repository: jrobertgardzinski/user-id
+          path: user-id
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Install user-id
+        run: mvn -B -q --no-transfer-progress -f user-id/pom.xml install -DskipTests
+      - name: Build and test
+        run: mvn -B --no-transfer-progress -f author-directory/pom.xml clean verify
