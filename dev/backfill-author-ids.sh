@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Fills author_id in memes and comments from security's users table, for rows written before the
-# id column existed (V13 in memes, V7 in comments). Idempotent: only rows without an id are touched.
-# Rows still without an id afterwards belong to accounts security no longer holds; they render as
-# masked addresses until the address column goes.
+# Fills the owner's id in memes (author_id), comments (author_id) and collections (user_id) from
+# security's users table, for rows written before the id column existed. Idempotent: only rows
+# without an id are touched. Rows still without an id afterwards belong to accounts security no
+# longer holds; they render as masked addresses until the address column goes.
 #
 # Runs against the compose stack (project "security", the one every up-script uses).
 set -euo pipefail
@@ -17,13 +17,16 @@ if [ -z "$values" ]; then
     exit 0
 fi
 
-for triple in memes-postgres:memes:memes comments-postgres:comments:comments; do
-    IFS=: read -r service db table <<<"$triple"
+# service:database:table:address column:id column
+for row in memes-postgres:memes:memes:author:author_id \
+           comments-postgres:comments:comments:author:author_id \
+           collections-postgres:collections:collection_items:user_email:user_id; do
+    IFS=: read -r service db table address id <<<"$row"
     pg "$service" "$db" <<SQL
-UPDATE $table t SET author_id = v.id::uuid
+UPDATE $table t SET $id = v.id::uuid
   FROM (VALUES $values) AS v(id, email)
- WHERE lower(t.author) = lower(v.email) AND t.author_id IS NULL;
+ WHERE lower(t.$address) = lower(v.email) AND t.$id IS NULL;
 SELECT '$table' AS "table", count(*) AS rows,
-       count(*) FILTER (WHERE author_id IS NULL) AS still_without_id FROM $table;
+       count(*) FILTER (WHERE $id IS NULL) AS still_without_id FROM $table;
 SQL
 done
