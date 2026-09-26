@@ -62,12 +62,28 @@ public final class HeapMemes extends FakeMemeErasure implements MemeRepository {
 
     /** Every meme of this author's, marked ones included — what "still on the heap" means. */
     public List<MemeMetadata> heldBy(String author) {
+        return memes.values().stream().filter(meme -> meme.author().equals(author)).map(this::metadataOf).toList();
+    }
+
+    /** Every meme of this person's, by id — marked ones included. */
+    public List<MemeMetadata> heldBy(UserId author) {
         return Stream.concat(activeOf(author).stream(), pendingOf(author).stream()).toList();
+    }
+
+    public List<MemeMetadata> visibleOf(UserId author) {
+        return activeOf(author);
+    }
+
+    private MemeMetadata metadataOf(Meme meme) {
+        return new MemeMetadata(meme.id(), meme.author(), meme.authorId(), meme.format(),
+                isMarked(meme.id()) ? com.jrobertgardzinski.memes.domain.MemeStatus.PENDING_ERASURE
+                        : com.jrobertgardzinski.memes.domain.MemeStatus.ACTIVE,
+                isMarked(meme.id()) ? java.time.Instant.EPOCH : null);
     }
 
     /** This author's memes that are actually in the gallery right now. */
     public List<MemeMetadata> visibleOf(String author) {
-        return activeOf(author);
+        return heldBy(author).stream().filter(meme -> !meme.isPendingErasure()).toList();
     }
 
     // posting and reading a meme are not part of closing an account

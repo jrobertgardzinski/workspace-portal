@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Fills the owner's id in memes (author_id), comments (author_id) and collections (user_id) from
-# security's users table, for rows written before the id column existed. Idempotent: only rows
-# without an id are touched. Rows still without an id afterwards belong to accounts security no
-# longer holds; they render as masked addresses until the address column goes.
+# Fills the author's id in memes and comments from security's users table, for rows written before
+# the id column existed. Idempotent: only rows without an id are touched. A row still without an id
+# afterwards is either anonymised (author = 'deleted account') or belongs to an account security no
+# longer holds; both render as "deleted account". Collections need no backfill: user_id is NOT NULL
+# and the address column is gone.
 #
 # Runs against the compose stack (project "security", the one every up-script uses).
 set -euo pipefail
@@ -19,8 +20,7 @@ fi
 
 # service:database:table:address column:id column
 for row in memes-postgres:memes:memes:author:author_id \
-           comments-postgres:comments:comments:author:author_id \
-           collections-postgres:collections:collection_items:user_email:user_id; do
+           comments-postgres:comments:comments:author:author_id; do
     IFS=: read -r service db table address id <<<"$row"
     pg "$service" "$db" <<SQL
 UPDATE $table t SET $id = v.id::uuid

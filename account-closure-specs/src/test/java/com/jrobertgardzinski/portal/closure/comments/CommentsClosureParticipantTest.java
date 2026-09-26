@@ -50,16 +50,10 @@ class CommentsClosureParticipantTest extends AtomicParticipantContractTest {
     @Override
     protected void givenLeaverHolds(int rows) {
         for (int i = 0; i < rows; i++) {
-            comments.wrote("c" + (++written), LEAVER);
+            comments.wrote("c" + (++written), "leaver@example.com", LEAVER);
         }
     }
 
-    @Override
-    protected void givenLeaverHoldsUnderId(int rows) {
-        for (int i = 0; i < rows; i++) {
-            comments.wrote("c" + (++written), "old@example.com", LEAVER_ID);
-        }
-    }
 
     @Override
     protected boolean nothingTouched() {

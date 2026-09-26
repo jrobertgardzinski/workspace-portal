@@ -56,7 +56,7 @@ import static org.mockito.Mockito.mock;
  * rows on the heap, and {@link #deliver} in place of the broker. Nothing is reordered,
  * duplicated or dropped at random; {@link #silence} is the only failure staged.
  */
-final class PortalInOneProcess {
+public final class PortalInOneProcess {
 
     static final String MEMES = "memes";
     static final String COMMENTS = "comments";
@@ -143,7 +143,7 @@ final class PortalInOneProcess {
     }
 
     /** The identity security minted for an address — the specs name people by address, the saga by id. */
-    static UserId idOf(String email) {
+    public static UserId idOf(String email) {
         return new UserId(UUID.nameUUIDFromBytes(("user:" + email).getBytes()));
     }
 
@@ -200,13 +200,12 @@ final class PortalInOneProcess {
     /** Built from the same record the deployed participants use, so this transport cannot carry a different message. */
     private Optional<String> answerOf(String participant, JsonNode command) {
         String type = command.path(ClosureMessages.Field.TYPE).asText();
-        String email = command.path(ClosureMessages.Field.EMAIL).asText();
         String sagaId = command.path(ClosureMessages.Field.SAGA_ID).asText();
         String initiatedBy = command.path(ClosureMessages.Field.INITIATED_BY).asText();
         JsonNode rule = command.path(ClosureMessages.Field.POLICY).path(participant);
-        ClosureCommand parsed = new ClosureCommand(type, sagaId, email,
-                ClosureCommand.userIdOf(command.path(ClosureMessages.Field.USER_ID).asText(null)),
-                initiatedBy, rule.isMissingNode() ? Optional.empty() : Optional.of(rule.asText()));
+        UserId leaver = ClosureCommand.userIdOf(command.path(ClosureMessages.Field.USER_ID).asText(null)).orElse(null);
+        ClosureCommand parsed = new ClosureCommand(type, sagaId, leaver, initiatedBy,
+                rule.isMissingNode() ? Optional.empty() : Optional.of(rule.asText()));
 
         // the count each participant reserved, or -1 for "this was not the reversible step"
         int reserved = switch (participant) {
@@ -226,7 +225,7 @@ final class PortalInOneProcess {
         }
         try {
             return Optional.of(mapper.writeValueAsString(
-                    new ClosureConfirmation(sagaId, email, reserved).fields()));
+                    new ClosureConfirmation(sagaId, leaver, reserved).fields()));
         } catch (Exception impossible) {
             throw new IllegalStateException("could not serialise a confirmation", impossible);
         }

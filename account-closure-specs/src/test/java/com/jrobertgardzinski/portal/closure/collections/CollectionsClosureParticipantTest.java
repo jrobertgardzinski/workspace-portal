@@ -1,6 +1,5 @@
 package com.jrobertgardzinski.portal.closure.collections;
 
-import java.util.Optional;
 import com.jrobertgardzinski.closure.ClosureCommand;
 import com.jrobertgardzinski.closure.ClosureInitiator;
 import com.jrobertgardzinski.closure.ClosureMessages;
@@ -66,13 +65,6 @@ class CollectionsClosureParticipantTest extends ClosureParticipantContractTest {
         return confirmed;
     }
 
-    @Override
-    protected void givenLeaverHoldsUnderId(int rows) {
-        for (int i = 0; i < rows; i++) {
-            favourites.add("old@example.com", Optional.of(LEAVER_ID), "favourites",
-                    new ItemRef("meme", "m" + (++saved)));
-        }
-    }
 
     @Override
     protected boolean nothingTouched() {

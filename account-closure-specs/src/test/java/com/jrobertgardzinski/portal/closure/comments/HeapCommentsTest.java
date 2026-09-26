@@ -4,6 +4,8 @@ import com.jrobertgardzinski.comments.domain.Comment;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.jrobertgardzinski.identity.UserId;
+
 import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -19,13 +21,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class HeapCommentsTest {
 
+    private static final UserId AUTHOR = UserId.random();
+
     private final HeapComments comments = new HeapComments();
 
     @Test
     @DisplayName("findByMeme, find and findByAuthor hide a comment a running saga has marked")
     void thread_reads_hide_marked_comments() {
-        comments.wrote("c1", "author@example.com");
-        Comment marked = comments.activeOf("author@example.com").get(0);
+        comments.wrote("c1", "author@example.com", AUTHOR);
+        Comment marked = comments.activeOf(AUTHOR).get(0);
         comments.store(marked.markForErasure(Instant.now()));
 
         assertEquals(0, comments.findByMeme(marked.memeId()).size());
@@ -37,8 +41,8 @@ class HeapCommentsTest {
     @Test
     @DisplayName("deleteByMeme is status-blind: a marked comment goes with the rest of its thread")
     void cascade_delete_takes_marked_comments_too() {
-        comments.wrote("c1", "author@example.com");
-        Comment marked = comments.activeOf("author@example.com").get(0);
+        comments.wrote("c1", "author@example.com", AUTHOR);
+        Comment marked = comments.activeOf(AUTHOR).get(0);
         comments.store(marked.markForErasure(Instant.now()));
 
         comments.deleteByMeme(marked.memeId());

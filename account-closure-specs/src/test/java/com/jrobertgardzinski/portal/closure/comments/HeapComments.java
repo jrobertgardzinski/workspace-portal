@@ -61,12 +61,21 @@ public final class HeapComments extends FakeCommentErasure implements CommentRep
 
     /** Every comment of this author's, marked ones included — what "still on the heap" means. */
     public List<Comment> heldBy(String author) {
+        return rows.stream().filter(row -> row.author().equals(author)).toList();
+    }
+
+    /** Every comment of this person's, by id — marked ones included. */
+    public List<Comment> heldBy(UserId author) {
         return Stream.concat(activeOf(author).stream(), pendingOf(author).stream()).toList();
+    }
+
+    public List<Comment> visibleOf(UserId author) {
+        return activeOf(author);
     }
 
     /** This author's comments that are actually in a thread right now. */
     public List<Comment> visibleOf(String author) {
-        return activeOf(author);
+        return heldBy(author).stream().filter(row -> !isMarked(row.id())).toList();
     }
 
     // writing a comment is not part of closing an account

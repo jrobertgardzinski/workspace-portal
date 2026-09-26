@@ -56,16 +56,10 @@ class MemesClosureParticipantTest extends AtomicParticipantContractTest {
     @Override
     protected void givenLeaverHolds(int rows) {
         for (int i = 0; i < rows; i++) {
-            memes.posted("m" + (++posted), LEAVER);
+            memes.posted("m" + (++posted), "leaver@example.com", LEAVER);
         }
     }
 
-    @Override
-    protected void givenLeaverHoldsUnderId(int rows) {
-        for (int i = 0; i < rows; i++) {
-            memes.posted("m" + (++posted), "old@example.com", LEAVER_ID);
-        }
-    }
 
     @Override
     protected boolean nothingTouched() {

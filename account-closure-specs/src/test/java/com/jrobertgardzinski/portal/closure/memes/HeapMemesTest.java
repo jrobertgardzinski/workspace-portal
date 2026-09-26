@@ -3,6 +3,8 @@ package com.jrobertgardzinski.portal.closure.memes;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.jrobertgardzinski.identity.UserId;
+
 import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,13 +19,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class HeapMemesTest {
 
+    private static final UserId AUTHOR = UserId.random();
+
     private final HeapMemes memes = new HeapMemes();
 
     @Test
     @DisplayName("findMetadata and allIds hide a meme a running saga has marked")
     void gallery_reads_hide_marked_memes() {
-        memes.posted("m1", "author@example.com");
-        memes.store(memes.activeOf("author@example.com").get(0).markForErasure(Instant.now()));
+        memes.posted("m1", "author@example.com", AUTHOR);
+        memes.store(memes.activeOf(AUTHOR).get(0).markForErasure(Instant.now()));
 
         assertTrue(memes.findMetadata("m1").isEmpty());
         assertTrue(memes.allIds().isEmpty());
@@ -32,11 +36,11 @@ class HeapMemesTest {
     @Test
     @DisplayName("reassignAuthor and deleteById act on the row regardless of erasure status")
     void mutations_are_status_blind() {
-        memes.posted("m1", "author@example.com");
-        memes.store(memes.activeOf("author@example.com").get(0).markForErasure(Instant.now()));
+        memes.posted("m1", "author@example.com", AUTHOR);
+        memes.store(memes.activeOf(AUTHOR).get(0).markForErasure(Instant.now()));
 
         memes.reassignAuthor("m1", "deleted-account");
-        assertEquals(1, memes.pendingOf("deleted-account").size());
+        assertEquals(1, memes.heldBy("deleted-account").stream().filter(meme -> meme.isPendingErasure()).count());
 
         memes.deleteById("m1");
         assertEquals(0, memes.heldBy("deleted-account").size());
