@@ -3,7 +3,7 @@ package com.jrobertgardzinski.portal.closure.collections;
 import com.jrobertgardzinski.closure.ClosureCommand;
 import com.jrobertgardzinski.closure.ClosureInitiator;
 import com.jrobertgardzinski.closure.ClosureMessages;
-import com.jrobertgardzinski.closure.ClosureParticipantContract;
+import com.jrobertgardzinski.closure.ClosureParticipantContractTest;
 import com.jrobertgardzinski.collections.application.MarkUserItemsForErasure;
 import com.jrobertgardzinski.collections.application.PurgeUserItems;
 import com.jrobertgardzinski.collections.application.RestoreUserItems;
@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** The collections axis: the protocol comes from the contract; the short closure and the ignored rule are this service's own. */
 @Epic("Saga")
 @Feature("Account closure — the collections axis")
-class CollectionsClosureParticipantTest extends ClosureParticipantContract {
+class CollectionsClosureParticipantTest extends ClosureParticipantContractTest {
 
     private final HeapFavourites favourites = new HeapFavourites();
     private final List<Observation> observed = new ArrayList<>();

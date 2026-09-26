@@ -1,6 +1,6 @@
 package com.jrobertgardzinski.portal.closure.comments;
 
-import com.jrobertgardzinski.closure.AtomicParticipantContract;
+import com.jrobertgardzinski.closure.AtomicParticipantContractTest;
 import com.jrobertgardzinski.closure.ClosureCommand;
 import com.jrobertgardzinski.closure.ClosureInitiator;
 import com.jrobertgardzinski.closure.ClosureMessages;
@@ -30,7 +30,7 @@ import static org.mockito.Mockito.mock;
 /** The comments axis: the protocol comes from the contract, the purge rule is this service's own. */
 @Epic("Saga")
 @Feature("Account closure — the comments axis")
-class CommentsClosureParticipantTest extends AtomicParticipantContract {
+class CommentsClosureParticipantTest extends AtomicParticipantContractTest {
 
     private final HeapComments comments = new HeapComments();
     private final List<Observation> observed = new ArrayList<>();

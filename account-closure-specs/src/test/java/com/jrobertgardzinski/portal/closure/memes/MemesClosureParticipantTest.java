@@ -1,6 +1,6 @@
 package com.jrobertgardzinski.portal.closure.memes;
 
-import com.jrobertgardzinski.closure.AtomicParticipantContract;
+import com.jrobertgardzinski.closure.AtomicParticipantContractTest;
 import com.jrobertgardzinski.closure.ClosureCommand;
 import com.jrobertgardzinski.closure.ClosureInitiator;
 import com.jrobertgardzinski.closure.ClosureMessages;
@@ -34,7 +34,7 @@ import static org.mockito.Mockito.mock;
 /** The memes axis: the protocol comes from the contract, the purge rule is this service's own. */
 @Epic("Saga")
 @Feature("Account closure — the memes axis")
-class MemesClosureParticipantTest extends AtomicParticipantContract {
+class MemesClosureParticipantTest extends AtomicParticipantContractTest {
 
     private final HeapMemes memes = new HeapMemes();
     private final List<Observation> observed = new ArrayList<>();
