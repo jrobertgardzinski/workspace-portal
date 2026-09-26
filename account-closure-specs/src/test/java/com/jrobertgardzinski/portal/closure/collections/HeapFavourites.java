@@ -1,6 +1,6 @@
 package com.jrobertgardzinski.portal.closure.collections;
 
-import com.jrobertgardzinski.collections.application.InMemoryCollectionStore;
+import com.jrobertgardzinski.collections.application.InMemoryCollectionRepository;
 import com.jrobertgardzinski.collections.domain.ItemRef;
 import com.jrobertgardzinski.collections.domain.SavedItem;
 
@@ -9,19 +9,19 @@ import java.util.stream.Stream;
 
 /**
  * The favourites service's rows on the heap — now a thin subclass of
- * {@link InMemoryCollectionStore}, collections-application's own reference stand-in for
- * {@code CollectionStore}/{@code ItemErasure}, reached through this repository's test-jar
+ * {@link InMemoryCollectionRepository}, collections-application's own reference stand-in for
+ * {@code CollectionRepository}/{@code ItemErasure}, reached through this repository's test-jar
  * dependency on it. Used to be a byte-for-byte copy of that class, kept only because this runner
  * could not see any test source of collections-application's — it can, and always could, since
  * account-closure-specs already depends on {@code collections-application} as a test-jar for its
  * {@code ItemErasureContractTest}.
  *
- * <p>What is left here is exactly what {@link InMemoryCollectionStore} does not do: name a few
+ * <p>What is left here is exactly what {@link InMemoryCollectionRepository} does not do: name a few
  * convenience readers the Gherkin steps and {@code CollectionsClosureParticipantTest} already
  * speak in ({@link #heldBy}, {@link #visibleOf}, {@link #saved}). No erasure logic lives in this
  * class any more — there is nothing left here that could drift from the class it stands in for.
  */
-public final class HeapFavourites extends InMemoryCollectionStore {
+public final class HeapFavourites extends InMemoryCollectionRepository {
 
     /** Every row of this user's, marked ones included — what "still on the heap" means. */
     public List<SavedItem> heldBy(String user) {
