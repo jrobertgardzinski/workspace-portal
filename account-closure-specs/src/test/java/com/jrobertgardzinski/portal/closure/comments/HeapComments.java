@@ -1,4 +1,4 @@
-package com.jrobertgardzinski.portal.closure;
+package com.jrobertgardzinski.portal.closure.comments;
 
 import com.jrobertgardzinski.comments.application.CommentErasure;
 import com.jrobertgardzinski.comments.application.CommentRepository;
@@ -9,32 +9,26 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * The comment service's rows, on the heap — both ports at once, and {@link #store} writing the
- * erasure columns only, for the same two reasons spelled out in {@link HeapMemes}. This is the
- * service where that second rule earns its keep: an administrator's closure anonymises the author
- * and restores the row in the same loop, so a fake that wrote the whole record back would hand
- * the leaver's name straight back to the thread.
- */
-final class HeapComments implements CommentErasure, CommentRepository {
+/** The comment service's rows on the heap; {@link #store} writes the erasure columns only, or an administrator's anonymisation would be undone. */
+public final class HeapComments implements CommentErasure, CommentRepository {
 
     private final List<Comment> rows = new ArrayList<>();
 
-    void wrote(String author, int howMany) {
+    public void wrote(String author, int howMany) {
         for (int i = 1; i <= howMany; i++) {
             wrote(author + "-comment-" + i, author);
         }
     }
 
-    void wrote(String id, String author) {
+    public void wrote(String id, String author) {
         rows.add(new Comment(id, "someones-meme", author, "a comment"));
     }
 
-    List<Comment> heldBy(String author) {
+    public List<Comment> heldBy(String author) {
         return rows.stream().filter(row -> row.author().equals(author)).toList();
     }
 
-    List<Comment> visibleOf(String author) {
+    public List<Comment> visibleOf(String author) {
         return heldBy(author).stream().filter(row -> !row.isPendingErasure()).toList();
     }
 
@@ -98,7 +92,7 @@ final class HeapComments implements CommentErasure, CommentRepository {
         return rows.stream().filter(row -> row.id().equals(commentId)).findFirst();
     }
 
-    // Writing and reading a thread is another file's story.
+    // writing and reading a thread are not part of closing an account
     @Override
     public void save(Comment comment) {
         throw new UnsupportedOperationException("writing is not part of closing an account");

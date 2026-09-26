@@ -53,8 +53,7 @@ public class AccountClosureSteps {
 
     @When("every part except {word} answers")
     public void everyPartExceptOneAnswers(String silent) {
-        // the command never reaches it — the one failure these scenarios stage, and the only one
-        // that cannot be told from inside any single repository
+        // the command never reaches it
         portal.silence(silent);
         portal.everyPartAnswers();
     }

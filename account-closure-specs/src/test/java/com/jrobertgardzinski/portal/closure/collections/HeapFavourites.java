@@ -1,4 +1,4 @@
-package com.jrobertgardzinski.portal.closure;
+package com.jrobertgardzinski.portal.closure.collections;
 
 import com.jrobertgardzinski.collections.application.CollectionStore;
 import com.jrobertgardzinski.collections.application.ItemErasure;
@@ -9,13 +9,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * The favourites service's rows, on the heap — the third of three, and a near-copy of the one in
- * collections_account-closure's own tests. The copy is deliberate: this runner may depend on the
- * participants but not on anybody's test sources, and a shared fake would be one more thing that
- * has to be true of every assembly of the portal before these scenarios mean anything.
- */
-final class HeapFavourites implements CollectionStore, ItemErasure {
+/** The favourites service's rows on the heap: a copy of collections_account-closure's HeapStore, since this runner depends on no test sources. */
+public final class HeapFavourites implements CollectionStore, ItemErasure {
 
     private final List<SavedItem> rows = new ArrayList<>();
 
@@ -65,9 +60,7 @@ final class HeapFavourites implements CollectionStore, ItemErasure {
                 return;
             }
         }
-        // and NOTHING when no row matches. The adapter runs `UPDATE … WHERE`, which quietly
-        // matches nothing; appending here would hand a member a reference they never saved. The
-        // port contract catches this, and caught exactly this.
+        // no row, no write: the adapter's UPDATE … WHERE matches nothing, and the contract checks this
     }
 
     @Override
@@ -83,17 +76,15 @@ final class HeapFavourites implements CollectionStore, ItemErasure {
                 .filter(row -> row.markedForErasureAt().isBefore(cutoff)).toList();
     }
 
-    /** Everything still held under this address, marked or not — what the closure has to clear. */
-    List<SavedItem> heldBy(String user) {
+    public List<SavedItem> heldBy(String user) {
         return rows.stream().filter(row -> row.user().equals(user)).toList();
     }
 
-    /** What this member would still see in their lists. */
-    List<SavedItem> visibleOf(String user) {
+    public List<SavedItem> visibleOf(String user) {
         return activeOf(user);
     }
 
-    void saved(String user, int howMany) {
+    public void saved(String user, int howMany) {
         for (int i = 1; i <= howMany; i++) {
             add(user, "favourites", new ItemRef("meme", "someones-meme-" + i));
         }

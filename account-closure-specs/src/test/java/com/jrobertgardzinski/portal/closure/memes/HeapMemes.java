@@ -1,4 +1,4 @@
-package com.jrobertgardzinski.portal.closure;
+package com.jrobertgardzinski.portal.closure.memes;
 
 import com.jrobertgardzinski.memes.application.MemeErasure;
 import com.jrobertgardzinski.memes.application.MemeRepository;
@@ -10,36 +10,26 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * The meme service's rows, on the heap. It is both ports at once because in the running service
- * they are two views of ONE table, and a fake that let them drift apart would prove things about
- * a portal that does not exist.
- *
- * <p>{@link #store} writes the erasure columns and nothing else — the same rule the real JDBC
- * adapter states in a comment of its own. Writing the author back would undo, one line later, the
- * anonymisation the very same closure has just performed.
- */
-final class HeapMemes implements MemeErasure, MemeRepository {
+/** The meme service's rows on the heap; {@link #store} writes the erasure columns only, like the JDBC adapter. */
+public final class HeapMemes implements MemeErasure, MemeRepository {
 
     private final List<MemeMetadata> rows = new ArrayList<>();
 
-    void posted(String author, int howMany) {
+    public void posted(String author, int howMany) {
         for (int i = 1; i <= howMany; i++) {
             posted(author + "-meme-" + i, author);
         }
     }
 
-    void posted(String id, String author) {
+    public void posted(String id, String author) {
         rows.add(new MemeMetadata(id, author, "png"));
     }
 
-    /** What is still held under this author, marked or not. */
-    List<MemeMetadata> heldBy(String author) {
+    public List<MemeMetadata> heldBy(String author) {
         return rows.stream().filter(row -> row.author().equals(author)).toList();
     }
 
-    /** What a visitor of the gallery would see of this author. */
-    List<MemeMetadata> visibleOf(String author) {
+    public List<MemeMetadata> visibleOf(String author) {
         return heldBy(author).stream().filter(row -> !row.isPendingErasure()).toList();
     }
 
@@ -93,8 +83,7 @@ final class HeapMemes implements MemeErasure, MemeRepository {
         return rows.stream().map(MemeMetadata::id).toList();
     }
 
-    // Not part of a closure: a meme is posted here by putting a row in, because how a meme comes
-    // into being is another file's story and dragging the image pipeline in would prove nothing.
+    // posting and reading a meme are not part of closing an account
     @Override
     public void save(Meme meme) {
         throw new UnsupportedOperationException("posting is not part of closing an account");

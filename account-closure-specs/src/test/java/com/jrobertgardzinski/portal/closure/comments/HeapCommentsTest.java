@@ -1,10 +1,10 @@
-package com.jrobertgardzinski.portal.closure;
+package com.jrobertgardzinski.portal.closure.comments;
 
 import com.jrobertgardzinski.comments.application.CommentErasure;
 import com.jrobertgardzinski.comments.application.CommentErasureContract;
 
 /** The heap the portal's specs run the comment threads on, held to what the real adapter promises. */
-class HeapCommentsContractTest extends CommentErasureContract {
+class HeapCommentsTest extends CommentErasureContract {
 
     private final HeapComments comments = new HeapComments();
 

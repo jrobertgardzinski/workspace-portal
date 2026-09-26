@@ -25,6 +25,9 @@ import com.jrobertgardzinski.memes.application.TagRepository;
 import com.jrobertgardzinski.memes.application.VoteRepository;
 import com.jrobertgardzinski.memes.closure.MemesClosureParticipant;
 import com.jrobertgardzinski.observation.Observations;
+import com.jrobertgardzinski.portal.closure.collections.HeapFavourites;
+import com.jrobertgardzinski.portal.closure.comments.HeapComments;
+import com.jrobertgardzinski.portal.closure.memes.HeapMemes;
 import com.jrobertgardzinski.offboarding.application.Destination;
 import com.jrobertgardzinski.offboarding.application.EventsRouter;
 import com.jrobertgardzinski.offboarding.application.Source;
@@ -48,24 +51,9 @@ import java.util.UUID;
 import static org.mockito.Mockito.mock;
 
 /**
- * The whole portal, as four objects and a method call.
- *
- * <p>The orchestrator is the REAL {@link EventsRouter} — the same code the Kafka loop calls — and
- * the three participants are the real ones from {@code memes_account-closure},
- * {@code comments_account-closure} and {@code collections_account-closure}. What is fake is
- * everything below them (rows on the heap) and everything between them: where a deployment has a
- * broker, this class has {@link #deliver}, which hands each message to its reader and feeds the
- * answers straight back.
- *
- * <p>That substitution is the whole claim of these specs. The router already speaks in
- * {@link Source} and {@link Destination} rather than topic names, and the participants already
- * take a parsed {@link ClosureCommand}, so neither had to be adapted to run this way — which is
- * the difference between a portal that CAN be assembled in one process and a portal that has been
- * rewritten until it could.
- *
- * <p>One thing is faithfully NOT modelled: a message may be withheld from a participant
- * ({@link #silence}), but nothing here reorders, duplicates or drops messages at random. This is
- * the choreography's story; the broker's is the integration tests' and the live stack's.
+ * The whole portal in one process: the real {@link EventsRouter}, the real three participants,
+ * rows on the heap, and {@link #deliver} in place of the broker. Nothing is reordered,
+ * duplicated or dropped at random; {@link #silence} is the only failure staged.
  */
 final class PortalInOneProcess {
 
@@ -87,13 +75,10 @@ final class PortalInOneProcess {
     private final CommentsClosureParticipant commentsParticipant;
     private final CollectionsClosureParticipant collectionsParticipant;
 
-    /** Participants this run keeps a message from — the one failure this file stages. */
     private final Set<String> silenced = new HashSet<>();
 
-    /** Everything the portal has said to security. The verdict the person is owed is in here. */
     private final List<JsonNode> toSecurity = new ArrayList<>();
 
-    /** What the portal has published and nobody has carried yet — the transport, as a queue. */
     private final List<EventsRouter.Outgoing> inFlight = new ArrayList<>();
 
     private Instant now = Instant.parse("2026-09-24T12:00:00Z");
@@ -156,7 +141,6 @@ final class PortalInOneProcess {
         silenced.add(participant);
     }
 
-    /** Security states the fact that opens the case; everything that follows follows from it. */
     void securityAnnouncesClosureOf(String email, String initiatedBy, String policyJson) {
         String fact = "{\"id\":\"" + UUID.nameUUIDFromBytes(("fact:" + email).getBytes())
                 + "\",\"type\":\"" + ClosureMessages.ACCOUNT_DELETION_REQUESTED + "\","
@@ -167,11 +151,7 @@ final class PortalInOneProcess {
         inFlight.addAll(router.handle(Source.SECURITY, fact));
     }
 
-    /**
-     * The portal waits out the silence and capitulates. Each DELIVERED re-command buys the silent
-     * participant another whole timeout, so exhausting the budget takes one deadline per retry
-     * plus the one that finally gives up — the same arithmetic the orchestrator's own specs use.
-     */
+    /** Each delivered re-command buys the silent part another timeout; spend the budget, then the one that gives up. */
     void givesUpWaiting() {
         for (int attempt = 0; attempt <= SweepOverdue.DEFAULT_MAX_RETRIES; attempt++) {
             now = now.plus(PURGE_TIMEOUT).plusSeconds(1);
@@ -183,13 +163,7 @@ final class PortalInOneProcess {
         }
     }
 
-    /**
-     * The transport, as a method. A message for the participants is read by each of them that is
-     * listening; a confirmation goes back into the router, and whatever THAT answers joins the
-     * queue — which is how the last confirmation ends up commanding the erasure without anybody
-     * scheduling anything. {@code everyPartAnswers} drains the queue until the portal has nothing
-     * left to say, so a scenario's step says "the transport did its job" and means it.
-     */
+    /** Drains the queue: confirmations go back into the router and whatever it answers joins the queue. */
     void everyPartAnswers() {
         while (!inFlight.isEmpty()) {
             List<EventsRouter.Outgoing> batch = List.copyOf(inFlight);
@@ -216,15 +190,7 @@ final class PortalInOneProcess {
         }
     }
 
-    /**
-     * One participant's whole part in one command: the decision, and what it says back.
-     *
-     * <p>The confirmation is built here because in a deployed portal each participant builds its
-     * own, and those three are the shape this one has to match — including {@code reserved},
-     * which is how a mark that found nothing is told apart from one that took forty things out
-     * of sight. A transport that quietly dropped a field would make every scenario in ../specs
-     * green about a message the portal does not send.
-     */
+    /** Built from the same record the deployed participants use, so this transport cannot carry a different message. */
     private Optional<String> answerOf(String participant, JsonNode command) {
         String type = command.path(ClosureMessages.Field.TYPE).asText();
         String email = command.path(ClosureMessages.Field.EMAIL).asText();
@@ -247,10 +213,6 @@ final class PortalInOneProcess {
                     ? refs : -1;
             default -> throw new IllegalStateException("no such participant: " + participant);
         };
-        // only the reversible step is answered: the closure and the compensation END the case.
-        // Built from the same record the three deployed participants use, which is the only
-        // reason this transport cannot quietly carry a different message than they do — it did,
-        // for a few hours on the day it was written
         if (reserved < 0) {
             return Optional.empty();
         }
@@ -262,7 +224,6 @@ final class PortalInOneProcess {
         }
     }
 
-    /** Everything the portal has told security, in the order it said it. */
     List<JsonNode> saidToSecurity() {
         return List.copyOf(toSecurity);
     }
