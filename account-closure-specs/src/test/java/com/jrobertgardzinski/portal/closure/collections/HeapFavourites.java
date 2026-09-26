@@ -1,89 +1,39 @@
 package com.jrobertgardzinski.portal.closure.collections;
 
-import com.jrobertgardzinski.collections.application.CollectionStore;
-import com.jrobertgardzinski.collections.application.ItemErasure;
+import com.jrobertgardzinski.collections.application.InMemoryCollectionStore;
 import com.jrobertgardzinski.collections.domain.ItemRef;
 import com.jrobertgardzinski.collections.domain.SavedItem;
 
-import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
-/** The favourites service's rows on the heap: a copy of collections_account-closure's HeapStore, since this runner depends on no test sources. */
-public final class HeapFavourites implements CollectionStore, ItemErasure {
+/**
+ * The favourites service's rows on the heap — now a thin subclass of
+ * {@link InMemoryCollectionStore}, collections-application's own reference stand-in for
+ * {@code CollectionStore}/{@code ItemErasure}, reached through this repository's test-jar
+ * dependency on it. Used to be a byte-for-byte copy of that class, kept only because this runner
+ * could not see any test source of collections-application's — it can, and always could, since
+ * account-closure-specs already depends on {@code collections-application} as a test-jar for its
+ * {@code ItemErasureContractTest}.
+ *
+ * <p>What is left here is exactly what {@link InMemoryCollectionStore} does not do: name a few
+ * convenience readers the Gherkin steps and {@code CollectionsClosureParticipantTest} already
+ * speak in ({@link #heldBy}, {@link #visibleOf}, {@link #saved}). No erasure logic lives in this
+ * class any more — there is nothing left here that could drift from the class it stands in for.
+ */
+public final class HeapFavourites extends InMemoryCollectionStore {
 
-    private final List<SavedItem> rows = new ArrayList<>();
-
-    private boolean same(SavedItem row, String user, String collection, ItemRef ref) {
-        return row.user().equals(user) && row.collection().equals(collection) && row.ref().equals(ref);
-    }
-
-    @Override
-    public boolean add(String user, String collection, ItemRef item) {
-        if (rows.stream().anyMatch(row -> same(row, user, collection, item))) {
-            return false;
-        }
-        return rows.add(new SavedItem(user, collection, item));
-    }
-
-    @Override
-    public boolean remove(String user, String collection, ItemRef item) {
-        return rows.removeIf(row -> same(row, user, collection, item));
-    }
-
-    @Override
-    public List<ItemRef> list(String user, String collection) {
-        return rows.stream()
-                .filter(row -> row.user().equals(user) && row.collection().equals(collection))
-                .filter(row -> !row.isPendingErasure())   // a marked reference is out of every list
-                .map(SavedItem::ref)
-                .toList();
-    }
-
-    @Override
-    public List<SavedItem> activeOf(String user) {
-        return rows.stream().filter(row -> row.user().equals(user))
-                .filter(row -> !row.isPendingErasure()).toList();
-    }
-
-    @Override
-    public List<SavedItem> pendingOf(String user) {
-        return rows.stream().filter(row -> row.user().equals(user))
-                .filter(SavedItem::isPendingErasure).toList();
-    }
-
-    @Override
-    public void store(SavedItem state) {
-        for (int i = 0; i < rows.size(); i++) {
-            if (same(rows.get(i), state.user(), state.collection(), state.ref())) {
-                rows.set(i, state);
-                return;
-            }
-        }
-        // no row, no write: the adapter's UPDATE … WHERE matches nothing, and the contract checks this
-    }
-
-    @Override
-    public int eraseMarked(String user) {
-        List<SavedItem> doomed = pendingOf(user);
-        rows.removeAll(doomed);
-        return doomed.size();
-    }
-
-    @Override
-    public List<SavedItem> pendingSince(Instant cutoff) {
-        return rows.stream().filter(SavedItem::isPendingErasure)
-                .filter(row -> row.markedForErasureAt().isBefore(cutoff)).toList();
-    }
-
+    /** Every row of this user's, marked ones included — what "still on the heap" means. */
     public List<SavedItem> heldBy(String user) {
-        return rows.stream().filter(row -> row.user().equals(user)).toList();
+        return Stream.concat(activeOf(user).stream(), pendingOf(user).stream()).toList();
     }
 
+    /** This user's rows that are actually in a list right now. */
     public List<SavedItem> visibleOf(String user) {
         return activeOf(user);
     }
 
+    /** Saves {@code howMany} distinct favourites for a user, named the way the specs read them. */
     public void saved(String user, int howMany) {
         for (int i = 1; i <= howMany; i++) {
             add(user, "favourites", new ItemRef("meme", "someones-meme-" + i));
