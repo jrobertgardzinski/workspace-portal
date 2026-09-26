@@ -1,18 +1,39 @@
 package com.jrobertgardzinski.portal.closure.comments;
 
-import com.jrobertgardzinski.comments.application.CommentErasure;
 import com.jrobertgardzinski.comments.application.CommentRepository;
+import com.jrobertgardzinski.comments.application.FakeCommentErasure;
 import com.jrobertgardzinski.comments.domain.Comment;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
-/** The comment service's rows on the heap; {@link #store} writes the erasure columns only, or an administrator's anonymisation would be undone. */
-public final class HeapComments implements CommentErasure, CommentRepository {
+/**
+ * The comment service's rows on the heap — a thin subclass of {@link FakeCommentErasure},
+ * comments-application's own reference stand-in for {@code CommentErasure}, reached through this
+ * repository's test-jar dependency on it. What is added here is the {@code CommentRepository} axis
+ * over the SAME backing list, and the convenience readers the specs already call by name.
+ *
+ * <p>{@code CommentRepository}'s reads mirror the real adapter's {@code active_comments} view:
+ * every one of {@link #findByMeme}, {@link #find} and {@link #findByAuthor} hides a comment
+ * {@link #isMarked} still remembers. Only {@link #deleteByMeme} is status-blind, exactly like the
+ * real adapter's cascade delete — a marked comment goes with the rest of its thread. The original,
+ * fully self-contained version of this class got exactly this wrong: {@code findByMeme} read
+ * through {@code allUnder}, which does not filter, and nothing here exercised the difference.
+ */
+public final class HeapComments extends FakeCommentErasure implements CommentRepository {
 
-    private final List<Comment> rows = new ArrayList<>();
+    private final List<Comment> rows;
+
+    public HeapComments() {
+        this(new ArrayList<>());
+    }
+
+    private HeapComments(List<Comment> rows) {
+        super(rows);
+        this.rows = rows;
+    }
 
     public void wrote(String author, int howMany) {
         for (int i = 1; i <= howMany; i++) {
@@ -24,75 +45,17 @@ public final class HeapComments implements CommentErasure, CommentRepository {
         rows.add(new Comment(id, "someones-meme", author, "a comment"));
     }
 
+    /** Every comment of this author's, marked ones included — what "still on the heap" means. */
     public List<Comment> heldBy(String author) {
-        return rows.stream().filter(row -> row.author().equals(author)).toList();
+        return Stream.concat(activeOf(author).stream(), pendingOf(author).stream()).toList();
     }
 
+    /** This author's comments that are actually in a thread right now. */
     public List<Comment> visibleOf(String author) {
-        return heldBy(author).stream().filter(row -> !row.isPendingErasure()).toList();
+        return activeOf(author);
     }
 
-    @Override
-    public List<Comment> activeOf(String author) {
-        return visibleOf(author);
-    }
-
-    @Override
-    public List<Comment> pendingOf(String author) {
-        return heldBy(author).stream().filter(Comment::isPendingErasure).toList();
-    }
-
-    @Override
-    public void store(Comment state) {
-        for (int i = 0; i < rows.size(); i++) {
-            if (rows.get(i).id().equals(state.id())) {
-                Comment held = rows.get(i);
-                rows.set(i, new Comment(held.id(), held.memeId(), held.author(), held.text(),
-                        state.status(), state.markedForErasureAt()));
-                return;
-            }
-        }
-    }
-
-    @Override
-    public List<Comment> allUnder(String memeId) {
-        return rows.stream().filter(row -> row.memeId().equals(memeId)).toList();
-    }
-
-    @Override
-    public List<Comment> pendingSince(Instant cutoff) {
-        return rows.stream().filter(Comment::isPendingErasure)
-                .filter(row -> row.markedForErasureAt().isBefore(cutoff)).toList();
-    }
-
-    @Override
-    public void delete(String commentId) {
-        rows.removeIf(row -> row.id().equals(commentId));
-    }
-
-    @Override
-    public void reassignAuthor(String commentId, String newAuthor) {
-        for (int i = 0; i < rows.size(); i++) {
-            Comment held = rows.get(i);
-            if (held.id().equals(commentId)) {
-                rows.set(i, new Comment(held.id(), held.memeId(), newAuthor, held.text(),
-                        held.status(), held.markedForErasureAt()));
-                return;
-            }
-        }
-    }
-
-    @Override
-    public List<Comment> findByAuthor(String author) {
-        return heldBy(author);
-    }
-
-    @Override
-    public Optional<Comment> find(String commentId) {
-        return rows.stream().filter(row -> row.id().equals(commentId)).findFirst();
-    }
-
-    // writing and reading a thread are not part of closing an account
+    // writing a comment is not part of closing an account
     @Override
     public void save(Comment comment) {
         throw new UnsupportedOperationException("writing is not part of closing an account");
@@ -100,7 +63,10 @@ public final class HeapComments implements CommentErasure, CommentRepository {
 
     @Override
     public List<Comment> findByMeme(String memeId) {
-        return allUnder(memeId);
+        return rows.stream()
+                .filter(row -> row.memeId().equals(memeId))
+                .filter(row -> !isMarked(row.id()))
+                .toList();
     }
 
     @Override
@@ -114,7 +80,36 @@ public final class HeapComments implements CommentErasure, CommentRepository {
     }
 
     @Override
+    public Optional<Comment> find(String commentId) {
+        return rows.stream()
+                .filter(row -> row.id().equals(commentId))
+                .filter(row -> !isMarked(commentId))
+                .findFirst();
+    }
+
+    @Override
+    public List<Comment> findByAuthor(String author) {
+        return visibleOf(author);
+    }
+
+    @Override
+    public void delete(String commentId) {
+        rows.removeIf(row -> row.id().equals(commentId));
+    }
+
+    @Override
     public void deleteByMeme(String memeId) {
         rows.removeIf(row -> row.memeId().equals(memeId));
+    }
+
+    @Override
+    public void reassignAuthor(String commentId, String newAuthor) {
+        for (int i = 0; i < rows.size(); i++) {
+            Comment held = rows.get(i);
+            if (held.id().equals(commentId)) {
+                rows.set(i, new Comment(held.id(), held.memeId(), newAuthor, held.text()));
+                return;
+            }
+        }
     }
 }

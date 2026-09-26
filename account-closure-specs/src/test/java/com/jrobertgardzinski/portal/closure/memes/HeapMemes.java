@@ -1,19 +1,42 @@
 package com.jrobertgardzinski.portal.closure.memes;
 
-import com.jrobertgardzinski.memes.application.MemeErasure;
+import com.jrobertgardzinski.memes.application.FakeMemeErasure;
 import com.jrobertgardzinski.memes.application.MemeRepository;
 import com.jrobertgardzinski.memes.domain.Meme;
 import com.jrobertgardzinski.memes.domain.MemeMetadata;
 
-import java.time.Instant;
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
-/** The meme service's rows on the heap; {@link #store} writes the erasure columns only, like the JDBC adapter. */
-public final class HeapMemes implements MemeErasure, MemeRepository {
+/**
+ * The meme service's rows on the heap — a thin subclass of {@link FakeMemeErasure},
+ * memes-application's own reference stand-in for {@code MemeErasure}, reached through this
+ * repository's test-jar dependency on it. What is added here is the {@code MemeRepository} axis
+ * over the SAME backing map (bytes are never read by a saga, so every posted meme carries an empty
+ * one) and the convenience readers the specs already call by name.
+ *
+ * <p>{@code MemeRepository}'s own javadoc says every read is a read of the GALLERY: a meme a
+ * running saga has marked must be invisible through it, exactly like the real adapter's
+ * {@code active_memes} view. {@link #findMetadata} and {@link #allIds} honour that by asking
+ * {@link #isMarked}; the original, fully self-contained version of this class did not, and nothing
+ * here exercised the difference — this repository axis is dead weight for the sagas' own specs,
+ * still worth answering correctly since it is part of the port.
+ */
+public final class HeapMemes extends FakeMemeErasure implements MemeRepository {
 
-    private final List<MemeMetadata> rows = new ArrayList<>();
+    private final Map<String, Meme> memes;
+
+    public HeapMemes() {
+        this(new HashMap<>());
+    }
+
+    private HeapMemes(Map<String, Meme> memes) {
+        super(memes);
+        this.memes = memes;
+    }
 
     public void posted(String author, int howMany) {
         for (int i = 1; i <= howMany; i++) {
@@ -22,65 +45,17 @@ public final class HeapMemes implements MemeErasure, MemeRepository {
     }
 
     public void posted(String id, String author) {
-        rows.add(new MemeMetadata(id, author, "png"));
+        memes.put(id, new Meme(id, author, "png", new byte[0]));
     }
 
+    /** Every meme of this author's, marked ones included — what "still on the heap" means. */
     public List<MemeMetadata> heldBy(String author) {
-        return rows.stream().filter(row -> row.author().equals(author)).toList();
+        return Stream.concat(activeOf(author).stream(), pendingOf(author).stream()).toList();
     }
 
+    /** This author's memes that are actually in the gallery right now. */
     public List<MemeMetadata> visibleOf(String author) {
-        return heldBy(author).stream().filter(row -> !row.isPendingErasure()).toList();
-    }
-
-    @Override
-    public List<MemeMetadata> activeOf(String author) {
-        return visibleOf(author);
-    }
-
-    @Override
-    public List<MemeMetadata> pendingOf(String author) {
-        return heldBy(author).stream().filter(MemeMetadata::isPendingErasure).toList();
-    }
-
-    @Override
-    public void store(MemeMetadata state) {
-        for (int i = 0; i < rows.size(); i++) {
-            if (rows.get(i).id().equals(state.id())) {
-                MemeMetadata held = rows.get(i);
-                rows.set(i, new MemeMetadata(held.id(), held.author(), held.format(),
-                        state.status(), state.markedForErasureAt()));
-                return;
-            }
-        }
-    }
-
-    @Override
-    public List<MemeMetadata> pendingSince(Instant cutoff) {
-        return rows.stream().filter(MemeMetadata::isPendingErasure)
-                .filter(row -> row.markedForErasureAt().isBefore(cutoff)).toList();
-    }
-
-    @Override
-    public void deleteById(String memeId) {
-        rows.removeIf(row -> row.id().equals(memeId));
-    }
-
-    @Override
-    public void reassignAuthor(String memeId, String newAuthor) {
-        for (int i = 0; i < rows.size(); i++) {
-            MemeMetadata held = rows.get(i);
-            if (held.id().equals(memeId)) {
-                rows.set(i, new MemeMetadata(held.id(), newAuthor, held.format(), held.status(),
-                        held.markedForErasureAt()));
-                return;
-            }
-        }
-    }
-
-    @Override
-    public List<String> allIds() {
-        return rows.stream().map(MemeMetadata::id).toList();
+        return activeOf(author);
     }
 
     // posting and reading a meme are not part of closing an account
@@ -96,6 +71,27 @@ public final class HeapMemes implements MemeErasure, MemeRepository {
 
     @Override
     public Optional<MemeMetadata> findMetadata(String id) {
-        return rows.stream().filter(row -> row.id().equals(id)).findFirst();
+        Meme held = memes.get(id);
+        return held == null || isMarked(id)
+                ? Optional.empty()
+                : Optional.of(new MemeMetadata(held.id(), held.author(), held.format()));
+    }
+
+    @Override
+    public List<String> allIds() {
+        return memes.keySet().stream().filter(id -> !isMarked(id)).toList();
+    }
+
+    @Override
+    public void deleteById(String memeId) {
+        memes.remove(memeId);
+    }
+
+    @Override
+    public void reassignAuthor(String memeId, String newAuthor) {
+        Meme held = memes.get(memeId);
+        if (held != null) {
+            memes.put(memeId, new Meme(held.id(), newAuthor, held.format(), held.data()));
+        }
     }
 }
