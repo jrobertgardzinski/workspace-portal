@@ -61,6 +61,13 @@ class MemesClosureParticipantTest extends AtomicParticipantContractTest {
     }
 
     @Override
+    protected void givenLeaverHoldsUnderId(int rows) {
+        for (int i = 0; i < rows; i++) {
+            memes.posted("m" + (++posted), "old@example.com", LEAVER_ID);
+        }
+    }
+
+    @Override
     protected boolean nothingTouched() {
         return memes.heldBy(LEAVER).size() == posted && memes.visibleOf(LEAVER).size() == posted;
     }

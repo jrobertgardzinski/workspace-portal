@@ -1,5 +1,7 @@
 package com.jrobertgardzinski.portal.closure.collections;
 
+import java.util.Optional;
+import com.jrobertgardzinski.identity.UserId;
 import com.jrobertgardzinski.collections.application.InMemoryCollectionRepository;
 import com.jrobertgardzinski.collections.domain.ItemRef;
 import com.jrobertgardzinski.collections.domain.SavedItem;
@@ -37,6 +39,13 @@ public final class HeapFavourites extends InMemoryCollectionRepository {
     public void saved(String user, int howMany) {
         for (int i = 1; i <= howMany; i++) {
             add(user, "favourites", new ItemRef("meme", "someones-meme-" + i));
+        }
+    }
+
+    /** Rows written after the cutover: the owner's id beside the address. */
+    public void saved(String user, UserId userId, int howMany) {
+        for (int i = 1; i <= howMany; i++) {
+            add(user, Optional.of(userId), "favourites", new ItemRef("meme", "someones-meme-" + i));
         }
     }
 }

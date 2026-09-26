@@ -24,9 +24,10 @@ public class AccountClosureSteps {
 
     @Given("{word} posted {int} memes, wrote {int} comments and saved {int} favourites")
     public void aMemberWithContent(String email, int memes, int comments, int favourites) {
-        portal.memes.posted(email, memes);
-        portal.comments.wrote(email, comments);
-        portal.favourites.saved(email, favourites);
+        // rows as the portal writes them since the cutover: the id beside the address
+        portal.memes.posted(email, PortalInOneProcess.idOf(email), memes);
+        portal.comments.wrote(email, PortalInOneProcess.idOf(email), comments);
+        portal.favourites.saved(email, PortalInOneProcess.idOf(email), favourites);
     }
 
     @When("security announces that {word} asked to be forgotten")

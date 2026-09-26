@@ -1,5 +1,7 @@
 package com.jrobertgardzinski.portal.closure.comments;
 
+import com.jrobertgardzinski.comments.domain.CommentStatus;
+import com.jrobertgardzinski.identity.UserId;
 import com.jrobertgardzinski.comments.application.CommentRepository;
 import com.jrobertgardzinski.comments.application.FakeCommentErasure;
 import com.jrobertgardzinski.comments.domain.Comment;
@@ -41,8 +43,20 @@ public final class HeapComments extends FakeCommentErasure implements CommentRep
         }
     }
 
+    /** Rows written after the cutover: the author's id beside the address. */
+    public void wrote(String author, UserId authorId, int howMany) {
+        for (int i = 1; i <= howMany; i++) {
+            wrote(author + "-comment-" + i, author, authorId);
+        }
+    }
+
     public void wrote(String id, String author) {
         rows.add(new Comment(id, "someones-meme", author, "a comment"));
+    }
+
+    public void wrote(String id, String author, UserId authorId) {
+        rows.add(new Comment(id, "someones-meme", author, Optional.of(authorId), "a comment",
+                CommentStatus.ACTIVE, null));
     }
 
     /** Every comment of this author's, marked ones included — what "still on the heap" means. */

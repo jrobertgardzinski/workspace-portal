@@ -1,5 +1,6 @@
 package com.jrobertgardzinski.portal.closure.memes;
 
+import com.jrobertgardzinski.identity.UserId;
 import com.jrobertgardzinski.memes.application.FakeMemeErasure;
 import com.jrobertgardzinski.memes.application.MemeRepository;
 import com.jrobertgardzinski.memes.domain.Meme;
@@ -44,8 +45,19 @@ public final class HeapMemes extends FakeMemeErasure implements MemeRepository {
         }
     }
 
+    /** Rows written after the cutover: the author's id beside the address. */
+    public void posted(String author, UserId authorId, int howMany) {
+        for (int i = 1; i <= howMany; i++) {
+            posted(author + "-meme-" + i, author, authorId);
+        }
+    }
+
     public void posted(String id, String author) {
         memes.put(id, new Meme(id, author, "png", new byte[0]));
+    }
+
+    public void posted(String id, String author, UserId authorId) {
+        memes.put(id, new Meme(id, author, Optional.of(authorId), "png", new byte[0]));
     }
 
     /** Every meme of this author's, marked ones included — what "still on the heap" means. */
@@ -74,7 +86,8 @@ public final class HeapMemes extends FakeMemeErasure implements MemeRepository {
         Meme held = memes.get(id);
         return held == null || isMarked(id)
                 ? Optional.empty()
-                : Optional.of(new MemeMetadata(held.id(), held.author(), held.format()));
+                : Optional.of(new MemeMetadata(held.id(), held.author(), held.authorId(), held.format(),
+                        com.jrobertgardzinski.memes.domain.MemeStatus.ACTIVE, null));
     }
 
     @Override
@@ -91,7 +104,7 @@ public final class HeapMemes extends FakeMemeErasure implements MemeRepository {
     public void reassignAuthor(String memeId, String newAuthor) {
         Meme held = memes.get(memeId);
         if (held != null) {
-            memes.put(memeId, new Meme(held.id(), newAuthor, held.format(), held.data()));
+            memes.put(memeId, new Meme(held.id(), newAuthor, held.authorId(), held.format(), held.data()));
         }
     }
 }

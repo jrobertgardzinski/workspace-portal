@@ -160,6 +160,16 @@ jobs:
           token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v7
         with:
+          repository: jrobertgardzinski/user-id
+          path: shared/user-id
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v7
+        with:
+          repository: jrobertgardzinski/author-directory
+          path: shared/author-directory
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v7
+        with:
           repository: jrobertgardzinski/test-starter
           path: shared/test-starter
           token: ${{ secrets.REPO_PAT }}

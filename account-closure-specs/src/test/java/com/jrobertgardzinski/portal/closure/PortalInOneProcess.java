@@ -1,5 +1,6 @@
 package com.jrobertgardzinski.portal.closure;
 
+import com.jrobertgardzinski.identity.UserId;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jrobertgardzinski.closure.ClosureCommand;
@@ -141,10 +142,16 @@ final class PortalInOneProcess {
         silenced.add(participant);
     }
 
+    /** The identity security minted for an address — the specs name people by address, the saga by id. */
+    static UserId idOf(String email) {
+        return new UserId(UUID.nameUUIDFromBytes(("user:" + email).getBytes()));
+    }
+
     void securityAnnouncesClosureOf(String email, String initiatedBy, String policyJson) {
         String fact = "{\"id\":\"" + UUID.nameUUIDFromBytes(("fact:" + email).getBytes())
                 + "\",\"type\":\"" + ClosureMessages.ACCOUNT_DELETION_REQUESTED + "\","
                 + "\"email\":\"" + email + "\","
+                + "\"" + ClosureMessages.Field.USER_ID + "\":\"" + idOf(email) + "\","
                 + "\"" + ClosureMessages.Field.INITIATED_BY + "\":\"" + initiatedBy + "\""
                 + (policyJson == null ? "" : ",\"" + ClosureMessages.Field.POLICY + "\":" + policyJson)
                 + ",\"version\":1}";
@@ -197,8 +204,9 @@ final class PortalInOneProcess {
         String sagaId = command.path(ClosureMessages.Field.SAGA_ID).asText();
         String initiatedBy = command.path(ClosureMessages.Field.INITIATED_BY).asText();
         JsonNode rule = command.path(ClosureMessages.Field.POLICY).path(participant);
-        ClosureCommand parsed = new ClosureCommand(type, sagaId, email, initiatedBy,
-                rule.isMissingNode() ? Optional.empty() : Optional.of(rule.asText()));
+        ClosureCommand parsed = new ClosureCommand(type, sagaId, email,
+                ClosureCommand.userIdOf(command.path(ClosureMessages.Field.USER_ID).asText(null)),
+                initiatedBy, rule.isMissingNode() ? Optional.empty() : Optional.of(rule.asText()));
 
         // the count each participant reserved, or -1 for "this was not the reversible step"
         int reserved = switch (participant) {
