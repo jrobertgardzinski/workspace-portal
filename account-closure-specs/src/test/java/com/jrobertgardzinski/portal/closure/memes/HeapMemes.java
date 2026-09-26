@@ -104,7 +104,8 @@ public final class HeapMemes extends FakeMemeErasure implements MemeRepository {
     public void reassignAuthor(String memeId, String newAuthor) {
         Meme held = memes.get(memeId);
         if (held != null) {
-            memes.put(memeId, new Meme(held.id(), newAuthor, held.authorId(), held.format(), held.data()));
+            // the id goes with the old author, as in the JDBC adapter
+            memes.put(memeId, new Meme(held.id(), newAuthor, held.format(), held.data()));
         }
     }
 }
