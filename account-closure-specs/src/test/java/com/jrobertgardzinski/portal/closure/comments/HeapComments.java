@@ -2,6 +2,7 @@ package com.jrobertgardzinski.portal.closure.comments;
 
 import com.jrobertgardzinski.comments.domain.CommentStatus;
 import com.jrobertgardzinski.identity.UserId;
+import com.jrobertgardzinski.portal.closure.PortalInOneProcess;
 import com.jrobertgardzinski.comments.application.CommentRepository;
 import com.jrobertgardzinski.comments.application.FakeCommentErasure;
 import com.jrobertgardzinski.comments.domain.Comment;
@@ -37,31 +38,26 @@ public final class HeapComments extends FakeCommentErasure implements CommentRep
         this.rows = rows;
     }
 
+    /** A feature step names a person by address; the portal knows them by the id it maps to. */
     public void wrote(String author, int howMany) {
-        for (int i = 1; i <= howMany; i++) {
-            wrote(author + "-comment-" + i, author);
-        }
+        wrote(author, PortalInOneProcess.idOf(author), howMany);
     }
 
     /** Rows written after the cutover: the author's id beside the address. */
     public void wrote(String author, UserId authorId, int howMany) {
         for (int i = 1; i <= howMany; i++) {
-            wrote(author + "-comment-" + i, author, authorId);
+            wrote(author + "-comment-" + i, authorId);
         }
     }
 
-    public void wrote(String id, String author) {
-        rows.add(new Comment(id, "someones-meme", author, "a comment"));
-    }
-
-    public void wrote(String id, String author, UserId authorId) {
-        rows.add(new Comment(id, "someones-meme", author, Optional.of(authorId), "a comment",
+    public void wrote(String id, UserId authorId) {
+        rows.add(new Comment(id, "someones-meme", Optional.of(authorId), "a comment",
                 CommentStatus.ACTIVE, null));
     }
 
-    /** Every comment of this author's, marked ones included — what "still on the heap" means. */
+    /** Every comment of this person's, marked ones included — what "still on the heap" means. */
     public List<Comment> heldBy(String author) {
-        return rows.stream().filter(row -> row.author().equals(author)).toList();
+        return heldBy(PortalInOneProcess.idOf(author));
     }
 
     /** Every comment of this person's, by id — marked ones included. */
@@ -73,9 +69,9 @@ public final class HeapComments extends FakeCommentErasure implements CommentRep
         return activeOf(author);
     }
 
-    /** This author's comments that are actually in a thread right now. */
+    /** This person's comments that are actually in a thread right now. */
     public List<Comment> visibleOf(String author) {
-        return heldBy(author).stream().filter(row -> !isMarked(row.id())).toList();
+        return visibleOf(PortalInOneProcess.idOf(author));
     }
 
     // writing a comment is not part of closing an account
@@ -121,13 +117,19 @@ public final class HeapComments extends FakeCommentErasure implements CommentRep
     }
 
     @Override
-    public void reassignAuthor(String commentId, String newAuthor) {
+    public void anonymise(String commentId) {
         for (int i = 0; i < rows.size(); i++) {
             Comment held = rows.get(i);
             if (held.id().equals(commentId)) {
-                rows.set(i, new Comment(held.id(), held.memeId(), newAuthor, held.text()));
+                rows.set(i, new Comment(held.id(), held.memeId(), Optional.empty(), held.text(),
+                        CommentStatus.ACTIVE, null));
                 return;
             }
         }
+    }
+
+    /** The words an administrator's closure kept: still in the thread, signed by nobody. */
+    public List<Comment> signedByNobody() {
+        return rows.stream().filter(row -> row.authorId().isEmpty()).filter(row -> !isMarked(row.id())).toList();
     }
 }

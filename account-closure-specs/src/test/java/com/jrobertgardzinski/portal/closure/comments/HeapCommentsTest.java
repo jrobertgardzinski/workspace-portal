@@ -28,7 +28,7 @@ class HeapCommentsTest {
     @Test
     @DisplayName("findByMeme and find hide a comment a running saga has marked")
     void thread_reads_hide_marked_comments() {
-        comments.wrote("c1", "author@example.com", AUTHOR);
+        comments.wrote("c1", AUTHOR);
         Comment marked = comments.activeOf(AUTHOR).get(0);
         comments.store(marked.markForErasure(Instant.now()));
 
@@ -40,7 +40,7 @@ class HeapCommentsTest {
     @Test
     @DisplayName("deleteByMeme is status-blind: a marked comment goes with the rest of its thread")
     void cascade_delete_takes_marked_comments_too() {
-        comments.wrote("c1", "author@example.com", AUTHOR);
+        comments.wrote("c1", AUTHOR);
         Comment marked = comments.activeOf(AUTHOR).get(0);
         comments.store(marked.markForErasure(Instant.now()));
 

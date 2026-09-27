@@ -1,6 +1,7 @@
 package com.jrobertgardzinski.portal.closure.memes;
 
 import com.jrobertgardzinski.identity.UserId;
+import com.jrobertgardzinski.portal.closure.PortalInOneProcess;
 import com.jrobertgardzinski.memes.application.FakeMemeErasure;
 import com.jrobertgardzinski.memes.application.MemeRepository;
 import com.jrobertgardzinski.memes.domain.Meme;
@@ -39,30 +40,24 @@ public final class HeapMemes extends FakeMemeErasure implements MemeRepository {
         this.memes = memes;
     }
 
+    /** A feature step names a person by address; the portal knows them by the id it maps to. */
     public void posted(String author, int howMany) {
-        for (int i = 1; i <= howMany; i++) {
-            posted(author + "-meme-" + i, author);
-        }
+        posted(author, PortalInOneProcess.idOf(author), howMany);
     }
 
-    /** Rows written after the cutover: the author's id beside the address. */
     public void posted(String author, UserId authorId, int howMany) {
         for (int i = 1; i <= howMany; i++) {
-            posted(author + "-meme-" + i, author, authorId);
+            posted(author + "-meme-" + i, authorId);
         }
     }
 
-    public void posted(String id, String author) {
-        memes.put(id, new Meme(id, author, "png", new byte[0]));
+    public void posted(String id, UserId authorId) {
+        memes.put(id, new Meme(id, authorId, "png", new byte[0]));
     }
 
-    public void posted(String id, String author, UserId authorId) {
-        memes.put(id, new Meme(id, author, Optional.of(authorId), "png", new byte[0]));
-    }
-
-    /** Every meme of this author's, marked ones included — what "still on the heap" means. */
+    /** Every meme of this person's, marked ones included — what "still on the heap" means. */
     public List<MemeMetadata> heldBy(String author) {
-        return memes.values().stream().filter(meme -> meme.author().equals(author)).map(this::metadataOf).toList();
+        return heldBy(PortalInOneProcess.idOf(author));
     }
 
     /** Every meme of this person's, by id — marked ones included. */
@@ -75,15 +70,23 @@ public final class HeapMemes extends FakeMemeErasure implements MemeRepository {
     }
 
     private MemeMetadata metadataOf(Meme meme) {
-        return new MemeMetadata(meme.id(), meme.author(), meme.authorId(), meme.format(),
+        return new MemeMetadata(meme.id(), meme.authorId(), meme.format(),
                 isMarked(meme.id()) ? com.jrobertgardzinski.memes.domain.MemeStatus.PENDING_ERASURE
                         : com.jrobertgardzinski.memes.domain.MemeStatus.ACTIVE,
                 isMarked(meme.id()) ? java.time.Instant.EPOCH : null);
     }
 
-    /** This author's memes that are actually in the gallery right now. */
+    /** This person's memes that are actually in the gallery right now. */
     public List<MemeMetadata> visibleOf(String author) {
-        return heldBy(author).stream().filter(meme -> !meme.isPendingErasure()).toList();
+        return visibleOf(PortalInOneProcess.idOf(author));
+    }
+
+    /** The memes an administrator's closure kept: still in the gallery, belonging to nobody. */
+    public List<MemeMetadata> signedByNobody() {
+        return memes.values().stream().map(this::metadataOf)
+                .filter(meme -> meme.authorId().isEmpty())
+                .filter(meme -> !meme.isPendingErasure())
+                .toList();
     }
 
     // posting and reading a meme are not part of closing an account
@@ -102,7 +105,7 @@ public final class HeapMemes extends FakeMemeErasure implements MemeRepository {
         Meme held = memes.get(id);
         return held == null || isMarked(id)
                 ? Optional.empty()
-                : Optional.of(new MemeMetadata(held.id(), held.author(), held.authorId(), held.format(),
+                : Optional.of(new MemeMetadata(held.id(), held.authorId(), held.format(),
                         com.jrobertgardzinski.memes.domain.MemeStatus.ACTIVE, null));
     }
 
@@ -117,11 +120,11 @@ public final class HeapMemes extends FakeMemeErasure implements MemeRepository {
     }
 
     @Override
-    public void reassignAuthor(String memeId, String newAuthor) {
+    public void anonymise(String memeId) {
         Meme held = memes.get(memeId);
         if (held != null) {
-            // the id goes with the old author, as in the JDBC adapter
-            memes.put(memeId, new Meme(held.id(), newAuthor, held.format(), held.data()));
+            // the id goes and nothing takes its place, as in the JDBC adapter
+            memes.put(memeId, new Meme(held.id(), Optional.empty(), held.format(), held.data()));
         }
     }
 }

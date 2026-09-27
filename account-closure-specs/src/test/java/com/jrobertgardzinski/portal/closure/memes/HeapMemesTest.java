@@ -26,7 +26,7 @@ class HeapMemesTest {
     @Test
     @DisplayName("findMetadata and allIds hide a meme a running saga has marked")
     void gallery_reads_hide_marked_memes() {
-        memes.posted("m1", "author@example.com", AUTHOR);
+        memes.posted("m1", AUTHOR);
         memes.store(memes.activeOf(AUTHOR).get(0).markForErasure(Instant.now()));
 
         assertTrue(memes.findMetadata("m1").isEmpty());
@@ -36,13 +36,13 @@ class HeapMemesTest {
     @Test
     @DisplayName("reassignAuthor and deleteById act on the row regardless of erasure status")
     void mutations_are_status_blind() {
-        memes.posted("m1", "author@example.com", AUTHOR);
+        memes.posted("m1", AUTHOR);
         memes.store(memes.activeOf(AUTHOR).get(0).markForErasure(Instant.now()));
 
-        memes.reassignAuthor("m1", "deleted-account");
-        assertEquals(1, memes.heldBy("deleted-account").stream().filter(meme -> meme.isPendingErasure()).count());
+        memes.anonymise("m1");
+        assertEquals(0, memes.heldBy(AUTHOR).size(), "an anonymised meme is nobody's, marked or not");
 
         memes.deleteById("m1");
-        assertEquals(0, memes.heldBy("deleted-account").size());
+        assertEquals(0, memes.signedByNobody().size());
     }
 }

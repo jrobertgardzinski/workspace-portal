@@ -3,7 +3,6 @@ package com.jrobertgardzinski.portal.closure;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.jrobertgardzinski.closure.ClosureInitiator;
 import com.jrobertgardzinski.closure.ClosureMessages;
-import com.jrobertgardzinski.memes.domain.DeletedAccount;
 import io.cucumber.java.Before;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
@@ -136,7 +135,7 @@ public class AccountClosureSteps {
 
     @Then("the portal holds {int} comments signed by nobody")
     public void theWordsStayUnsigned(int howMany) {
-        assertEquals(howMany, portal.comments.visibleOf(DeletedAccount.AUTHOR).size(),
+        assertEquals(howMany, portal.comments.signedByNobody().size(),
                 "the thread lost the words an administrator's closure said to keep");
         assertEquals(0, portal.comments.heldBy(theLeaver).size(),
                 "the leaver's name is still on them");

@@ -9,7 +9,6 @@ import com.jrobertgardzinski.comments.application.MarkUserCommentsForErasure;
 import com.jrobertgardzinski.comments.application.PurgeUserComments;
 import com.jrobertgardzinski.comments.application.RestoreUserComments;
 import com.jrobertgardzinski.comments.closure.CommentsClosureParticipant;
-import com.jrobertgardzinski.comments.domain.DeletedAccount;
 import com.jrobertgardzinski.comments.domain.Observation;
 import com.jrobertgardzinski.observation.Observations;
 import com.jrobertgardzinski.purge.PurgeRule;
@@ -50,7 +49,7 @@ class CommentsClosureParticipantTest extends AtomicParticipantContractTest {
     @Override
     protected void givenLeaverHolds(int rows) {
         for (int i = 0; i < rows; i++) {
-            comments.wrote("c" + (++written), "leaver@example.com", LEAVER);
+            comments.wrote("c" + (++written), LEAVER);
         }
     }
 
@@ -76,7 +75,7 @@ class CommentsClosureParticipantTest extends AtomicParticipantContractTest {
         handle(command(ClosureMessages.PURGE_USER_CONTENT));
         handle(command(ClosureMessages.ERASE_USER_CONTENT, LEAVER, initiatedBy.wire(), rule));
         assertEquals(0, comments.heldBy(LEAVER).size());
-        assertEquals(anonymised, comments.heldBy(DeletedAccount.AUTHOR).size());
+        assertEquals(anonymised, comments.signedByNobody().size());
     }
 
     @Test

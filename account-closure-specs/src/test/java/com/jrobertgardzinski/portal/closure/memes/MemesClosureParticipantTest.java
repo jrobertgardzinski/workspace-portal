@@ -13,7 +13,6 @@ import com.jrobertgardzinski.memes.application.RestoreUserContent;
 import com.jrobertgardzinski.memes.application.TagRepository;
 import com.jrobertgardzinski.memes.application.VoteRepository;
 import com.jrobertgardzinski.memes.closure.MemesClosureParticipant;
-import com.jrobertgardzinski.memes.domain.DeletedAccount;
 import com.jrobertgardzinski.memes.domain.Observation;
 import com.jrobertgardzinski.observation.Observations;
 import com.jrobertgardzinski.purge.PurgeRule;
@@ -56,7 +55,7 @@ class MemesClosureParticipantTest extends AtomicParticipantContractTest {
     @Override
     protected void givenLeaverHolds(int rows) {
         for (int i = 0; i < rows; i++) {
-            memes.posted("m" + (++posted), "leaver@example.com", LEAVER);
+            memes.posted("m" + (++posted), LEAVER);
         }
     }
 
@@ -82,7 +81,7 @@ class MemesClosureParticipantTest extends AtomicParticipantContractTest {
         handle(command(ClosureMessages.PURGE_USER_CONTENT));
         handle(command(ClosureMessages.ERASE_USER_CONTENT, LEAVER, initiatedBy.wire(), rule));
         assertEquals(0, memes.heldBy(LEAVER).size());
-        assertEquals(anonymised, memes.heldBy(DeletedAccount.AUTHOR).size());
+        assertEquals(anonymised, memes.signedByNobody().size());
     }
 
     @Test
