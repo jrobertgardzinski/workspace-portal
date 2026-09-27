@@ -18,7 +18,7 @@ import java.util.stream.Stream;
  * over the SAME backing list, and the convenience readers the specs already call by name.
  *
  * <p>{@code CommentRepository}'s reads mirror the real adapter's {@code active_comments} view:
- * every one of {@link #findByMeme}, {@link #find} and {@link #findByAuthor} hides a comment
+ * every one of {@link #findByMeme} and {@link #find} hides a comment
  * {@link #isMarked} still remembers. Only {@link #deleteByMeme} is status-blind, exactly like the
  * real adapter's cascade delete — a marked comment goes with the rest of its thread. The original,
  * fully self-contained version of this class got exactly this wrong: {@code findByMeme} read
@@ -108,11 +108,6 @@ public final class HeapComments extends FakeCommentErasure implements CommentRep
                 .filter(row -> row.id().equals(commentId))
                 .filter(row -> !isMarked(commentId))
                 .findFirst();
-    }
-
-    @Override
-    public List<Comment> findByAuthor(String author) {
-        return visibleOf(author);
     }
 
     @Override

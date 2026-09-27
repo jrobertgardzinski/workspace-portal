@@ -26,7 +26,7 @@ class HeapCommentsTest {
     private final HeapComments comments = new HeapComments();
 
     @Test
-    @DisplayName("findByMeme, find and findByAuthor hide a comment a running saga has marked")
+    @DisplayName("findByMeme and find hide a comment a running saga has marked")
     void thread_reads_hide_marked_comments() {
         comments.wrote("c1", "author@example.com", AUTHOR);
         Comment marked = comments.activeOf(AUTHOR).get(0);
@@ -35,7 +35,6 @@ class HeapCommentsTest {
         assertEquals(0, comments.findByMeme(marked.memeId()).size());
         assertEquals(0, comments.countByMeme(marked.memeId()));
         assertTrue(comments.find("c1").isEmpty());
-        assertEquals(0, comments.findByAuthor("author@example.com").size());
     }
 
     @Test
