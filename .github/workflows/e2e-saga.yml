@@ -160,6 +160,11 @@ jobs:
           token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v7
         with:
+          repository: jrobertgardzinski/meme-deletion
+          path: shared/meme-deletion
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v7
+        with:
           repository: jrobertgardzinski/account-closure
           path: shared/account-closure
           token: ${{ secrets.REPO_PAT }}
