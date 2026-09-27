@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.jrobertgardzinski</groupId>
+    <artifactId>meme-deletion</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+
+    <!--
+      The words three services must agree on to delete one meme: the name of every message the
+      cascade sends, the fields they carry, and the promises a hop owes the hops after it.
+
+      They were literals. memes had KafkaMemeEvents.MEME_DELETED, comments had
+      KafkaCommentEvents.COMMENTS_DELETED, and the two consumers had the same two strings typed
+      out again inside a listener and a consumer loop — four spellings of one agreement, guarded
+      by a topic-name test hand-copied into two repositories. A typo in any of them is not a
+      compile error anywhere: it is a meme deleted whose thread stays, or a thread deleted whose
+      favourites stay.
+
+      It also holds the hop CONTRACT, as a test-jar, for the same reason account-closure holds
+      the participant contract: the promises (idempotence, an event that names nothing, an
+      announcement that shares the drop's unit of work) were previously each one adapter's
+      private decision, and the two adapters had made different ones.
+
+      What is NOT here: the topics. Those are transport, they differ per deployment, and they
+      stay in infrastructure beside the pact tests that pin them — the same line SagaTopics
+      draws. This library is the vocabulary and the contract, nothing else: pure Java, only
+      unit-of-work beside it, so Micronaut, Spring and Helidon consumers can all hold it.
+    -->
+    <properties>
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <!-- the promise a hop's drop and its announcement commit together -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>unit-of-work</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.11.4</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-junit5</artifactId>
+            <version>2.29.0</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.2</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <plugin>
+                <!-- the hop contract travels to the two hops as a test-jar -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-maven</artifactId>
+                <version>2.17.0</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>
