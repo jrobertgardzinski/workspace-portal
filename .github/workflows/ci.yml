@@ -79,6 +79,11 @@ jobs:
           token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v7
         with:
+          repository: jrobertgardzinski/unit-of-work
+          path: shared/unit-of-work
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v7
+        with:
           repository: jrobertgardzinski/account-closure
           path: shared/account-closure
           token: ${{ secrets.REPO_PAT }}
@@ -255,6 +260,11 @@ jobs:
         with:
           repository: jrobertgardzinski/envelope
           path: shared/envelope
+          token: ${{ secrets.REPO_PAT }}
+      - uses: actions/checkout@v7
+        with:
+          repository: jrobertgardzinski/unit-of-work
+          path: shared/unit-of-work
           token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v7
         with:
