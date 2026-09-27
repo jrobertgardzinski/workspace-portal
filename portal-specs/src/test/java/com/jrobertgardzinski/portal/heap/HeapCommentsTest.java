@@ -1,4 +1,4 @@
-package com.jrobertgardzinski.portal.closure.comments;
+package com.jrobertgardzinski.portal.heap;
 
 import com.jrobertgardzinski.comments.domain.Comment;
 import org.junit.jupiter.api.DisplayName;

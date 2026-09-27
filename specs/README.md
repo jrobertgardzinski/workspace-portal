@@ -4,6 +4,10 @@ Every `.feature` here states something that is only true of the portal AS A WHOL
 behave towards each other. Each service also has a `specs/` of its own, for what it promises about
 its own content; those are the right place for anything one repository can state alone.
 
+Two protocols live here, one world: `account-closure.feature` (an orchestrated saga) and
+`meme-deletion.feature` (a choreography with no orchestrator). They share `portal.heap.Portal` —
+the three services' rows and use cases — and each brings its own bus.
+
 | level | what it proves | what it needs running |
 |---|---|---|
 | this directory | the orchestrator and the three participants, wired in ONE process | nothing |
@@ -12,10 +16,11 @@ its own content; those are the right place for anything one repository can state
 
 ## Why the middle column says "nothing"
 
-The runner (`account-closure-specs`) builds the real orchestrator (`EventsRouter`) and the real
+The runner (`portal-specs`) builds the real orchestrator (`EventsRouter`) and the real
 participants (`memes_account-closure`, `comments_account-closure`,
-`collections_account-closure`), hands them heap-only adapters and delivers the messages between
-them by calling methods. No broker, no database, no HTTP, no container. A whole account closure
+`collections_account-closure`) — and, for the deletion cascade, the real teardown (`DeleteMeme`)
+and both hops (`comments_meme-deletion`, `collections_meme-deletion`) — hands them heap-only
+adapters and delivers the messages between them by calling methods. No broker, no database, no HTTP, no container. A whole account closure
 runs in milliseconds.
 
 That is not a shortcut, it is the point. Whether the portal is deployed as six services or as one
@@ -45,5 +50,5 @@ that renames one is SUPPOSED to turn this file red. Same contract as `microservi
 
 ```bash
 # from this repo root
-./mvnw -pl account-closure-specs -am test
+./mvnw -pl portal-specs -am test
 ```

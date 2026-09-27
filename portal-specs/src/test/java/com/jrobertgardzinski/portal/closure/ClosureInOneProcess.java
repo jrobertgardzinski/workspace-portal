@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jrobertgardzinski.closure.ClosureCommand;
 import com.jrobertgardzinski.closure.ClosureConfirmation;
+import com.jrobertgardzinski.closure.ClosureConfirmations;
 import com.jrobertgardzinski.purge.PurgeRule;
 import com.jrobertgardzinski.closure.ClosureMessages;
 import com.jrobertgardzinski.collections.application.MarkUserItemsForErasure;
@@ -26,9 +27,11 @@ import com.jrobertgardzinski.memes.application.TagRepository;
 import com.jrobertgardzinski.memes.application.VoteRepository;
 import com.jrobertgardzinski.memes.closure.MemesClosureParticipant;
 import com.jrobertgardzinski.observation.Observations;
-import com.jrobertgardzinski.portal.closure.collections.HeapFavourites;
-import com.jrobertgardzinski.portal.closure.comments.HeapComments;
-import com.jrobertgardzinski.portal.closure.memes.HeapMemes;
+import com.jrobertgardzinski.portal.heap.HeapFavourites;
+import com.jrobertgardzinski.portal.heap.Identities;
+import com.jrobertgardzinski.portal.heap.Portal;
+import com.jrobertgardzinski.portal.heap.HeapComments;
+import com.jrobertgardzinski.portal.heap.HeapMemes;
 import com.jrobertgardzinski.offboarding.application.Destination;
 import com.jrobertgardzinski.offboarding.application.EventsRouter;
 import com.jrobertgardzinski.offboarding.application.Source;
@@ -52,11 +55,15 @@ import java.util.UUID;
 import static org.mockito.Mockito.mock;
 
 /**
- * The whole portal in one process: the real {@link EventsRouter}, the real three participants,
- * rows on the heap, and {@link #deliver} in place of the broker. Nothing is reordered,
- * duplicated or dropped at random; {@link #silence} is the only failure staged.
+ * The account-closure saga in one process: the real {@link EventsRouter}, the real three
+ * participants over {@link Portal}'s rows, and {@link #deliver} in place of the broker. Nothing
+ * is reordered, duplicated or dropped at random; {@link #silence} is the only failure staged.
+ *
+ * <p>This class is the saga's BUS. The portal it drives is {@link Portal}, shared with the
+ * deletion cascade next door, which brings a bus of its own — there is no orchestrator there to
+ * share.
  */
-public final class PortalInOneProcess {
+public final class ClosureInOneProcess {
 
     static final String MEMES = "memes";
     static final String COMMENTS = "comments";
@@ -66,9 +73,12 @@ public final class PortalInOneProcess {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
-    final HeapMemes memes = new HeapMemes();
-    final HeapComments comments = new HeapComments();
-    final HeapFavourites favourites = new HeapFavourites();
+    private final Portal world = new Portal();
+
+    // the steps read the portal through this class; the rows themselves are the world's
+    final HeapMemes memes = world.memes;
+    final HeapComments comments = world.comments;
+    final HeapFavourites favourites = world.favourites;
 
     private final InMemorySagaStore sagas = new InMemorySagaStore();
     private final EventsRouter router;
@@ -82,76 +92,30 @@ public final class PortalInOneProcess {
 
     private final List<EventsRouter.Outgoing> inFlight = new ArrayList<>();
 
-    private Instant now = Instant.parse("2026-09-24T12:00:00Z");
-
-    PortalInOneProcess() {
+    ClosureInOneProcess() {
         Set<String> participants = Set.of(MEMES, COMMENTS, COLLECTIONS);
         router = new EventsRouter(
                 new BeginOffboarding(sagas, participants),
                 new RecordConfirmation(sagas, participants),
                 new SweepOverdue(sagas, PURGE_TIMEOUT),
-                mapper, windUpClock());
+                mapper, world.clock());
 
-        memesParticipant = new MemesClosureParticipant(
-                new MarkUserContentForErasure(memes, windUpClock()),
-                new RestoreUserContent(memes),
-                new PurgeUserContent(memes, memes, mock(VoteRepository.class),
-                        mock(MemeContentIndex.class), mock(TagRepository.class),
-                        mock(MemeEvents.class), mock(PurgePolicyOverride.class),
-                        new PurgeRule.Delete()),
-                // no outbox in here: the confirmation is what deliver() sends back
-                (sagaId, leaver, reserved) -> { },
-                Observations.silent(), Runnable::run);
-
-        commentsParticipant = new CommentsClosureParticipant(
-                new MarkUserCommentsForErasure(comments, windUpClock()),
-                new RestoreUserComments(comments),
-                new PurgeUserComments(comments, comments, mock(CommentVotes.class),
-                        new PurgeRule.Delete()),
-                (sagaId, leaver, reserved) -> { },
-                Observations.silent(), Runnable::run);
-
-        collectionsParticipant = new CollectionsClosureParticipant(
-                new MarkUserItemsForErasure(favourites, windUpClock()),
-                new RestoreUserItems(favourites),
-                new PurgeUserItems(favourites),
-                Observations.silent());
-    }
-
-    /** A clock the scenarios wind forward by reassigning {@link #now}. */
-    private Clock windUpClock() {
-        return new Clock() {
-            @Override
-            public Instant instant() {
-                return now;
-            }
-
-            @Override
-            public ZoneOffset getZone() {
-                return ZoneOffset.UTC;
-            }
-
-            @Override
-            public Clock withZone(java.time.ZoneId zone) {
-                return this;
-            }
-        };
+        // no outbox in here: the confirmation is what deliver() sends back
+        ClosureConfirmations nothingToAnnounce = (sagaId, leaver, reserved) -> { };
+        memesParticipant = world.memesClosure(nothingToAnnounce);
+        commentsParticipant = world.commentsClosure(nothingToAnnounce);
+        collectionsParticipant = world.collectionsClosure();
     }
 
     void silence(String participant) {
         silenced.add(participant);
     }
 
-    /** The identity security minted for an address — the specs name people by address, the saga by id. */
-    public static UserId idOf(String email) {
-        return new UserId(UUID.nameUUIDFromBytes(("user:" + email).getBytes()));
-    }
-
     void securityAnnouncesClosureOf(String email, String initiatedBy, String policyJson) {
         String fact = "{\"id\":\"" + UUID.nameUUIDFromBytes(("fact:" + email).getBytes())
                 + "\",\"type\":\"" + ClosureMessages.ACCOUNT_DELETION_REQUESTED + "\","
                 + "\"email\":\"" + email + "\","
-                + "\"" + ClosureMessages.Field.USER_ID + "\":\"" + idOf(email) + "\","
+                + "\"" + ClosureMessages.Field.USER_ID + "\":\"" + Identities.idOf(email) + "\","
                 + "\"" + ClosureMessages.Field.INITIATED_BY + "\":\"" + initiatedBy + "\""
                 + (policyJson == null ? "" : ",\"" + ClosureMessages.Field.POLICY + "\":" + policyJson)
                 + ",\"version\":1}";
@@ -161,7 +125,8 @@ public final class PortalInOneProcess {
     /** Each delivered re-command buys the silent part another timeout; spend the budget, then the one that gives up. */
     void givesUpWaiting() {
         for (int attempt = 0; attempt <= SweepOverdue.DEFAULT_MAX_RETRIES; attempt++) {
-            now = now.plus(PURGE_TIMEOUT).plusSeconds(1);
+            world.windForward(PURGE_TIMEOUT.plusSeconds(1));
+            Instant now = world.clock().instant();
             List<EventsRouter.Outgoing> swept = router.sweepOverdue();
             swept.stream().map(EventsRouter.Outgoing::countsRetryFor).filter(Objects::nonNull)
                     .forEach(charge -> sagas.retryDelivered(charge.sagaId(), charge.retriesSoFar(), now));

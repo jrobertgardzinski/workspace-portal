@@ -1,4 +1,4 @@
-package com.jrobertgardzinski.portal.closure.comments;
+package com.jrobertgardzinski.portal.heap;
 
 import com.jrobertgardzinski.comments.domain.CommentStatus;
 import com.jrobertgardzinski.identity.UserId;
@@ -111,6 +111,21 @@ public final class HeapComments extends FakeCommentErasure implements CommentRep
                 return;
             }
         }
+    }
+
+    /** One comment under a named meme — what the deletion cascade takes a thread to be. */
+    public void wroteUnder(String memeId, String id, UserId userId) {
+        rows.add(new Comment(id, memeId, Optional.of(userId), "a comment",
+                CommentStatus.ACTIVE, null));
+    }
+
+    /**
+     * Everything still hanging under a meme, marked rows included. Status-blind on purpose: the
+     * cascade's delete is, and a spec that read through the active view would call a thread gone
+     * while its marked rows were still there.
+     */
+    public List<Comment> under(String memeId) {
+        return rows.stream().filter(row -> row.memeId().equals(memeId)).toList();
     }
 
     /** The words an administrator's closure kept: still in the thread, signed by nobody. */

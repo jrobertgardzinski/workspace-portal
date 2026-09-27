@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.jrobertgardzinski</groupId>
-    <artifactId>account-closure-specs</artifactId>
+    <artifactId>portal-specs</artifactId>
     <version>1.0.0-SNAPSHOT</version>
 
     <!--
@@ -107,6 +107,39 @@
         <dependency>
             <groupId>com.jrobertgardzinski</groupId>
             <artifactId>collections_account-closure</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- both hops of the cascade, as deployed -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>comments_meme-deletion</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>collections_meme-deletion</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- the cascade's vocabulary, and its hop contract as a test-jar -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>meme-deletion</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>meme-deletion</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>unit-of-work</artifactId>
             <version>1.0.0-SNAPSHOT</version>
             <scope>test</scope>
         </dependency>

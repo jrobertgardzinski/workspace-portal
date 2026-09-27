@@ -1,11 +1,13 @@
-package com.jrobertgardzinski.portal.closure.collections;
+package com.jrobertgardzinski.portal.heap;
 
 import com.jrobertgardzinski.identity.UserId;
 import com.jrobertgardzinski.collections.application.InMemoryCollectionRepository;
 import com.jrobertgardzinski.collections.domain.ItemRef;
 import com.jrobertgardzinski.collections.domain.SavedItem;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -14,7 +16,7 @@ import java.util.stream.Stream;
  * {@code CollectionRepository}/{@code ItemErasure}, reached through this repository's test-jar
  * dependency on it. Used to be a byte-for-byte copy of that class, kept only because this runner
  * could not see any test source of collections-application's — it can, and always could, since
- * account-closure-specs already depends on {@code collections-application} as a test-jar for its
+ * portal-specs already depends on {@code collections-application} as a test-jar for its
  * {@code ItemErasureContractTest}.
  *
  * <p>What is left here is exactly what {@link InMemoryCollectionRepository} does not do: name a few
@@ -23,6 +25,9 @@ import java.util.stream.Stream;
  * class any more — there is nothing left here that could drift from the class it stands in for.
  */
 public final class HeapFavourites extends InMemoryCollectionRepository {
+
+    /** Whom this fake has saved for: the repository it extends keys by user and walks none. */
+    private final Set<UserId> savers = new LinkedHashSet<>();
 
     /** Every row of this user's, marked ones included — what "still on the heap" means. */
     public List<SavedItem> heldBy(UserId userId) {
@@ -37,7 +42,29 @@ public final class HeapFavourites extends InMemoryCollectionRepository {
     /** Saves {@code howMany} distinct favourites for a user. */
     public void saved(UserId userId, int howMany) {
         for (int i = 1; i <= howMany; i++) {
-            add(userId, "favourites", new ItemRef("meme", "someones-meme-" + i));
+            savedPointingAt(userId, "meme", "someones-meme-" + i);
         }
     }
+
+    /** One favourite pointing at a named thing — a meme, or a comment under one. */
+    public void savedPointingAt(UserId userId, String itemType, String id) {
+        savers.add(userId);
+        add(userId, "favourites", new ItemRef(itemType, id));
+    }
+
+    /**
+     * Every row anybody still has pointing at this thing, marked ones included — the reader the
+     * deletion specs ask "did the cascade reach it".
+     *
+     * <p>Only the people this fake has saved for: the repository it stands in for keys everything
+     * by user and exposes no way to walk them, and a spec that saved for nobody expects nothing.
+     */
+    public List<SavedItem> pointingAt(String itemType, String id) {
+        ItemRef ref = new ItemRef(itemType, id);
+        return savers.stream()
+                .flatMap(userId -> Stream.concat(activeOf(userId).stream(), pendingOf(userId).stream()))
+                .filter(item -> item.ref().equals(ref))
+                .toList();
+    }
+
 }

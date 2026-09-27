@@ -8,6 +8,21 @@ Python). Each sub-directory is an independent git repository, gitignored here;
 this workspace versions only the aggregator `pom.xml`, the compose file and the
 up/down scripts.
 
+## Two protocols the portal owns
+
+Closing an account is an orchestrated **saga**: `microservice-offboarding` commands each part,
+waits for its confirmation, and gives up loudly if one never answers. Deleting a meme is a
+**choreography** with no orchestrator at all — memes announces, comments drops the thread and
+announces what went, collections drops every reference to both — and nothing confirms, nothing
+compensates, and a hop that gives up leaves dead rows the UI renders honestly.
+
+Both are built the same way, and the way is the point: a shared vocabulary library
+(`account-closure`, `meme-deletion`) holding the message names, the parsed messages and the
+contract every participant is held to; a thin `<service>_<protocol>` module per service holding
+what that service DECIDES; the adapter next door holding only the wire. Both run end to end,
+without a broker or a database, in `portal-specs` — one world, two buses — against the features
+in `specs/`.
+
 The portal runs on the **shared kernel** — identity, mail chain, stub IdP,
 notification channels and every shared library — which lives in the sibling
 workspace `../shared` (repo `workspace-shared`) and is consumed through `~/.m2`

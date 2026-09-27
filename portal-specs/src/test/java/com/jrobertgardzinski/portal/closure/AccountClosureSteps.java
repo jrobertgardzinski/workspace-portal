@@ -9,17 +9,18 @@ import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 
+import static com.jrobertgardzinski.portal.heap.Identities.idOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The portal's promises about closing an account, driven against all four parts at once. */
 public class AccountClosureSteps {
 
-    private PortalInOneProcess portal;
+    private ClosureInOneProcess portal;
 
     @Before
     public void wire() {
-        portal = new PortalInOneProcess();
+        portal = new ClosureInOneProcess();
     }
 
     @Given("{word} posted {int} memes, wrote {int} comments and saved {int} favourites")
@@ -159,10 +160,6 @@ public class AccountClosureSteps {
                         && said.path(ClosureMessages.Field.EMAIL).asText().equals(email));
     }
 
-    /** Gherkin names people by address; every row in the portal knows them by id. */
-    private static UserId idOf(String email) {
-        return PortalInOneProcess.idOf(email);
-    }
 
     /** Every scenario in this file is about one leaver; the Background names them. */
     private static final String theLeaver = "alice@example.com";

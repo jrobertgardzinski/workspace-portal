@@ -1,5 +1,6 @@
 package com.jrobertgardzinski.portal.closure.collections;
 
+import com.jrobertgardzinski.portal.heap.HeapFavourites;
 import com.jrobertgardzinski.closure.ClosureCommand;
 import com.jrobertgardzinski.closure.ClosureInitiator;
 import com.jrobertgardzinski.closure.ClosureMessages;

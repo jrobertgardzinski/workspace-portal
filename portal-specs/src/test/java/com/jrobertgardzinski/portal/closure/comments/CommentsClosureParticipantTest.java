@@ -1,19 +1,16 @@
-package com.jrobertgardzinski.portal.closure.memes;
+package com.jrobertgardzinski.portal.closure.comments;
 
+import com.jrobertgardzinski.portal.heap.HeapComments;
 import com.jrobertgardzinski.closure.AtomicParticipantContractTest;
 import com.jrobertgardzinski.closure.ClosureCommand;
 import com.jrobertgardzinski.closure.ClosureInitiator;
 import com.jrobertgardzinski.closure.ClosureMessages;
-import com.jrobertgardzinski.memes.application.MarkUserContentForErasure;
-import com.jrobertgardzinski.memes.application.MemeContentIndex;
-import com.jrobertgardzinski.memes.application.MemeEvents;
-import com.jrobertgardzinski.memes.application.PurgePolicyOverride;
-import com.jrobertgardzinski.memes.application.PurgeUserContent;
-import com.jrobertgardzinski.memes.application.RestoreUserContent;
-import com.jrobertgardzinski.memes.application.TagRepository;
-import com.jrobertgardzinski.memes.application.VoteRepository;
-import com.jrobertgardzinski.memes.closure.MemesClosureParticipant;
-import com.jrobertgardzinski.memes.domain.Observation;
+import com.jrobertgardzinski.comments.application.CommentVotes;
+import com.jrobertgardzinski.comments.application.MarkUserCommentsForErasure;
+import com.jrobertgardzinski.comments.application.PurgeUserComments;
+import com.jrobertgardzinski.comments.application.RestoreUserComments;
+import com.jrobertgardzinski.comments.closure.CommentsClosureParticipant;
+import com.jrobertgardzinski.comments.domain.Observation;
 import com.jrobertgardzinski.observation.Observations;
 import com.jrobertgardzinski.purge.PurgeRule;
 import io.qameta.allure.Epic;
@@ -30,21 +27,19 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 
-/** The memes axis: the protocol comes from the contract, the purge rule is this service's own. */
+/** The comments axis: the protocol comes from the contract, the purge rule is this service's own. */
 @Epic("Saga")
-@Feature("Account closure — the memes axis")
-class MemesClosureParticipantTest extends AtomicParticipantContractTest {
+@Feature("Account closure — the comments axis")
+class CommentsClosureParticipantTest extends AtomicParticipantContractTest {
 
-    private final HeapMemes memes = new HeapMemes();
+    private final HeapComments comments = new HeapComments();
     private final List<Observation> observed = new ArrayList<>();
-    private int posted;
+    private int written;
 
-    private final MemesClosureParticipant participant = new MemesClosureParticipant(
-            new MarkUserContentForErasure(memes, Clock.systemUTC()),
-            new RestoreUserContent(memes),
-            new PurgeUserContent(memes, memes, mock(VoteRepository.class), mock(MemeContentIndex.class),
-                    mock(TagRepository.class), mock(MemeEvents.class), mock(PurgePolicyOverride.class),
-                    new PurgeRule.Delete()),
+    private final CommentsClosureParticipant participant = new CommentsClosureParticipant(
+            new MarkUserCommentsForErasure(comments, Clock.systemUTC()),
+            new RestoreUserComments(comments),
+            new PurgeUserComments(comments, comments, mock(CommentVotes.class), new PurgeRule.Delete()),
             confirmations, (Observations<Observation>) observed::add, unitOfWork);
 
     @Override
@@ -55,14 +50,14 @@ class MemesClosureParticipantTest extends AtomicParticipantContractTest {
     @Override
     protected void givenLeaverHolds(int rows) {
         for (int i = 0; i < rows; i++) {
-            memes.posted("m" + (++posted), LEAVER);
+            comments.wrote("c" + (++written), LEAVER);
         }
     }
 
 
     @Override
     protected boolean nothingTouched() {
-        return memes.heldBy(LEAVER).size() == posted && memes.visibleOf(LEAVER).size() == posted;
+        return comments.heldBy(LEAVER).size() == written && comments.visibleOf(LEAVER).size() == written;
     }
 
     @Override
@@ -70,7 +65,7 @@ class MemesClosureParticipantTest extends AtomicParticipantContractTest {
         return observed.stream().anyMatch(o -> o instanceof Observation.PurgeReservedNothing);
     }
 
-    @ParameterizedTest(name = "{0} closure carrying {1}: {2} memes anonymised, the rest deleted")
+    @ParameterizedTest(name = "{0} closure carrying {1}: {2} comments left signed by nobody, the rest deleted")
     @CsvSource({
             "SELF,  ANONYMIZE_AUTHOR,    0",   // the owner's closure admits no conditions
             "ADMIN, ANONYMIZE_AUTHOR,    2",
@@ -80,17 +75,17 @@ class MemesClosureParticipantTest extends AtomicParticipantContractTest {
         givenLeaverHolds(2);
         handle(command(ClosureMessages.PURGE_USER_CONTENT));
         handle(command(ClosureMessages.ERASE_USER_CONTENT, LEAVER, initiatedBy.wire(), rule));
-        assertEquals(0, memes.heldBy(LEAVER).size());
-        assertEquals(anonymised, memes.signedByNobody().size());
+        assertEquals(0, comments.heldBy(LEAVER).size());
+        assertEquals(anonymised, comments.signedByNobody().size());
     }
 
     @Test
-    @DisplayName("the compensation puts the marked memes back in the gallery")
+    @DisplayName("the compensation puts the marked comments back in their threads")
     void restore_undoes_the_mark() {
         givenLeaverHolds(2);
         handle(command(ClosureMessages.PURGE_USER_CONTENT));
-        assertEquals(0, memes.visibleOf(LEAVER).size());
+        assertEquals(0, comments.visibleOf(LEAVER).size());
         handle(command(ClosureMessages.RESTORE_USER_CONTENT));
-        assertEquals(2, memes.visibleOf(LEAVER).size());
+        assertEquals(2, comments.visibleOf(LEAVER).size());
     }
 }

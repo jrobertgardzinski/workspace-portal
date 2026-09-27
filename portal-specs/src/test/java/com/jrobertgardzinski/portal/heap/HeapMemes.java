@@ -1,4 +1,4 @@
-package com.jrobertgardzinski.portal.closure.memes;
+package com.jrobertgardzinski.portal.heap;
 
 import com.jrobertgardzinski.identity.UserId;
 import com.jrobertgardzinski.memes.application.FakeMemeErasure;
