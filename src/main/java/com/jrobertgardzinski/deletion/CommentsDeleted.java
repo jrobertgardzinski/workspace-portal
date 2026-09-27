@@ -1,6 +1,7 @@
 package com.jrobertgardzinski.deletion;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +62,6 @@ public record CommentsDeleted(String memeId, List<String> commentIds, int unusab
         message.put(DeletionMessages.Field.MEME_ID, memeId);
         message.put(DeletionMessages.Field.COMMENT_IDS, commentIds);
         message.put(DeletionMessages.Field.VERSION, VERSION);
-        return Map.copyOf(message);
+        return Collections.unmodifiableMap(message);
     }
 }
