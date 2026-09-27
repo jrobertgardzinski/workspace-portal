@@ -45,7 +45,7 @@ class MemesClosureParticipantTest extends AtomicParticipantContractTest {
             new PurgeUserContent(memes, memes, mock(VoteRepository.class), mock(MemeContentIndex.class),
                     mock(TagRepository.class), mock(MemeEvents.class), mock(PurgePolicyOverride.class),
                     new PurgeRule.Delete()),
-            confirmations, (Observations<Observation>) observed::add, atomically);
+            confirmations, (Observations<Observation>) observed::add, unitOfWork);
 
     @Override
     protected void handle(ClosureCommand command) {

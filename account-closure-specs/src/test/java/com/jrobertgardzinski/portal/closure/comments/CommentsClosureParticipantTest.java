@@ -39,7 +39,7 @@ class CommentsClosureParticipantTest extends AtomicParticipantContractTest {
             new MarkUserCommentsForErasure(comments, Clock.systemUTC()),
             new RestoreUserComments(comments),
             new PurgeUserComments(comments, comments, mock(CommentVotes.class), new PurgeRule.Delete()),
-            confirmations, (Observations<Observation>) observed::add, atomically);
+            confirmations, (Observations<Observation>) observed::add, unitOfWork);
 
     @Override
     protected void handle(ClosureCommand command) {

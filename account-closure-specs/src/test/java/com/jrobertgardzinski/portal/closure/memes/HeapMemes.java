@@ -1,7 +1,6 @@
 package com.jrobertgardzinski.portal.closure.memes;
 
 import com.jrobertgardzinski.identity.UserId;
-import com.jrobertgardzinski.portal.closure.PortalInOneProcess;
 import com.jrobertgardzinski.memes.application.FakeMemeErasure;
 import com.jrobertgardzinski.memes.application.MemeRepository;
 import com.jrobertgardzinski.memes.domain.Meme;
@@ -40,33 +39,25 @@ public final class HeapMemes extends FakeMemeErasure implements MemeRepository {
         this.memes = memes;
     }
 
-    /** A feature step names a person by address; the portal knows them by the id it maps to. */
-    public void posted(String author, int howMany) {
-        posted(author, PortalInOneProcess.idOf(author), howMany);
-    }
-
-    public void posted(String author, UserId authorId, int howMany) {
+    /** {@code howMany} memes of one person; the prefix only keeps the ids readable in a failure. */
+    public void posted(String prefix, UserId userId, int howMany) {
         for (int i = 1; i <= howMany; i++) {
-            posted(author + "-meme-" + i, authorId);
+            posted(prefix + "-meme-" + i, userId);
         }
     }
 
-    public void posted(String id, UserId authorId) {
-        memes.put(id, new Meme(id, authorId, "png", new byte[0]));
+    public void posted(String id, UserId userId) {
+        memes.put(id, new Meme(id, userId, "png", new byte[0]));
     }
 
     /** Every meme of this person's, marked ones included — what "still on the heap" means. */
-    public List<MemeMetadata> heldBy(String author) {
-        return heldBy(PortalInOneProcess.idOf(author));
+    public List<MemeMetadata> heldBy(UserId userId) {
+        return Stream.concat(activeOf(userId).stream(), pendingOf(userId).stream()).toList();
     }
 
-    /** Every meme of this person's, by id — marked ones included. */
-    public List<MemeMetadata> heldBy(UserId author) {
-        return Stream.concat(activeOf(author).stream(), pendingOf(author).stream()).toList();
-    }
-
-    public List<MemeMetadata> visibleOf(UserId author) {
-        return activeOf(author);
+    /** This person's memes that are actually in the gallery right now. */
+    public List<MemeMetadata> visibleOf(UserId userId) {
+        return activeOf(userId);
     }
 
     private MemeMetadata metadataOf(Meme meme) {
@@ -74,11 +65,6 @@ public final class HeapMemes extends FakeMemeErasure implements MemeRepository {
                 isMarked(meme.id()) ? com.jrobertgardzinski.memes.domain.MemeStatus.PENDING_ERASURE
                         : com.jrobertgardzinski.memes.domain.MemeStatus.ACTIVE,
                 isMarked(meme.id()) ? java.time.Instant.EPOCH : null);
-    }
-
-    /** This person's memes that are actually in the gallery right now. */
-    public List<MemeMetadata> visibleOf(String author) {
-        return visibleOf(PortalInOneProcess.idOf(author));
     }
 
     /** The memes an administrator's closure kept: still in the gallery, belonging to nobody. */

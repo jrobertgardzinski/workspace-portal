@@ -2,7 +2,6 @@ package com.jrobertgardzinski.portal.closure.comments;
 
 import com.jrobertgardzinski.comments.domain.CommentStatus;
 import com.jrobertgardzinski.identity.UserId;
-import com.jrobertgardzinski.portal.closure.PortalInOneProcess;
 import com.jrobertgardzinski.comments.application.CommentRepository;
 import com.jrobertgardzinski.comments.application.FakeCommentErasure;
 import com.jrobertgardzinski.comments.domain.Comment;
@@ -38,40 +37,26 @@ public final class HeapComments extends FakeCommentErasure implements CommentRep
         this.rows = rows;
     }
 
-    /** A feature step names a person by address; the portal knows them by the id it maps to. */
-    public void wrote(String author, int howMany) {
-        wrote(author, PortalInOneProcess.idOf(author), howMany);
-    }
-
-    /** Rows written after the cutover: the author's id beside the address. */
-    public void wrote(String author, UserId authorId, int howMany) {
+    /** {@code howMany} comments of one person; the prefix only keeps the ids readable in a failure. */
+    public void wrote(String prefix, UserId userId, int howMany) {
         for (int i = 1; i <= howMany; i++) {
-            wrote(author + "-comment-" + i, authorId);
+            wrote(prefix + "-comment-" + i, userId);
         }
     }
 
-    public void wrote(String id, UserId authorId) {
-        rows.add(new Comment(id, "someones-meme", Optional.of(authorId), "a comment",
+    public void wrote(String id, UserId userId) {
+        rows.add(new Comment(id, "someones-meme", Optional.of(userId), "a comment",
                 CommentStatus.ACTIVE, null));
     }
 
     /** Every comment of this person's, marked ones included — what "still on the heap" means. */
-    public List<Comment> heldBy(String author) {
-        return heldBy(PortalInOneProcess.idOf(author));
-    }
-
-    /** Every comment of this person's, by id — marked ones included. */
-    public List<Comment> heldBy(UserId author) {
-        return Stream.concat(activeOf(author).stream(), pendingOf(author).stream()).toList();
-    }
-
-    public List<Comment> visibleOf(UserId author) {
-        return activeOf(author);
+    public List<Comment> heldBy(UserId userId) {
+        return Stream.concat(activeOf(userId).stream(), pendingOf(userId).stream()).toList();
     }
 
     /** This person's comments that are actually in a thread right now. */
-    public List<Comment> visibleOf(String author) {
-        return visibleOf(PortalInOneProcess.idOf(author));
+    public List<Comment> visibleOf(UserId userId) {
+        return activeOf(userId);
     }
 
     // writing a comment is not part of closing an account

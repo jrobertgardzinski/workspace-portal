@@ -3,6 +3,7 @@ package com.jrobertgardzinski.portal.closure;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.jrobertgardzinski.closure.ClosureInitiator;
 import com.jrobertgardzinski.closure.ClosureMessages;
+import com.jrobertgardzinski.identity.UserId;
 import io.cucumber.java.Before;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
@@ -23,10 +24,9 @@ public class AccountClosureSteps {
 
     @Given("{word} posted {int} memes, wrote {int} comments and saved {int} favourites")
     public void aMemberWithContent(String email, int memes, int comments, int favourites) {
-        // rows as the portal writes them since the cutover: the id beside the address
-        portal.memes.posted(email, PortalInOneProcess.idOf(email), memes);
-        portal.comments.wrote(email, PortalInOneProcess.idOf(email), comments);
-        portal.favourites.saved(email, PortalInOneProcess.idOf(email), favourites);
+        portal.memes.posted(email, idOf(email), memes);
+        portal.comments.wrote(email, idOf(email), comments);
+        portal.favourites.saved(idOf(email), favourites);
     }
 
     @When("security announces that {word} asked to be forgotten")
@@ -74,16 +74,16 @@ public class AccountClosureSteps {
     }
 
     private void stillHolds(String email, int memes, int comments, int favourites) {
-        assertEquals(memes, portal.memes.heldBy(email).size(), "memes destroyed too early");
-        assertEquals(comments, portal.comments.heldBy(email).size(), "comments destroyed too early");
-        assertEquals(favourites, portal.favourites.heldBy(email).size(), "favourites destroyed too early");
+        assertEquals(memes, portal.memes.heldBy(idOf(email)).size(), "memes destroyed too early");
+        assertEquals(comments, portal.comments.heldBy(idOf(email)).size(), "comments destroyed too early");
+        assertEquals(favourites, portal.favourites.heldBy(idOf(email)).size(), "favourites destroyed too early");
     }
 
     @Then("the portal holds nothing of {word}")
     public void thePortalHoldsNothing(String email) {
-        assertEquals(0, portal.memes.heldBy(email).size(), "memes survived the closure");
-        assertEquals(0, portal.comments.heldBy(email).size(), "comments survived the closure");
-        assertEquals(0, portal.favourites.heldBy(email).size(), "favourites survived the closure");
+        assertEquals(0, portal.memes.heldBy(idOf(email)).size(), "memes survived the closure");
+        assertEquals(0, portal.comments.heldBy(idOf(email)).size(), "comments survived the closure");
+        assertEquals(0, portal.favourites.heldBy(idOf(email)).size(), "favourites survived the closure");
     }
 
     @Then("security is told the portal purged the content of {word}")
@@ -106,50 +106,50 @@ public class AccountClosureSteps {
 
     @Then("their {int} memes and {int} comments are out of sight")
     public void thoseTwoAreOutOfSightToo(int memes, int comments) {
-        assertEquals(0, portal.memes.visibleOf(theLeaver).size(), "memes still in the gallery");
-        assertEquals(0, portal.comments.visibleOf(theLeaver).size(), "comments still in their threads");
-        assertEquals(memes, portal.memes.heldBy(theLeaver).size());
-        assertEquals(comments, portal.comments.heldBy(theLeaver).size());
+        assertEquals(0, portal.memes.visibleOf(idOf(theLeaver)).size(), "memes still in the gallery");
+        assertEquals(0, portal.comments.visibleOf(idOf(theLeaver)).size(), "comments still in their threads");
+        assertEquals(memes, portal.memes.heldBy(idOf(theLeaver)).size());
+        assertEquals(comments, portal.comments.heldBy(idOf(theLeaver)).size());
     }
 
     @Then("their {int} comments and {int} favourites are out of sight")
     public void thoseTwoAreOutOfSight(int comments, int favourites) {
-        assertEquals(0, portal.comments.visibleOf(theLeaver).size(), "comments still in their threads");
-        assertEquals(0, portal.favourites.visibleOf(theLeaver).size(), "favourites still in the lists");
-        assertEquals(comments, portal.comments.heldBy(theLeaver).size());
-        assertEquals(favourites, portal.favourites.heldBy(theLeaver).size());
+        assertEquals(0, portal.comments.visibleOf(idOf(theLeaver)).size(), "comments still in their threads");
+        assertEquals(0, portal.favourites.visibleOf(idOf(theLeaver)).size(), "favourites still in the lists");
+        assertEquals(comments, portal.comments.heldBy(idOf(theLeaver)).size());
+        assertEquals(favourites, portal.favourites.heldBy(idOf(theLeaver)).size());
     }
 
     @Then("their {int} memes are still in the gallery, because that part never heard")
     public void theSilentPartsContentIsUntouched(int memes) {
-        assertEquals(memes, portal.memes.visibleOf(theLeaver).size(),
+        assertEquals(memes, portal.memes.visibleOf(idOf(theLeaver)).size(),
                 "a part that never got the command has nothing to hide");
     }
 
     @Then("{word} sees their {int} memes, {int} comments and {int} favourites again")
     public void everythingIsBack(String email, int memes, int comments, int favourites) {
-        assertEquals(memes, portal.memes.visibleOf(email).size(), "memes did not come back");
-        assertEquals(comments, portal.comments.visibleOf(email).size(), "comments did not come back");
-        assertEquals(favourites, portal.favourites.visibleOf(email).size(), "favourites did not come back");
+        assertEquals(memes, portal.memes.visibleOf(idOf(email)).size(), "memes did not come back");
+        assertEquals(comments, portal.comments.visibleOf(idOf(email)).size(), "comments did not come back");
+        assertEquals(favourites, portal.favourites.visibleOf(idOf(email)).size(), "favourites did not come back");
     }
 
     @Then("the portal holds {int} comments signed by nobody")
     public void theWordsStayUnsigned(int howMany) {
         assertEquals(howMany, portal.comments.signedByNobody().size(),
                 "the thread lost the words an administrator's closure said to keep");
-        assertEquals(0, portal.comments.heldBy(theLeaver).size(),
+        assertEquals(0, portal.comments.heldBy(idOf(theLeaver)).size(),
                 "the leaver's name is still on them");
     }
 
     @Then("the portal holds no memes and no favourites of {word}")
     public void theOtherTwoAreGone(String email) {
-        assertEquals(0, portal.memes.heldBy(email).size(), "memes survived a closure that named them");
-        assertEquals(0, portal.favourites.heldBy(email).size(), "favourites survived");
+        assertEquals(0, portal.memes.heldBy(idOf(email)).size(), "memes survived a closure that named them");
+        assertEquals(0, portal.favourites.heldBy(idOf(email)).size(), "favourites survived");
     }
 
     @Then("the portal holds no favourites of {word}")
     public void noFavouritesLeft(String email) {
-        assertEquals(0, portal.favourites.heldBy(email).size(),
+        assertEquals(0, portal.favourites.heldBy(idOf(email)).size(),
                 "a pointer has nothing to keep, so nothing may keep it");
     }
 
@@ -157,6 +157,11 @@ public class AccountClosureSteps {
         return portal.saidToSecurity().stream().anyMatch(said ->
                 said.path(ClosureMessages.Field.TYPE).asText().equals(type)
                         && said.path(ClosureMessages.Field.EMAIL).asText().equals(email));
+    }
+
+    /** Gherkin names people by address; every row in the portal knows them by id. */
+    private static UserId idOf(String email) {
+        return PortalInOneProcess.idOf(email);
     }
 
     /** Every scenario in this file is about one leaver; the Background names them. */

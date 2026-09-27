@@ -1,6 +1,5 @@
 package com.jrobertgardzinski.portal.closure.collections;
 
-import com.jrobertgardzinski.portal.closure.PortalInOneProcess;
 import com.jrobertgardzinski.identity.UserId;
 import com.jrobertgardzinski.collections.application.InMemoryCollectionRepository;
 import com.jrobertgardzinski.collections.domain.ItemRef;
@@ -26,30 +25,17 @@ import java.util.stream.Stream;
 public final class HeapFavourites extends InMemoryCollectionRepository {
 
     /** Every row of this user's, marked ones included — what "still on the heap" means. */
-    public List<SavedItem> heldBy(String user) {
-        return heldBy(PortalInOneProcess.idOf(user));
-    }
-
-    public List<SavedItem> heldBy(UserId user) {
-        return Stream.concat(activeOf(user).stream(), pendingOf(user).stream()).toList();
-    }
-
-    public List<SavedItem> visibleOf(UserId user) {
-        return activeOf(user);
+    public List<SavedItem> heldBy(UserId userId) {
+        return Stream.concat(activeOf(userId).stream(), pendingOf(userId).stream()).toList();
     }
 
     /** This user's rows that are actually in a list right now. */
-    public List<SavedItem> visibleOf(String user) {
-        return visibleOf(PortalInOneProcess.idOf(user));
+    public List<SavedItem> visibleOf(UserId userId) {
+        return activeOf(userId);
     }
 
-    /** Saves {@code howMany} distinct favourites for a user, named the way the specs read them. */
-    public void saved(String user, int howMany) {
-        saved(user, PortalInOneProcess.idOf(user), howMany);
-    }
-
-    /** Rows written after the cutover: the owner's id beside the address. */
-    public void saved(String user, UserId userId, int howMany) {
+    /** Saves {@code howMany} distinct favourites for a user. */
+    public void saved(UserId userId, int howMany) {
         for (int i = 1; i <= howMany; i++) {
             add(userId, "favourites", new ItemRef("meme", "someones-meme-" + i));
         }

@@ -46,6 +46,6 @@ class HeapCommentsTest {
 
         comments.deleteByMeme(marked.memeId());
 
-        assertEquals(0, comments.heldBy("author@example.com").size());
+        assertEquals(0, comments.heldBy(AUTHOR).size());
     }
 }
