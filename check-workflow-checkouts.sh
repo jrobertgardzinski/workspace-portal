@@ -9,6 +9,14 @@
 # nobody was told about, because the failure looks like an infrastructure hiccup and the local
 # `estate.sh` clone (driven by estate/shared.repos, which WAS updated) keeps working.
 #
+# The same list drifts a second way, and did on 2026-09-26: memes' and comments' `ci.yml` installed
+# `account-closure` BEFORE `user-id`, which is fine until the closure vocabulary starts speaking
+# UserId — from that commit on every run died in "Install the shared libraries" with "Could not find
+# artifact user-id", and nobody was told, because the checkout list was complete and the local builds
+# were green. user-collections happened to list the two the other way round and stayed green, which
+# is what made the failure look like somebody else's problem. So the order is checked too, against
+# the dependencies the libraries' own poms declare.
+#
 # This script makes that drift loud. Run it against a checkout of workspace-shared:
 #   ./check-workflow-checkouts.sh ../shared          # locally, beside the portal workspace
 #   ./check-workflow-checkouts.sh shared             # in CI, after the checkout steps
@@ -18,6 +26,9 @@ set -euo pipefail
 SHARED="${1:-../shared}"
 POM="$SHARED/pom.xml"
 WORKFLOWS=(.github/workflows/ci.yml .github/workflows/e2e-saga.yml)
+# Every workflow that installs shared libraries by hand, this workspace's own and each service's.
+mapfile -t INSTALLERS < <(printf '%s\n' "${WORKFLOWS[@]}" microservice-*/.github/workflows/*.yml \
+  | while read -r f; do [[ -f "$f" ]] && grep -qE '\-f[[:space:]]+[A-Za-z0-9_.-]+/pom\.xml[[:space:]]+install' "$f" && echo "$f"; done)
 
 if [[ ! -f "$POM" ]]; then
   echo "[check-workflow-checkouts] no aggregator at $POM"
@@ -47,6 +58,42 @@ for wf in "${WORKFLOWS[@]}"; do
     echo "    Maven will refuse with 'child module ... does not exist' before a single container starts."
   else
     echo "[check-workflow-checkouts] $wf covers all ${#MODULES[@]} shared modules"
+  fi
+done
+
+# A library must be installed before anything that depends on it: `mvn install` resolves from the
+# local repository, so a consumer built first cannot see a sibling that is not there yet.
+# A guard that covers nothing must say so: in CI these files only exist after the services are
+# checked out, and a silent pass there is exactly how the order drifted unnoticed in the first place.
+if [[ ${#INSTALLERS[@]} -eq 0 ]]; then
+  echo "[check-workflow-checkouts] no workflow installs shared libraries by hand here —"
+  echo "    run this beside the service checkouts (portal/microservice-*), or the order is unchecked."
+  status=1
+fi
+
+for wf in "${INSTALLERS[@]}"; do
+  mapfile -t installed < <(sed -n 's:.*-f[[:space:]]\+\([A-Za-z0-9_.-]\+\)/pom\.xml[[:space:]]\+install.*:\1:p' "$wf")
+  [[ ${#installed[@]} -gt 0 ]] || continue
+  inverted=()
+  for i in "${!installed[@]}"; do
+    name="${installed[$i]}"
+    pom="$SHARED/$name/pom.xml"
+    [[ -f "$pom" ]] || continue
+    for j in "${!installed[@]}"; do
+      dep="${installed[$j]}"
+      [[ "$dep" == "$name" ]] && continue
+      (( j < i )) && continue          # already installed earlier: correct order
+      grep -qE "^[[:space:]]*<artifactId>${dep}</artifactId>[[:space:]]*$" "$pom" \
+        && inverted+=("$name before $dep, which $name's pom depends on")
+    done
+  done
+  if [[ ${#inverted[@]} -gt 0 ]]; then
+    status=1
+    echo "[check-workflow-checkouts] $wf installs the shared libraries out of dependency order:"
+    printf '    %s\n' "${inverted[@]}"
+    echo "    Maven will refuse with 'Could not find artifact' before a single test runs."
+  else
+    echo "[check-workflow-checkouts] $wf installs ${#installed[@]} libraries in dependency order"
   fi
 done
 
