@@ -108,12 +108,12 @@ kopia trzech fake'ów.
 
 ### 2.2 Dług, który zostaje
 
-- **`ClosureOutcome` w trzech kopiach** (`memes/`, `comments/`, `collections/`). Javadoc
-  `DeletionOutcome` sam to wytyka jako błąd, którego strona deletion uniknęła — strona closure go ma.
-- **`requestedRule` skopiowane słowo w słowo** między `MemesClosureParticipant`
-  a `CommentsClosureParticipant` (różnica: jedno słowo w logu), tak samo `markAndConfirm` i cały
-  szkielet guard / `isAddressed` / switch w trzech uczestnikach. Biblioteka `account-closure`
-  objęła *wiadomości*, nie objęła *zachowania*.
+- ~~**`ClosureOutcome` w trzech kopiach**~~ — **jedna kopia w `account-closure`, §6.7(c).**
+- ~~**`requestedRule` skopiowane słowo w słowo**~~ między uczestnikami, ~~tak samo `markAndConfirm`
+  i cały szkielet guard / `isAddressed` / switch w trzech uczestnikach~~ — **§6.7(c):** szkielet
+  w `account-closure` (`ClosureParticipant` / `AtomicClosureParticipant`), reguła
+  w `portal-libs/purge-rule` (`RequestedRule`). Biblioteka objęła *zachowanie*, nie tylko
+  *wiadomości*.
 - ~~**Brakujący port w comments przy zamknięciu konta**~~ — punkt 1.2, **dodany, §6.4.** To był
   reuse, którego brak miał konsekwencję w danych, nie w liniach kodu.
 - **Dwa pojęcia „użytecznego id na drucie"**: `Ids.usable` (package-private w `meme-deletion`)
@@ -228,9 +228,8 @@ i w jednym miejscu, zamiast rozsiane po siedmiu anonimowych klasach.
 1. ~~**`MemeEvents`**~~ — **zrobione tego samego dnia, §6.**
 2. ~~**Rozstrzygnięcie 1.2**~~ — **zdecydowane i zrobione tego samego dnia, §6.4:** zamknięcie
    konta ogłasza skasowane komentarze.
-3. **Kontrakty dla nowych fake'ów** — `VoteRepositoryContractTest` wiążący fake z adapterem
-   JDBC, wzorem `MemeErasureContractTest`.
-4. **Dopiero potem** `ClosureOutcome` i `requestedRule` z punktu 2.2.
+3. ~~**Kontrakty dla nowych fake'ów**~~ — **zrobione, §6.6.**
+4. ~~**Dopiero potem** `ClosureOutcome` i `requestedRule` z punktu 2.2.~~ — **zrobione, §6.7(c).**
 
 ---
 
@@ -313,11 +312,11 @@ Przy okazji wyszło, że o tym samym mówiliśmy na pięć sposobów — *mock*,
 wiersze, a nie *czym* jest klasa, która je trzyma — i dlatego zaczęło wyglądać na trzeci rodzaj
 atrapy obok mocka i fake'a.
 
-Dwie klasy, których `portal-specs` używa, zgodne **nie są**: `InMemoryCollectionRepository`
+Dwie klasy, których `portal-specs` używa, zgodne wtedy **nie były**: `InMemoryCollectionRepository`
 (collections-application) i `InMemorySagaStore` (offboarding-system) — to fake'i noszące nazwę
 zarezerwowaną dla adapterów produkcyjnych. Siedzą w osobnych repozytoriach z własną historią
 (sam offboarding ma ponad dziewięć wywołań), więc ich zmiana nazwy to commit w tamtych repo, nie
-w tym. Zapisane jako dług, nie przeoczone.
+w tym. Zapisane jako dług, nie przeoczone — i **spłacone tego samego dnia, §6.7(a)**.
 
 ### 6.4 Punkt 1.2: zamknięcie konta ogłasza skasowane komentarze
 
@@ -360,13 +359,111 @@ Z kolejności w §5 zostały dwie ostatnie pozycje: kontrakty dla nowych fake'ó
 (`VoteRepositoryContractTest` wzorem `MemeErasureContractTest`), a potem `ClosureOutcome`
 i `requestedRule` z §2.2. Doszły trzy:
 
-- Obietnica „mema zarezerwowanego przez trwającą sagę nikt nie zdejmie" nie ma nigdzie
-  scenariusza. To obietnica *jednego serwisu*, więc jej miejsce to `microservice-memes/specs`.
-- `InMemoryCollectionRepository` i `InMemorySagaStore` to fake'i pod nazwą zarezerwowaną dla
-  adapterów produkcyjnych — §6.3. Commit w tamtych repozytoriach.
-- Ogłoszenie z §6.4 nie ma paktu. `COMMENTS_DELETED` z kaskady ma
-  (`CommentsDeletedPactProviderTest`), a to samo zdarzenie wychodzące z zamknięcia konta idzie tą
-  samą drogą i tym samym outboxem — ale nic tego nie sprawdza od strony transportu.
+- ~~Obietnica „mema zarezerwowanego przez trwającą sagę nikt nie zdejmie" nie ma nigdzie
+  scenariusza.~~ **Ma, §6.7(b)** — w `microservice-memes/specs`, gdzie jej miejsce.
+- ~~`InMemoryCollectionRepository` i `InMemorySagaStore` to fake'i pod nazwą zarezerwowaną dla
+  adapterów produkcyjnych.~~ **Przemianowane, §6.7(a).**
+- ~~Ogłoszenie z §6.4 nie ma paktu.~~ **Sprawdzone, §6.6.**
+
+Z całej listy została jedna pozycja, i to świadomie: **dwa pojęcia „użytecznego id na drucie"**
+z §2.2 (`Ids.usable` w `meme-deletion` i `ClosureCommand.userIdOf`). To jeden pomysł w dwóch
+protokołach, każdy z własnym słownictwem, a nie kopia w jednym — dopóki tak jest, to jest decyzja,
+nie dług.
+
+### 6.6 Dwie pozycje z §6.5, po kolei
+
+**(a) Kontrakty dla nowych fake'ów.** `VoteRepositoryContractTest` i `CommentVotesContractTest` —
+po siedem zdań każdy, zadawane obu implementacjom: stand-inowi z test-jara i adapterowi JDBC na
+prawdziwej bazie (`FakeVoteRepositoryTest` / `JdbcVoteRepositoryTest`,
+`FakeCommentVotesTest` / `JdbcCommentVotesTest`, wzorem `MemeErasureContractTest`). Trzy zdania
+z dawnych testów fake'ów wjechały do kontraktu bez zmian, cztery są nowe: drugi głos tego samego
+wyborcy zastępuje pierwszy, wycofanie zdejmuje tylko jego kartkę, strona wyników zgadza się
+z czytaniem pojedynczym (`scoresOf` / `tallyAll`), i — po stronie memów — `allScores` nazywa
+dokładnie te memy, które mają kartkę.
+
+To ostatnie zdanie **natychmiast zaświeciło na czerwono**: `FakeVoteRepository.allScores` zwracał
+mem, którego ostatnią kartkę wycofano, ze score 0, a adapter go nie zwraca (wiersza już nie ma).
+Ranking czyta tę odpowiedź i mem bez ani jednego głosu stawał w nim wyżej niż mem przegłosowany na
+minus. Poprawione w fake'u, nie w kontrakcie — i to jest dokładnie to ryzyko z §4, złapane pierwszym
+uruchomieniem, a nie za trzy miesiące. Sprawdzone mutacją: po przywróceniu starego `allScores`
+kontrakt czerwienieje.
+
+Czego kontrakty **nie** mówią, wypisane w ich javadocach, żeby asymetrie były w jednym miejscu,
+a nie do odkrycia: głos na mema/komentarz, którego nie ma (to pilnuje SQL adaptera i klucz obcy —
+`OrphanBallotTest`, `UnknownComment`; stand-in nie ma czego zapytać), czas publikacji w `allScores`
+(stand-in go nie zna, więc żaden stand-in nie nadaje się do rankingu), i czy nieobstawione id jest
+w `scoresOf` nieobecne, czy obecne z zerem (port mówi wprost, że to decyzja use case'u — kontrakt
+żąda tylko, by nie czytało się jako cokolwiek innego niż 0).
+
+**(b) Transport ogłoszenia z §6.4.** `ClosureAnnouncementMatchesTheCascadesTest`: ten sam mem i te
+same id komentarzy idą oboma prawdziwymi drogami — kaskadą i zamknięciem konta — i rekordy, które
+wychodzą do brokera, muszą się zgadzać: temat, klucz partycji i cała treść z dokładnością do id
+koperty (na nim właśnie konsument deduplikuje, więc te dwa muszą się różnić). Rekord kaskady jest
+zweryfikowany paktem konsumenta (`CommentsDeletedPactProviderTest`), więc przypięcie do niego
+przenosi tę gwarancję na drugiego producenta — w tym nazwę tematu, czyli tę dziurę, którą audyt
+26.07 nazwał najgroźniejszą. Drugi test przy okazji: zamknięcie, które nic nie skasowało, nic nie
+ogłasza (obietnica z javadoca `eraseAndAnnounce` — puste ogłoszenie nie nosi faktu i wracałoby przy
+każdym ponowieniu ERASE). Oba sprawdzone mutacją: po wycięciu ogłoszenia z uczestnika test pada.
+
+Dlaczego **porównanie, a nie drugi provider test od paktu**: pact-jvm szuka metody
+`@PactVerifyProvider` po OPISIE interakcji, skanując classpath, a konsument ma jedną interakcję
+`COMMENTS_DELETED`. Dwie metody odpowiadające na ten sam opis sprawiają, że wybór między nimi jest
+losowy — próba stanęła na tym od razu (weryfikator wszedł w `CommentsDeletedPactProviderTest`
+zamiast we własną klasę), a gdyby trafił odwrotnie, to weryfikacja **kaskady** po cichu dowodziłaby
+czegoś o rekordzie zamknięcia. Jeżeli kolekcje kiedyś nazwą osobny stan („given an account closure
+erased comments"), to wraca do paktu jako druga metoda — po ich stronie.
+
+*Pobocznie, poza tą listą:* `memes-ui` ma czerwony test (`gallery.test.tsx`, timeout 5 s) —
+nietknięte, nie z tej zmiany, ale pełny reaktor memów przechodzi tylko z pominięciem tego modułu.
+
+### 6.7 Resztki z §6.5, dokończone
+
+**(a) Nazwy dwóch fake'ów.** `InMemoryCollectionRepository` → `FakeCollectionRepository`
+(collections-application, plus `FakeFavourites` w portal-specs, które je rozszerza) i
+`InMemorySagaStore` → `FakeSagaStore` (offboarding-system): razem trzydzieści miejsc w dwóch
+repozytoriach. Tabela w `portal-specs/README.md` mówi teraz, że majątek mówi jednym słowem, zamiast
+wyliczać dwa wyjątki; javadoc `FakeFavourites` stracił akapit tłumaczący, dlaczego nazywa się inaczej
+niż klasa, którą rozszerza. Przy okazji zniknęło „heap" z javadoców obu klas — słowo wycofane
+w §6.3, a w tekście zostało.
+
+**(b) Scenariusz rezerwacji.** `microservice-memes/specs/account-erasure.feature`, reguła „While
+the SAGA holds a MEME, nobody takes it down": po MARK ani autor, ani MODERATOR nie zdejmuje mema —
+endpoint pyta najpierw galerię, a zarezerwowanego mema w niej nie ma, więc odmowa to „no such meme"
+dla obu i nic za tą kontrolą się nie wykonuje. Potem kompensacja oddaje mem, a obraz jest dalej na
+dysku, czyli naprawdę nikt go nie zdjął. Trzy kroki glue w `ErasureSagaSteps`. Sprawdzone mutacją:
+bez `markForErasure` w kroku PURGE autor kasuje mema i scenariusz pada (200 zamiast 404).
+
+**(c) `ClosureOutcome`, `requestedRule`, `markAndConfirm`.** Trzy kopie `ClosureOutcome` zastąpione
+jedną w `shared/account-closure` — z tego samego powodu, który javadoc `DeletionOutcome` podawał,
+patrząc na tę stronę (ten javadoc mówi teraz, jak jest). Jedna zmiana w samym słownictwie: liczby.
+`Reserved(rows)` liczą wszystkie trzy osie, bo to jest to, co słyszy orkiestrator; `Erased(rows,
+leftBehind)` i `Restored(rows)` mają `UNCOUNTED = -1` dla osi, której use case liczby nie oddaje —
+nie zero, bo zero jest odpowiedzią („ten człowiek nie miał u nas nic"), a uczestnik, który nie
+liczy, nie ma jej udawać.
+
+Szkielet wyjechał do `account-closure` jako `ClosureParticipant` (strażnik, drop komendy bez
+adresata, switch, ostrzeżenie o marku, który nic nie zarezerwował) i `AtomicClosureParticipant`
+(mark i jego potwierdzenie w jednym unit of work) — ten sam podział na dwa poziomy, który po stronie
+testów robią `ClosureParticipantContractTest` i `AtomicParticipantContractTest`. Kolekcje rozszerzają
+poziom niższy, bo nie mają outboxu, więc nie mają własnego potwierdzenia do zacommitowania razem
+z markiem. Logger jest `getClass()`, żeby linia dalej nazywała uczestnika, a nie szkielet — na tym
+stoją testy logów w trzech serwisach. Zdanie INFO o marku zostało przy osi (hook `marked`), i dalej
+pada po commicie, nie w środku transakcji. Biblioteka przestała być samym słownictwem, więc dostała
+własny test szkieletu (`SkeletonParticipantTest`, uczestnik o jednej liczbie) — dotąd jej zachowanie
+sprawdzałyby tylko trzy kopie podklasy, czyli dokładnie to, co ten refaktor likwiduje.
+
+`requestedRule` wylądowało w `portal-libs/purge-rule` jako `RequestedRule`, **nie**
+w `account-closure`: biblioteka sagi wie, że zamknięcie wiozą warunki, i celowo nie wie, co one
+mówią — to słownictwo portalu (a trzeci uczestnik nie czyta ich wcale). Zwraca regułę i *zdanie do
+zalogowania*, bez tekstu reguły, bo ten pochodzi z kreatora odchodzącego — więc oba warianty logu
+zostały słowo w słowo, razem z nazwą osi, na której stoją asercje w `comments-infrastructure`.
+
+Dwie rzeczy wyszły przy okazji: switch po trzech w pełni kwalifikowanych `ClosureOutcome.Reserved`
+w `ClosureInOneProcess` zwinął się do jednego czytania, a `PurgeCommandsConsumer` w kolekcjach
+buduje potwierdzenie z `reserved.rows()` zamiast `references()`.
+
+Zielone po całości: memes 238 (bez `memes-ui`), comments 170, collections 172, offboarding 83,
+portal-specs 66, `account-closure` 18, `purge-rule` 11.
 
 *Kontekst kodu: §§0–5 opisują stan po commitach z 28.09.2026 (`69cb8c7` w `workspace-portal`,
 `80a9aec` w `microservice-memes`, `ab178cb` w `microservice-comments`) i numery linii są z tego
