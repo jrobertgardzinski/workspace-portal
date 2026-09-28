@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.jrobertgardzinski</groupId>
+    <artifactId>portal-libs</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>portal-libs</name>
+    <description>
+        The words the PORTAL's repositories share with each other and with nobody else.
+
+        The estate has a shared kernel (../../shared) and it is not this. The kernel is what the
+        two PRODUCTS share — identity, and the generic mechanisms any service would want: a unit
+        of work, an outbox, an envelope, a clock. What lives HERE speaks the portal's own domain:
+        a meme, its thread, an author, what may be kept of a leaver's content. The F1 game has no
+        use for a single one of these words, and putting them in the kernel meant the kernel
+        knew what a meme was.
+
+        That is not a hypothetical tidiness argument. These three libraries sat in `shared/`
+        until 2026-09-28 and none of them was ever listed among the kernel's libraries in
+        `shared/CLAUDE.md` — they arrived one at a time, each an obvious place for one more
+        cross-repository word, because there WAS no other place. Four portal repositories need a
+        vocabulary none of them can own; the only home the estate offered was the kernel. This
+        repository is that missing home.
+
+        The dependency direction is the whole point and it runs one way: these modules depend on
+        the kernel (`unit-of-work`, `user-id`), and nothing in the kernel depends on them.
+        `account-closure` deliberately stayed behind — microservice-security reads its
+        ClosureMessages, so it is the contract BETWEEN identity and the portal, and identity is
+        shared with the game.
+
+        A pure aggregator, NOT the parent of the modules: every one stays buildable on its own,
+        the estate's rule everywhere.
+    </description>
+
+    <modules>
+        <!-- what may be kept of a leaver's content: three words and their grammar -->
+        <module>purge-rule</module>
+        <!-- the names behind the author ids a meme and a comment carry -->
+        <module>author-directory</module>
+        <!-- the cascade a deleted meme sets off: its thread, and every saved pointer at both -->
+        <module>meme-deletion</module>
+    </modules>
+
+</project>
