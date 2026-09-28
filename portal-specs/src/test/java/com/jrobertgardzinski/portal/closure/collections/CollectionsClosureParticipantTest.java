@@ -8,7 +8,7 @@ import com.jrobertgardzinski.closure.ClosureParticipantContractTest;
 import com.jrobertgardzinski.collections.application.MarkUserItemsForErasure;
 import com.jrobertgardzinski.collections.application.PurgeUserItems;
 import com.jrobertgardzinski.collections.application.RestoreUserItems;
-import com.jrobertgardzinski.collections.closure.ClosureOutcome;
+import com.jrobertgardzinski.closure.ClosureOutcome;
 import com.jrobertgardzinski.collections.closure.CollectionsClosureParticipant;
 import com.jrobertgardzinski.collections.domain.ItemRef;
 import com.jrobertgardzinski.collections.domain.Observation;

@@ -39,7 +39,8 @@ This module is compliant: `world.FakeMemes`, `FakeComments`, `FakeFavourites` we
 the vocabulary was settled, and "heap" said where the rows live, not what kind of thing was
 holding them — which is how it came to look like a third kind of double.
 
-Two classes portal-specs consumes are NOT compliant and are named `InMemory*` while being fakes:
-`collections-application`'s `InMemoryCollectionRepository` and `offboarding-system`'s
-`InMemorySagaStore`. They live in repositories of their own with their own history (nine-plus
-call sites in offboarding alone), so renaming them is their repositories' commit, not this one's.
+The two classes portal-specs consumes from the neighbouring repositories are compliant as well
+since 28.09.2026: `collections-application`'s `FakeCollectionRepository` (which `FakeFavourites`
+extends) and `offboarding-system`'s `FakeSagaStore` were `InMemory*` while being fakes, which is
+the one name the table reserves for a production adapter. The rename was their repositories'
+commit, not this one's — this note says the estate now spells it one way.

@@ -8,6 +8,8 @@ import com.jrobertgardzinski.closure.ClosureConfirmation;
 import com.jrobertgardzinski.closure.ClosureConfirmations;
 import com.jrobertgardzinski.purge.PurgeRule;
 import com.jrobertgardzinski.closure.ClosureMessages;
+import com.jrobertgardzinski.closure.ClosureOutcome;
+import com.jrobertgardzinski.closure.ClosureParticipant;
 import com.jrobertgardzinski.collections.application.MarkUserItemsForErasure;
 import com.jrobertgardzinski.collections.application.PurgeUserItems;
 import com.jrobertgardzinski.collections.application.RestoreUserItems;
@@ -37,7 +39,7 @@ import com.jrobertgardzinski.offboarding.application.Destination;
 import com.jrobertgardzinski.offboarding.application.EventsRouter;
 import com.jrobertgardzinski.offboarding.application.Source;
 import com.jrobertgardzinski.offboarding.system.BeginOffboarding;
-import com.jrobertgardzinski.offboarding.system.InMemorySagaStore;
+import com.jrobertgardzinski.offboarding.system.FakeSagaStore;
 import com.jrobertgardzinski.offboarding.system.RecordConfirmation;
 import com.jrobertgardzinski.offboarding.system.SweepOverdue;
 
@@ -100,7 +102,7 @@ public final class ClosureInOneProcess {
     final FakeComments comments = world.comments;
     final FakeFavourites favourites = world.favourites;
 
-    private final InMemorySagaStore sagas = new InMemorySagaStore();
+    private final FakeSagaStore sagas = new FakeSagaStore();
     private final EventsRouter router;
     private final MemesClosureParticipant memesParticipant;
     private final CommentsClosureParticipant commentsParticipant;
@@ -224,19 +226,17 @@ public final class ClosureInOneProcess {
         ClosureCommand parsed = new ClosureCommand(type, sagaId, leaver, initiatedBy,
                 rule.isMissingNode() ? Optional.empty() : Optional.of(rule.asText()));
 
-        // the count each participant reserved, or -1 for "this was not the reversible step"
-        int reserved = switch (participant) {
-            case MEMES -> memesParticipant.handle(parsed)
-                    instanceof com.jrobertgardzinski.memes.closure.ClosureOutcome.Reserved(int memes)
-                    ? memes : -1;
-            case COMMENTS -> commentsParticipant.handle(parsed)
-                    instanceof com.jrobertgardzinski.comments.closure.ClosureOutcome.Reserved(int said)
-                    ? said : -1;
-            case COLLECTIONS -> collectionsParticipant.handle(parsed)
-                    instanceof com.jrobertgardzinski.collections.closure.ClosureOutcome.Reserved(int refs)
-                    ? refs : -1;
+        // one vocabulary for all three since 28.09.2026: this used to be three fully-qualified
+        // ClosureOutcome.Reserved patterns, one per service, in a switch that existed only because
+        // the three said the same thing in three types
+        ClosureParticipant axis = switch (participant) {
+            case MEMES -> memesParticipant;
+            case COMMENTS -> commentsParticipant;
+            case COLLECTIONS -> collectionsParticipant;
             default -> throw new IllegalStateException("no such participant: " + participant);
         };
+        // the count it reserved, or -1 for "this was not the reversible step"
+        int reserved = axis.handle(parsed) instanceof ClosureOutcome.Reserved(int rows) ? rows : -1;
         if (reserved < 0) {
             return Optional.empty();
         }

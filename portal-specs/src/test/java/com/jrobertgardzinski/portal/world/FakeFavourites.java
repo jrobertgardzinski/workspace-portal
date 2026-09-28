@@ -1,7 +1,7 @@
 package com.jrobertgardzinski.portal.world;
 
 import com.jrobertgardzinski.identity.UserId;
-import com.jrobertgardzinski.collections.application.InMemoryCollectionRepository;
+import com.jrobertgardzinski.collections.application.FakeCollectionRepository;
 import com.jrobertgardzinski.collections.domain.ItemRef;
 import com.jrobertgardzinski.collections.domain.SavedItem;
 
@@ -12,24 +12,20 @@ import java.util.stream.Stream;
 
 /**
  * The favourites service's rows in this process — a thin subclass of
- * {@link InMemoryCollectionRepository}, collections-application's own reference fake for
+ * {@link FakeCollectionRepository}, collections-application's own reference fake for
  * {@code CollectionRepository}/{@code ItemErasure}, reached through this repository's test-jar
  * dependency on it. Used to be a byte-for-byte copy of that class, kept only because this runner
  * could not see any test source of collections-application's — it can, and always could, since
  * portal-specs already depends on {@code collections-application} as a test-jar for its
  * {@code ItemErasureContractTest}.
  *
- * <p>Named {@code Fake} and not {@code InMemory} like the class it extends: in this repository a
- * {@code Fake} is a working test double and an {@code InMemory} is a production adapter that keeps
- * its rows in RAM. The parent predates the rule and lives in another repository's history; see
- * portal-specs/README.md.
  *
- * <p>What is left here is exactly what {@link InMemoryCollectionRepository} does not do: name a few
+ * <p>What is left here is exactly what {@link FakeCollectionRepository} does not do: name a few
  * convenience readers the Gherkin steps and {@code CollectionsClosureParticipantTest} already
  * speak in ({@link #heldBy}, {@link #visibleOf}, {@link #saved}). No erasure logic lives in this
  * class any more — there is nothing left here that could drift from the fake it extends.
  */
-public final class FakeFavourites extends InMemoryCollectionRepository {
+public final class FakeFavourites extends FakeCollectionRepository {
 
     /** Whom this fake has saved for: the repository it extends keys by user and walks none. */
     private final Set<UserId> savers = new LinkedHashSet<>();
