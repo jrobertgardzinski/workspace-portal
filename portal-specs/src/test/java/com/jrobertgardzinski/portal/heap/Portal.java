@@ -8,7 +8,7 @@ import com.jrobertgardzinski.collections.application.RestoreUserItems;
 import com.jrobertgardzinski.collections.closure.CollectionsClosureParticipant;
 import com.jrobertgardzinski.collections.deletion.CollectionsDeletionParticipant;
 import com.jrobertgardzinski.comments.application.CommentEvents;
-import com.jrobertgardzinski.comments.application.CommentVotes;
+import com.jrobertgardzinski.comments.application.FakeCommentVotes;
 import com.jrobertgardzinski.comments.application.DeleteThread;
 import com.jrobertgardzinski.comments.application.MarkUserCommentsForErasure;
 import com.jrobertgardzinski.comments.application.PurgeUserComments;
@@ -19,11 +19,11 @@ import com.jrobertgardzinski.memes.application.DeleteMeme;
 import com.jrobertgardzinski.memes.application.MarkUserContentForErasure;
 import com.jrobertgardzinski.memes.application.MemeContentIndex;
 import com.jrobertgardzinski.memes.application.MemeEvents;
-import com.jrobertgardzinski.memes.application.PurgePolicyOverride;
+import com.jrobertgardzinski.memes.application.FakePurgePolicyOverride;
 import com.jrobertgardzinski.memes.application.PurgeUserContent;
 import com.jrobertgardzinski.memes.application.RestoreUserContent;
 import com.jrobertgardzinski.memes.application.TagRepository;
-import com.jrobertgardzinski.memes.application.VoteRepository;
+import com.jrobertgardzinski.memes.application.FakeVoteRepository;
 import com.jrobertgardzinski.memes.closure.MemesClosureParticipant;
 import com.jrobertgardzinski.observation.Observations;
 import com.jrobertgardzinski.purge.PurgeRule;
@@ -55,6 +55,17 @@ public final class Portal {
     public final HeapMemes memes = new HeapMemes();
     public final HeapComments comments = new HeapComments();
     public final HeapFavourites favourites = new HeapFavourites();
+
+    /**
+     * The ballots, and the admin's dial. Real stand-ins rather than mocks, because a score is not
+     * scenery: {@code KEEP_POPULAR_ANONYMIZED} is the one purge rule that reads one, and the
+     * ordering both purges depend on — the leaver's own ballots retracted BEFORE any score is read
+     * — is invisible to a store that answers 0 whatever happens to it. They come from the services'
+     * own test-jars, so the specs and each service's use-case tests count votes the same way.
+     */
+    public final FakeVoteRepository memeVotes = new FakeVoteRepository();
+    public final FakeCommentVotes commentVotes = new FakeCommentVotes();
+    public final FakePurgePolicyOverride purgePolicy = new FakePurgePolicyOverride();
 
     /** The specs' clock; a saga's patience is measured against it. */
     private Instant now = Instant.parse("2026-09-24T12:00:00Z");
@@ -88,9 +99,9 @@ public final class Portal {
         return new MemesClosureParticipant(
                 new MarkUserContentForErasure(memes, clock()),
                 new RestoreUserContent(memes),
-                new PurgeUserContent(memes, memes, mock(VoteRepository.class),
+                new PurgeUserContent(memes, memes, memeVotes,
                         mock(MemeContentIndex.class), mock(TagRepository.class),
-                        mock(MemeEvents.class), mock(PurgePolicyOverride.class),
+                        mock(MemeEvents.class), purgePolicy,
                         new PurgeRule.Delete()),
                 confirmations, Observations.silent(), Runnable::run);
     }
@@ -99,7 +110,7 @@ public final class Portal {
         return new CommentsClosureParticipant(
                 new MarkUserCommentsForErasure(comments, clock()),
                 new RestoreUserComments(comments),
-                new PurgeUserComments(comments, comments, mock(CommentVotes.class),
+                new PurgeUserComments(comments, comments, commentVotes,
                         new PurgeRule.Delete()),
                 confirmations, Observations.silent(), Runnable::run);
     }
@@ -116,14 +127,14 @@ public final class Portal {
 
     /** Where the cascade starts: the author's own teardown, announcing through the port given. */
     public DeleteMeme deleteMeme(MemeEvents memeEvents) {
-        return new DeleteMeme(memes, mock(VoteRepository.class), mock(MemeContentIndex.class),
+        return new DeleteMeme(memes, memeVotes, mock(MemeContentIndex.class),
                 mock(TagRepository.class), memeEvents);
     }
 
     public CommentsDeletionParticipant commentsDeletion(CommentEvents commentEvents,
                                                         UnitOfWork unitOfWork) {
         return new CommentsDeletionParticipant(
-                new DeleteThread(comments, comments, mock(CommentVotes.class)),
+                new DeleteThread(comments, comments, commentVotes),
                 commentEvents, unitOfWork);
     }
 

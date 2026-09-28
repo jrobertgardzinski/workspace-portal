@@ -76,6 +76,8 @@ public final class ClosureInOneProcess {
     private final Portal world = new Portal();
 
     // the steps read the portal through this class; the rows themselves are the world's
+    final com.jrobertgardzinski.memes.application.FakeVoteRepository memeVotes = world.memeVotes;
+    final com.jrobertgardzinski.comments.application.FakeCommentVotes commentVotes = world.commentVotes;
     final HeapMemes memes = world.memes;
     final HeapComments comments = world.comments;
     final HeapFavourites favourites = world.favourites;

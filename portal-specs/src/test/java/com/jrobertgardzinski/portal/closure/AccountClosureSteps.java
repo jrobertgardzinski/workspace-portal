@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.jrobertgardzinski.closure.ClosureInitiator;
 import com.jrobertgardzinski.closure.ClosureMessages;
 import com.jrobertgardzinski.identity.UserId;
+import com.jrobertgardzinski.voting.VoteDirection;
 import io.cucumber.java.Before;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
@@ -39,6 +40,39 @@ public class AccountClosureSteps {
     public void theOwnerAsksStatingConditions(String email, String part, String rule) {
         portal.securityAnnouncesClosureOf(email, ClosureInitiator.SELF.wire(),
                 "{\"" + part + "\":\"" + rule + "\"}");
+    }
+
+    /**
+     * The community's verdict, cast by people who are NOT leaving — which is the whole point of a
+     * popularity condition. The leaver's own ballots are retracted by the purge before any score
+     * is read, so a score built out of them would be a score that no longer exists a line later.
+     */
+    @Given("{int} people upvoted {int} of {word}'s memes")
+    public void theCommunityUpvotedMemes(int voters, int howManyMemes, String email) {
+        for (int meme = 1; meme <= howManyMemes; meme++) {
+            for (int voter = 1; voter <= voters; voter++) {
+                portal.memeVotes.cast(email + "-meme-" + meme, "fan-" + voter + "@example.com",
+                        VoteDirection.UP);
+            }
+        }
+    }
+
+    @Given("{int} people upvoted {int} of {word}'s comments")
+    public void theCommunityUpvotedComments(int voters, int howManyComments, String email) {
+        for (int comment = 1; comment <= howManyComments; comment++) {
+            for (int voter = 1; voter <= voters; voter++) {
+                portal.commentVotes.cast(email + "-comment-" + comment,
+                        "fan-" + voter + "@example.com", VoteDirection.UP);
+            }
+        }
+    }
+
+    @When("an administrator closes {word}, choosing {word}={word} and {word}={word}")
+    public void anAdministratorClosesStatingTwo(String email, String firstPart, String firstRule,
+                                                String secondPart, String secondRule) {
+        portal.securityAnnouncesClosureOf(email, ClosureInitiator.ADMIN.wire(),
+                "{\"" + firstPart + "\":\"" + firstRule + "\",\""
+                        + secondPart + "\":\"" + secondRule + "\"}");
     }
 
     @When("an administrator closes {word}, choosing {word}={word}")
@@ -140,6 +174,14 @@ public class AccountClosureSteps {
                 "the thread lost the words an administrator's closure said to keep");
         assertEquals(0, portal.comments.heldBy(idOf(theLeaver)).size(),
                 "the leaver's name is still on them");
+    }
+
+    @Then("the portal holds {int} meme and {int} comment signed by nobody")
+    public void whatTheCommunityKeptStaysUnsigned(int memes, int comments) {
+        assertEquals(memes, portal.memes.signedByNobody().size(),
+                "the gallery lost a meme the community's verdict said to keep");
+        assertEquals(comments, portal.comments.signedByNobody().size(),
+                "the thread lost the words the community's verdict said to keep");
     }
 
     @Then("the portal holds no memes and no favourites of {word}")

@@ -77,6 +77,22 @@ Feature: Closing an account — what becomes of everything the leaver left behin
       Then the portal holds 3 comments signed by nobody
       And the portal holds no memes and no favourites of alice@example.com
 
+  Rule: A popularity condition is answered by the community, and splits each part from within
+
+    KEEP_POPULAR_ANONYMIZED states one threshold for the whole closure, and what meets it is not
+    the portal's to decide — the readers already decided, part by part and item by item. So one
+    command both keeps and destroys inside the SAME part, which is a sentence no single repository
+    can finish: the gallery does not know what the threads kept, and neither of them knows that a
+    saved pointer was never in the running.
+
+    Example: what the readers liked survives without its author, the rest goes
+      Given 3 people upvoted 1 of alice@example.com's memes
+      And 3 people upvoted 1 of alice@example.com's comments
+      When an administrator closes alice@example.com, choosing memes=KEEP_POPULAR_ANONYMIZED:2 and comments=KEEP_POPULAR_ANONYMIZED:2
+      And every part of the portal answers
+      Then the portal holds 1 meme and 1 comment signed by nobody
+      And the portal holds nothing of alice@example.com
+
   Rule: A saved reference has no conditions to honour
 
     A favourite is a pointer at somebody else's meme: nothing to anonymise, nothing to keep for
