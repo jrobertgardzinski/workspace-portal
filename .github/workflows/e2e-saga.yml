@@ -266,7 +266,6 @@ jobs:
       - name: The checkout list covers every shared module, in dependency order
         run: ./check-workflow-checkouts.sh ../shared
         working-directory: portal
-          token: ${{ secrets.REPO_PAT }}
 
       - name: Set up JDK 25
         uses: actions/setup-java@v5
