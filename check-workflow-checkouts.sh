@@ -17,6 +17,13 @@
 # is what made the failure look like somebody else's problem. So the order is checked too, against
 # the dependencies the libraries' own poms declare.
 #
+# Since 2026-09-28 there is a SECOND source of libraries: portal-libs, this workspace's own
+# vocabulary (purge-rule, author-directory, meme-deletion), which left the kernel because nothing
+# outside this product ever spoke a word of it. It is one repository with one aggregator, so the
+# module-level drift above cannot happen to it — one checkout brings all three. What CAN still
+# happen is forgetting the checkout entirely, or installing it before the kernel libraries its
+# modules depend on, so both are checked below.
+#
 # This script makes that drift loud. Run it against a checkout of workspace-shared:
 #   ./check-workflow-checkouts.sh ../shared          # locally, beside the portal workspace
 #   ./check-workflow-checkouts.sh shared             # in CI, after the checkout steps
@@ -51,6 +58,13 @@ for wf in "${WORKFLOWS[@]}"; do
     # The Python stubs and the portal services are not shared modules, so only shared/<module> counts.
     grep -qE "^[[:space:]]*path:[[:space:]]*shared/${m}[[:space:]]*(#.*)?$" "$wf" || missing+=("$m")
   done
+  # this workspace's own libraries: one repository, so one checkout covers all of its modules
+  if ! grep -qE "^[[:space:]]*path:[[:space:]]*portal/portal-libs[[:space:]]*(#.*)?$" "$wf"; then
+    status=1
+    echo "[check-workflow-checkouts] $wf does not check out portal-libs"
+    echo "    the portal reactor builds it (pom.xml lists it), so Maven will refuse with"
+    echo "    'child module .../portal-libs does not exist' before a single container starts."
+  fi
   if [[ ${#missing[@]} -gt 0 ]]; then
     status=1
     echo "[check-workflow-checkouts] $wf does not check out: ${missing[*]}"
@@ -77,13 +91,19 @@ for wf in "${INSTALLERS[@]}"; do
   inverted=()
   for i in "${!installed[@]}"; do
     name="${installed[$i]}"
-    pom="$SHARED/$name/pom.xml"
-    [[ -f "$pom" ]] || continue
+    # portal-libs declares nothing itself: it is a pure aggregator, and what it needs from the
+    # kernel is declared by the three modules under it.
+    if [[ "$name" == portal-libs ]]; then
+      mapfile -t poms < <(compgen -G "portal-libs/*/pom.xml" || true)
+    else
+      poms=("$SHARED/$name/pom.xml")
+    fi
+    [[ -f "${poms[0]:-}" ]] || continue
     for j in "${!installed[@]}"; do
       dep="${installed[$j]}"
       [[ "$dep" == "$name" ]] && continue
       (( j < i )) && continue          # already installed earlier: correct order
-      grep -qE "^[[:space:]]*<artifactId>${dep}</artifactId>[[:space:]]*$" "$pom" \
+      grep -qE "^[[:space:]]*<artifactId>${dep}</artifactId>[[:space:]]*$" "${poms[@]}" \
         && inverted+=("$name before $dep, which $name's pom depends on")
     done
   done

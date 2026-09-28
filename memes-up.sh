@@ -23,15 +23,18 @@ for arg in "$@"; do
 done
 set -- "${ARGS[@]+"${ARGS[@]}"}"
 
-# shared kernel first (libs into ~/.m2 + identity jars; voting and purge-rule ride along —
-# the gallery and comments vote through one and close accounts by the other), then the memes jars.
+# shared kernel first (libs into ~/.m2 + identity jars; voting rides along — the gallery and the
+# comment threads both vote through it), then the portal's own vocabulary, then the memes jars.
+# portal-libs is a SECOND install and not another -pl on the line above: it lives in this
+# workspace now, not in the kernel, which is the whole point of the 2026-09-28 move.
 #
 # `clean` on purpose: target/lib is filled by copy-dependencies, which only ADDS — after a module
 # rename the old jars stay next to the new ones, both land in the image, and the JVM picks whichever
 # copy of a class it meets first (2026-09-04: NoSuchMethodError on PasswordPolicy after the
 # password-security-* -> password-* flattening, with a green build). The layer splits of
 # 2026-09-24 renamed a great deal, so this matters more now than it did when it was written.
-(cd ../shared && ./mvnw -q -pl microservice-security/security-infrastructure,microservice-email,voting,purge-rule -am clean install -DskipTests)
+(cd ../shared && ./mvnw -q -pl microservice-security/security-infrastructure,microservice-email,voting -am clean install -DskipTests)
+./mvnw -q -f portal-libs/pom.xml clean install -DskipTests
 ./mvnw -q -pl microservice-memes/memes-infrastructure,microservice-comments/comments-infrastructure -am clean package -DskipTests
 
 OBS=()

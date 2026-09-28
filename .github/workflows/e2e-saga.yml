@@ -135,11 +135,6 @@ jobs:
           path: shared/voting
       - uses: actions/checkout@v7
         with:
-          repository: jrobertgardzinski/purge-rule
-          path: shared/purge-rule
-          token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v7
-        with:
           repository: jrobertgardzinski/offline-jwt
           path: shared/offline-jwt
           token: ${{ secrets.REPO_PAT }}
@@ -160,11 +155,6 @@ jobs:
           token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v7
         with:
-          repository: jrobertgardzinski/meme-deletion
-          path: shared/meme-deletion
-          token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v7
-        with:
           repository: jrobertgardzinski/account-closure
           path: shared/account-closure
           token: ${{ secrets.REPO_PAT }}
@@ -172,11 +162,6 @@ jobs:
         with:
           repository: jrobertgardzinski/user-id
           path: shared/user-id
-          token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v7
-        with:
-          repository: jrobertgardzinski/author-directory
-          path: shared/author-directory
           token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v7
         with:
@@ -234,6 +219,12 @@ jobs:
 
       # the portal's own children — microservice-image is Python for the same reason, and memes
       # calls it for WebP, so its context has to be here too
+      # the portal's own vocabulary, which used to sit in the kernel as three separate repos
+      - uses: actions/checkout@v7
+        with:
+          repository: jrobertgardzinski/portal-libs
+          path: portal/portal-libs
+          token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/microservice-memes

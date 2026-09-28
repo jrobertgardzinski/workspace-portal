@@ -16,13 +16,19 @@
         independent git repository; this pom only ties them into a single Maven
         reactor. It is a pure aggregator — NOT the parent of the modules.
 
-        The shared kernel (identity + libraries) lives in ../shared and feeds this
-        reactor through ~/.m2 — build it first: (cd ../shared; ./mvnw install).
+        The shared kernel (identity + the libraries BOTH products could want) lives in
+        ../shared and feeds this reactor through ~/.m2 — build it first:
+        (cd ../shared; ./mvnw install). What only the portal speaks — a meme, its thread,
+        an author, what may be kept of a leaver's content — lives in portal-libs, HERE, and
+        depends on the kernel rather than the other way round.
         infra-up.sh does exactly that. The F1 game is the OTHER product (../formula);
         the two share only identity.
     </description>
 
     <modules>
+        <!-- the portal's own vocabulary, ahead of everything that speaks it: three libraries that
+             sat in the shared kernel until 2026-09-28, where nothing but this product used them -->
+        <module>portal-libs</module>
         <module>microservice-memes</module>
         <module>microservice-comments</module>
         <module>microservice-user-collections</module>
