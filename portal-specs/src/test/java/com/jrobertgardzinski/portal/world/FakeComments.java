@@ -1,4 +1,4 @@
-package com.jrobertgardzinski.portal.heap;
+package com.jrobertgardzinski.portal.world;
 
 import com.jrobertgardzinski.comments.domain.CommentStatus;
 import com.jrobertgardzinski.identity.UserId;
@@ -12,8 +12,8 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
- * The comment service's rows on the heap — a thin subclass of {@link FakeCommentErasure},
- * comments-application's own reference stand-in for {@code CommentErasure}, reached through this
+ * The comment service's rows in this process — a thin subclass of {@link FakeCommentErasure},
+ * comments-application's own reference fake for {@code CommentErasure}, reached through this
  * repository's test-jar dependency on it. What is added here is the {@code CommentRepository} axis
  * over the SAME backing list, and the convenience readers the specs already call by name.
  *
@@ -24,32 +24,36 @@ import java.util.stream.Stream;
  * fully self-contained version of this class got exactly this wrong: {@code findByMeme} read
  * through {@code allUnder}, which does not filter, and nothing here exercised the difference.
  */
-public final class HeapComments extends FakeCommentErasure implements CommentRepository {
+public final class FakeComments extends FakeCommentErasure implements CommentRepository {
 
     private final List<Comment> rows;
 
-    public HeapComments() {
+    public FakeComments() {
         this(new ArrayList<>());
     }
 
-    private HeapComments(List<Comment> rows) {
+    private FakeComments(List<Comment> rows) {
         super(rows);
         this.rows = rows;
     }
 
-    /** {@code howMany} comments of one person; the prefix only keeps the ids readable in a failure. */
+    /**
+     * {@code howMany} comments of one person, under the ids {@link ContentIds} mints for
+     * {@code <prefix>-comment-<n>}. A comment id travels on the cascade's wire too, inside
+     * COMMENTS_DELETED, so it is held to the same contract as a meme's.
+     */
     public void wrote(String prefix, UserId userId, int howMany) {
         for (int i = 1; i <= howMany; i++) {
-            wrote(prefix + "-comment-" + i, userId);
+            wrote(ContentIds.of(prefix + "-comment-" + i), userId);
         }
     }
 
     public void wrote(String id, UserId userId) {
-        rows.add(new Comment(id, "someones-meme", Optional.of(userId), "a comment",
+        rows.add(new Comment(id, ContentIds.of("someones-meme"), Optional.of(userId), "a comment",
                 CommentStatus.ACTIVE, null));
     }
 
-    /** Every comment of this person's, marked ones included — what "still on the heap" means. */
+    /** Every comment of this person's, marked ones included — what "the portal still holds" means. */
     public List<Comment> heldBy(UserId userId) {
         return Stream.concat(activeOf(userId).stream(), pendingOf(userId).stream()).toList();
     }

@@ -1,4 +1,4 @@
-package com.jrobertgardzinski.portal.heap;
+package com.jrobertgardzinski.portal.world;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,17 +11,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The {@code MemeRepository} axis {@link HeapMemes} adds on top of the inherited
+ * The {@code MemeRepository} axis {@link FakeMemes} adds on top of the inherited
  * {@code FakeMemeErasure}: every read must hide a meme a running saga has marked, exactly like the
  * real adapter's {@code active_memes} view. The erasure axis itself is not retested here — it is
  * inherited unmodified, and memes-application's own {@code FakeMemeErasureTest} already dogfoods it
  * against the contract.
  */
-class HeapMemesTest {
+class FakeMemesTest {
 
     private static final UserId AUTHOR = UserId.random();
 
-    private final HeapMemes memes = new HeapMemes();
+    private final FakeMemes memes = new FakeMemes();
 
     @Test
     @DisplayName("findMetadata and allIds hide a meme a running saga has marked")

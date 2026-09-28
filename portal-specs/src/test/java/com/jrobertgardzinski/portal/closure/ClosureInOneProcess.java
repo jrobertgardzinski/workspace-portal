@@ -27,11 +27,12 @@ import com.jrobertgardzinski.memes.application.TagRepository;
 import com.jrobertgardzinski.memes.application.VoteRepository;
 import com.jrobertgardzinski.memes.closure.MemesClosureParticipant;
 import com.jrobertgardzinski.observation.Observations;
-import com.jrobertgardzinski.portal.heap.HeapFavourites;
-import com.jrobertgardzinski.portal.heap.Identities;
-import com.jrobertgardzinski.portal.heap.Portal;
-import com.jrobertgardzinski.portal.heap.HeapComments;
-import com.jrobertgardzinski.portal.heap.HeapMemes;
+import com.jrobertgardzinski.portal.world.FakeFavourites;
+import com.jrobertgardzinski.portal.world.Identities;
+import com.jrobertgardzinski.portal.deletion.DeletionInOneProcess;
+import com.jrobertgardzinski.portal.world.Portal;
+import com.jrobertgardzinski.portal.world.FakeComments;
+import com.jrobertgardzinski.portal.world.FakeMemes;
 import com.jrobertgardzinski.offboarding.application.Destination;
 import com.jrobertgardzinski.offboarding.application.EventsRouter;
 import com.jrobertgardzinski.offboarding.application.Source;
@@ -46,7 +47,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -59,9 +62,10 @@ import static org.mockito.Mockito.mock;
  * participants over {@link Portal}'s rows, and {@link #deliver} in place of the broker. Nothing
  * is reordered, duplicated or dropped at random; {@link #silence} is the only failure staged.
  *
- * <p>This class is the saga's BUS. The portal it drives is {@link Portal}, shared with the
- * deletion cascade next door, which brings a bus of its own — there is no orchestrator there to
- * share.
+ * <p>This class is the saga's BUS. The portal it drives is {@link Portal}, and the deletion
+ * cascade acts on the SAME rows, so this class holds that bus too ({@link #cascade}) rather than
+ * letting a second {@code new Portal()} pretend the two protocols meet nowhere. There is no
+ * orchestrator over there to share — only the rows.
  */
 public final class ClosureInOneProcess {
 
@@ -75,12 +79,26 @@ public final class ClosureInOneProcess {
 
     private final Portal world = new Portal();
 
+    /**
+     * The OTHER protocol, over the same rows. {@code PurgeUserContent} announces every meme it
+     * destroys, and in the deployed stack that announcement is a {@code MEME_DELETED} on the
+     * cascade's topic — so one account closure starts N cascades, after the pivot, with nobody
+     * orchestrating them and nothing to compensate with. A mock here made that seam unstatable:
+     * the rule {@code anonymise} and the rule {@code delete} looked identical to everything
+     * outside the memes part.
+     *
+     * <p>It is NOT drained by {@link #everyPartAnswers}. The saga is finished the moment the last
+     * confirmation lands; the cascade it set off is still in the air, and a scenario that wants
+     * it delivered says so ({@link #cascadeReachesEveryPart}).
+     */
+    private final DeletionInOneProcess cascade = new DeletionInOneProcess(world);
+
     // the steps read the portal through this class; the rows themselves are the world's
     final com.jrobertgardzinski.memes.application.FakeVoteRepository memeVotes = world.memeVotes;
     final com.jrobertgardzinski.comments.application.FakeCommentVotes commentVotes = world.commentVotes;
-    final HeapMemes memes = world.memes;
-    final HeapComments comments = world.comments;
-    final HeapFavourites favourites = world.favourites;
+    final FakeMemes memes = world.memes;
+    final FakeComments comments = world.comments;
+    final FakeFavourites favourites = world.favourites;
 
     private final InMemorySagaStore sagas = new InMemorySagaStore();
     private final EventsRouter router;
@@ -91,6 +109,9 @@ public final class ClosureInOneProcess {
     private final Set<String> silenced = new HashSet<>();
 
     private final List<JsonNode> toSecurity = new ArrayList<>();
+
+    /** The reservation each part last confirmed — the only count that ever leaves the portal. */
+    private final Map<String, Integer> confirmedBy = new LinkedHashMap<>();
 
     private final List<EventsRouter.Outgoing> inFlight = new ArrayList<>();
 
@@ -104,9 +125,24 @@ public final class ClosureInOneProcess {
 
         // no outbox in here: the confirmation is what deliver() sends back
         ClosureConfirmations nothingToAnnounce = (sagaId, leaver, reserved) -> { };
-        memesParticipant = world.memesClosure(nothingToAnnounce);
-        commentsParticipant = world.commentsClosure(nothingToAnnounce);
+        memesParticipant = world.memesClosure(nothingToAnnounce, cascade.memeEvents());
+        commentsParticipant = world.commentsClosure(nothingToAnnounce, cascade.commentEvents());
         collectionsParticipant = world.collectionsClosure();
+    }
+
+    /** Every hop of every cascade this closure set off hears it — which nobody waits for. */
+    void cascadeReachesEveryPart() {
+        cascade.everyHopAnswers();
+    }
+
+    /** Somebody takes a meme down while the saga is mid-flight. */
+    void takeDown(String memeId) {
+        cascade.takeDown(memeId);
+    }
+
+    /** Was anything announced at all — the difference between a meme deleted and one anonymised. */
+    boolean cascadeIsInFlight() {
+        return cascade.somethingIsInFlight();
     }
 
     void silence(String participant) {
@@ -127,14 +163,28 @@ public final class ClosureInOneProcess {
     /** Each delivered re-command buys the silent part another timeout; spend the budget, then the one that gives up. */
     void givesUpWaiting() {
         for (int attempt = 0; attempt <= SweepOverdue.DEFAULT_MAX_RETRIES; attempt++) {
-            world.windForward(PURGE_TIMEOUT.plusSeconds(1));
-            Instant now = world.clock().instant();
-            List<EventsRouter.Outgoing> swept = router.sweepOverdue();
-            swept.stream().map(EventsRouter.Outgoing::countsRetryFor).filter(Objects::nonNull)
-                    .forEach(charge -> sagas.retryDelivered(charge.sagaId(), charge.retriesSoFar(), now));
-            inFlight.addAll(swept);
-            everyPartAnswers();
+            waitsAndAsksAgain();
         }
+    }
+
+    /**
+     * One timeout spent and one re-command sent — a retry, not a capitulation. What it buys a
+     * scenario is a GAP: between the mark and the closure there is now a moment the specs can put
+     * something in, which is where the two protocols actually collide.
+     */
+    void waitsAndAsksAgain() {
+        world.windForward(PURGE_TIMEOUT.plusSeconds(1));
+        Instant now = world.clock().instant();
+        List<EventsRouter.Outgoing> swept = router.sweepOverdue();
+        swept.stream().map(EventsRouter.Outgoing::countsRetryFor).filter(Objects::nonNull)
+                .forEach(charge -> sagas.retryDelivered(charge.sagaId(), charge.retriesSoFar(), now));
+        inFlight.addAll(swept);
+        everyPartAnswers();
+    }
+
+    /** The part comes back — a restarted consumer, which is how a silence ends in production. */
+    void hearsAgain(String participant) {
+        silenced.remove(participant);
     }
 
     /** Drains the queue: confirmations go back into the router and whatever it answers joins the queue. */
@@ -190,12 +240,24 @@ public final class ClosureInOneProcess {
         if (reserved < 0) {
             return Optional.empty();
         }
+        // the FIRST one: a re-commanded MARK finds everything already reserved and confirms 0,
+        // which is idempotence working, not the count the saga was advanced on
+        confirmedBy.putIfAbsent(participant, reserved);
         try {
             return Optional.of(mapper.writeValueAsString(
                     new ClosureConfirmation(sagaId, leaver, reserved).fields()));
         } catch (Exception impossible) {
             throw new IllegalStateException("could not serialise a confirmation", impossible);
         }
+    }
+
+    /** What this part told the orchestrator it had reserved, the first time it answered. */
+    int confirmedBy(String participant) {
+        Integer said = confirmedBy.get(participant);
+        if (said == null) {
+            throw new IllegalStateException(participant + " never confirmed anything");
+        }
+        return said;
     }
 
     List<JsonNode> saidToSecurity() {

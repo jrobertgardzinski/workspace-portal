@@ -6,8 +6,8 @@ import com.jrobertgardzinski.deletion.CascadeHopContractTest;
 import com.jrobertgardzinski.deletion.CommentsDeleted;
 import com.jrobertgardzinski.deletion.DeletionOutcome;
 import com.jrobertgardzinski.deletion.MemeDeleted;
-import com.jrobertgardzinski.portal.heap.HeapFavourites;
-import com.jrobertgardzinski.portal.heap.Identities;
+import com.jrobertgardzinski.portal.world.FakeFavourites;
+import com.jrobertgardzinski.portal.world.Identities;
 
 import io.qameta.allure.Epic;
 import io.qameta.allure.Feature;
@@ -19,7 +19,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * The collections hop against the cascade's contract, on the heap. It extends the plain contract
+ * The collections hop against the cascade's contract, over the fakes. It extends the plain contract
  * and not {@code AtomicHopContractTest}: this hop is the cascade's end and announces nothing, so
  * it has no second write whose fate the first must share.
  */
@@ -29,7 +29,7 @@ class CollectionsDeletionParticipantTest extends CascadeHopContractTest {
 
     private static final String COMMENT = "5c6d7e8f-9a0b-4c1d-8e2f-3a4b5c6d7e8f";
 
-    private final HeapFavourites favourites = new HeapFavourites();
+    private final FakeFavourites favourites = new FakeFavourites();
 
     private final CollectionsDeletionParticipant service =
             new CollectionsDeletionParticipant(new PurgeDeletedItem(favourites));

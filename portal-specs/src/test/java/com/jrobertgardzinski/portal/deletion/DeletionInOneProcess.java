@@ -7,10 +7,10 @@ import com.jrobertgardzinski.deletion.CommentsDeleted;
 import com.jrobertgardzinski.deletion.MemeDeleted;
 import com.jrobertgardzinski.memes.application.DeleteMeme;
 import com.jrobertgardzinski.memes.application.MemeEvents;
-import com.jrobertgardzinski.portal.heap.HeapComments;
-import com.jrobertgardzinski.portal.heap.HeapFavourites;
-import com.jrobertgardzinski.portal.heap.HeapMemes;
-import com.jrobertgardzinski.portal.heap.Portal;
+import com.jrobertgardzinski.portal.world.FakeComments;
+import com.jrobertgardzinski.portal.world.FakeFavourites;
+import com.jrobertgardzinski.portal.world.FakeMemes;
+import com.jrobertgardzinski.portal.world.Portal;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -32,11 +32,9 @@ public final class DeletionInOneProcess {
     static final String COMMENTS = "comments";
     static final String COLLECTIONS = "collections";
 
-    private final Portal world = new Portal();
-
-    public final HeapMemes memes = world.memes;
-    public final HeapComments comments = world.comments;
-    public final HeapFavourites favourites = world.favourites;
+    public final FakeMemes memes;
+    public final FakeComments comments;
+    public final FakeFavourites favourites;
 
     /** What has been announced and not yet delivered — the whole of the "broker". */
     private final List<Object> inFlight = new ArrayList<>();
@@ -44,6 +42,7 @@ public final class DeletionInOneProcess {
     private final Set<String> silenced = new HashSet<>();
 
     private final MemeEvents memeEvents;
+    private final CommentEvents commentEvents;
     private final DeleteMeme deleteMeme;
     private final CommentsDeletionParticipant commentsParticipant;
     private final CollectionsDeletionParticipant collectionsParticipant;
@@ -54,9 +53,23 @@ public final class DeletionInOneProcess {
     /** Every COMMENTS_DELETED that was ever announced, for the specs to count. */
     private final List<CommentsDeleted> commentAnnouncements = new ArrayList<>();
 
+    /** The cascade over a portal of its own — what the deletion specs next door drive. */
     public DeletionInOneProcess() {
+        this(new Portal());
+    }
+
+    /**
+     * The cascade over a portal somebody else already holds. The account-closure bus builds one
+     * of these so that {@code PurgeUserContent}'s announcements land on a real hop instead of a
+     * mock: the two protocols act on the same rows in production, and the seam between them is
+     * only statable from a runner where they act on the same rows here.
+     */
+    public DeletionInOneProcess(Portal world) {
+        this.memes = world.memes;
+        this.comments = world.comments;
+        this.favourites = world.favourites;
         memeEvents = memeId -> MemeDeleted.of(memeId).ifPresent(inFlight::add);
-        CommentEvents commentEvents = (memeId, commentIds) ->
+        commentEvents = (memeId, commentIds) ->
                 CommentsDeleted.of(memeId, commentIds).ifPresent(announcement -> {
                     commentAnnouncements.add(announcement);
                     inFlight.add(announcement);
@@ -66,6 +79,28 @@ public final class DeletionInOneProcess {
         // the hop's unit of work: in one process there is one, and running the step IS it
         commentsParticipant = world.commentsDeletion(commentEvents, Runnable::run);
         collectionsParticipant = world.collectionsDeletion();
+    }
+
+    /**
+     * The port the cascade listens on. Whoever holds it can start a cascade — the author's own
+     * teardown does it through {@link #takeDown}, and an account closure does it from inside its
+     * irreversible half, which is the seam {@code closure.ClosureInOneProcess} wires up.
+     */
+    public MemeEvents memeEvents() {
+        return memeEvents;
+    }
+
+    /**
+     * The port the cascade's SECOND hop is announced on. An account closure destroys comments of
+     * its own, under memes it is not touching, and those announcements join this same wire.
+     */
+    public CommentEvents commentEvents() {
+        return commentEvents;
+    }
+
+    /** Is anything still on the wire — an announcement made and not yet delivered to a hop? */
+    public boolean somethingIsInFlight() {
+        return !inFlight.isEmpty();
     }
 
     /** The author (or a moderator) takes a meme down — where the cascade starts. */

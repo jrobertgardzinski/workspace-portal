@@ -1,4 +1,4 @@
-package com.jrobertgardzinski.portal.heap;
+package com.jrobertgardzinski.portal.world;
 
 import com.jrobertgardzinski.identity.UserId;
 

@@ -1,6 +1,6 @@
 package com.jrobertgardzinski.portal.closure.memes;
 
-import com.jrobertgardzinski.portal.heap.HeapMemes;
+import com.jrobertgardzinski.portal.world.FakeMemes;
 import com.jrobertgardzinski.closure.AtomicParticipantContractTest;
 import com.jrobertgardzinski.closure.ClosureCommand;
 import com.jrobertgardzinski.closure.ClosureInitiator;
@@ -36,7 +36,7 @@ import static org.mockito.Mockito.mock;
 @Feature("Account closure — the memes axis")
 class MemesClosureParticipantTest extends AtomicParticipantContractTest {
 
-    private final HeapMemes memes = new HeapMemes();
+    private final FakeMemes memes = new FakeMemes();
     private final List<Observation> observed = new ArrayList<>();
     private int posted;
 

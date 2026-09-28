@@ -1,6 +1,6 @@
 package com.jrobertgardzinski.portal.closure.collections;
 
-import com.jrobertgardzinski.portal.heap.HeapFavourites;
+import com.jrobertgardzinski.portal.world.FakeFavourites;
 import com.jrobertgardzinski.closure.ClosureCommand;
 import com.jrobertgardzinski.closure.ClosureInitiator;
 import com.jrobertgardzinski.closure.ClosureMessages;
@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Feature("Account closure — the collections axis")
 class CollectionsClosureParticipantTest extends ClosureParticipantContractTest {
 
-    private final HeapFavourites favourites = new HeapFavourites();
+    private final FakeFavourites favourites = new FakeFavourites();
     private final List<Observation> observed = new ArrayList<>();
     private int saved;
     private int confirmed = -1;   // no confirmation port here: the consumer confirms what Reserved says

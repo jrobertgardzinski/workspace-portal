@@ -1,4 +1,4 @@
-package com.jrobertgardzinski.portal.heap;
+package com.jrobertgardzinski.portal.world;
 
 import com.jrobertgardzinski.comments.domain.Comment;
 import org.junit.jupiter.api.DisplayName;
@@ -12,18 +12,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The {@code CommentRepository} axis {@link HeapComments} adds on top of the inherited
+ * The {@code CommentRepository} axis {@link FakeComments} adds on top of the inherited
  * {@code FakeCommentErasure}: every read must hide a comment a running saga has marked, exactly
- * like the real adapter's {@code active_comments} view — except {@link HeapComments#deleteByMeme},
+ * like the real adapter's {@code active_comments} view — except {@link FakeComments#deleteByMeme},
  * which is status-blind on purpose. The erasure axis itself is not retested here — it is inherited
  * unmodified, and comments-application's own {@code FakeCommentErasureTest} already dogfoods it
  * against the contract.
  */
-class HeapCommentsTest {
+class FakeCommentsTest {
 
     private static final UserId AUTHOR = UserId.random();
 
-    private final HeapComments comments = new HeapComments();
+    private final FakeComments comments = new FakeComments();
 
     @Test
     @DisplayName("findByMeme and find hide a comment a running saga has marked")

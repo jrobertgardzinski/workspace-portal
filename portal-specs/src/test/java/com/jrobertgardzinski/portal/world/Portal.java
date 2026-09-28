@@ -1,4 +1,4 @@
-package com.jrobertgardzinski.portal.heap;
+package com.jrobertgardzinski.portal.world;
 
 import com.jrobertgardzinski.closure.ClosureConfirmations;
 import com.jrobertgardzinski.collections.application.MarkUserItemsForErasure;
@@ -38,11 +38,11 @@ import java.time.ZoneOffset;
 import static org.mockito.Mockito.mock;
 
 /**
- * The portal itself, with no bus attached: three services' rows on the heap, their real use
+ * The portal itself, with no bus attached: three services' rows in this process, their real use
  * cases, and the participants of both cross-service protocols built over them.
  *
  * <p>One world, two protocols, because there is one portal. A second specs module would have
- * meant a second copy of these three heaps — or a third module to share them — and the copies
+ * meant a second copy of these three fakes — or a third module to share them — and the copies
  * would have drifted, which is the failure this repository has already paid for twice.
  *
  * <p>What is NOT here is how a message travels. Closing an account is an orchestrated saga with
@@ -52,12 +52,12 @@ import static org.mockito.Mockito.mock;
  */
 public final class Portal {
 
-    public final HeapMemes memes = new HeapMemes();
-    public final HeapComments comments = new HeapComments();
-    public final HeapFavourites favourites = new HeapFavourites();
+    public final FakeMemes memes = new FakeMemes();
+    public final FakeComments comments = new FakeComments();
+    public final FakeFavourites favourites = new FakeFavourites();
 
     /**
-     * The ballots, and the admin's dial. Real stand-ins rather than mocks, because a score is not
+     * The ballots, and the admin's dial. Real fakes rather than mocks, because a score is not
      * scenery: {@code KEEP_POPULAR_ANONYMIZED} is the one purge rule that reads one, and the
      * ordering both purges depend on — the leaver's own ballots retracted BEFORE any score is read
      * — is invisible to a store that answers 0 whatever happens to it. They come from the services'
@@ -95,24 +95,38 @@ public final class Portal {
 
     // ---- account closure: this service's participant, as deployed ----------------------------
 
-    public MemesClosureParticipant memesClosure(ClosureConfirmations confirmations) {
+    /**
+     * The memes part of the saga, announcing through the port given — the SAME port the author's
+     * own teardown announces through, because {@code PurgeUserContent} reuses the cascade rather
+     * than deleting a thread a second time. A caller that hands it the deletion bus is wiring the
+     * two protocols together exactly as {@code SagaParticipantConfig} does in the deployed stack.
+     */
+    public MemesClosureParticipant memesClosure(ClosureConfirmations confirmations,
+                                                MemeEvents memeEvents) {
         return new MemesClosureParticipant(
                 new MarkUserContentForErasure(memes, clock()),
                 new RestoreUserContent(memes),
                 new PurgeUserContent(memes, memes, memeVotes,
                         mock(MemeContentIndex.class), mock(TagRepository.class),
-                        mock(MemeEvents.class), purgePolicy,
+                        memeEvents, purgePolicy,
                         new PurgeRule.Delete()),
                 confirmations, Observations.silent(), Runnable::run);
     }
 
-    public CommentsClosureParticipant commentsClosure(ClosureConfirmations confirmations) {
+    /**
+     * The comments part of the saga, announcing what it destroyed through the port given — the same
+     * port the cascade's own hop announces through, for the same reason the memes part gets one: a
+     * comment this closure deletes may be saved in a collection belonging to somebody who is not
+     * leaving.
+     */
+    public CommentsClosureParticipant commentsClosure(ClosureConfirmations confirmations,
+                                                      CommentEvents commentEvents) {
         return new CommentsClosureParticipant(
                 new MarkUserCommentsForErasure(comments, clock()),
                 new RestoreUserComments(comments),
                 new PurgeUserComments(comments, comments, commentVotes,
                         new PurgeRule.Delete()),
-                confirmations, Observations.silent(), Runnable::run);
+                commentEvents, confirmations, Observations.silent(), Runnable::run);
     }
 
     public CollectionsClosureParticipant collectionsClosure() {

@@ -8,8 +8,8 @@ import com.jrobertgardzinski.deletion.AtomicHopContractTest;
 import com.jrobertgardzinski.deletion.CommentsDeleted;
 import com.jrobertgardzinski.deletion.DeletionOutcome;
 import com.jrobertgardzinski.deletion.MemeDeleted;
-import com.jrobertgardzinski.portal.heap.HeapComments;
-import com.jrobertgardzinski.portal.heap.Identities;
+import com.jrobertgardzinski.portal.world.FakeComments;
+import com.jrobertgardzinski.portal.world.Identities;
 
 import io.qameta.allure.Epic;
 import io.qameta.allure.Feature;
@@ -20,14 +20,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 
 /**
- * The comments hop against the cascade's contract, on the heap, with no mock of anything the
+ * The comments hop against the cascade's contract, over the fakes, with no mock of anything the
  * hop actually decides — the thread is real rows and the announcement is a real call.
  */
 @Epic("Meme deletion")
 @Feature("The comments hop")
 class CommentsDeletionParticipantTest extends AtomicHopContractTest {
 
-    private final HeapComments comments = new HeapComments();
+    private final FakeComments comments = new FakeComments();
 
     private final CommentEvents announcer = (memeId, commentIds) -> announcement(memeId);
 

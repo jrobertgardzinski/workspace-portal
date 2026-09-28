@@ -1,11 +1,12 @@
 package com.jrobertgardzinski.portal.closure.comments;
 
-import com.jrobertgardzinski.portal.heap.HeapComments;
+import com.jrobertgardzinski.portal.world.FakeComments;
 import com.jrobertgardzinski.closure.AtomicParticipantContractTest;
 import com.jrobertgardzinski.closure.ClosureCommand;
 import com.jrobertgardzinski.closure.ClosureInitiator;
 import com.jrobertgardzinski.closure.ClosureMessages;
 import com.jrobertgardzinski.comments.application.CommentVotes;
+import com.jrobertgardzinski.comments.application.CommentEvents;
 import com.jrobertgardzinski.comments.application.MarkUserCommentsForErasure;
 import com.jrobertgardzinski.comments.application.PurgeUserComments;
 import com.jrobertgardzinski.comments.application.RestoreUserComments;
@@ -32,7 +33,7 @@ import static org.mockito.Mockito.mock;
 @Feature("Account closure — the comments axis")
 class CommentsClosureParticipantTest extends AtomicParticipantContractTest {
 
-    private final HeapComments comments = new HeapComments();
+    private final FakeComments comments = new FakeComments();
     private final List<Observation> observed = new ArrayList<>();
     private int written;
 
@@ -40,7 +41,9 @@ class CommentsClosureParticipantTest extends AtomicParticipantContractTest {
             new MarkUserCommentsForErasure(comments, Clock.systemUTC()),
             new RestoreUserComments(comments),
             new PurgeUserComments(comments, comments, mock(CommentVotes.class), new PurgeRule.Delete()),
-            confirmations, (Observations<Observation>) observed::add, unitOfWork);
+            // one service's own axis: what the closure announces to the OTHER services is a
+            // portal-level promise and is stated there, in account-closure.feature
+            mock(CommentEvents.class), confirmations, (Observations<Observation>) observed::add, unitOfWork);
 
     @Override
     protected void handle(ClosureCommand command) {

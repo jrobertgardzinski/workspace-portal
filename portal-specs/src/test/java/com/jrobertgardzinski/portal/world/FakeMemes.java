@@ -1,4 +1,4 @@
-package com.jrobertgardzinski.portal.heap;
+package com.jrobertgardzinski.portal.world;
 
 import com.jrobertgardzinski.identity.UserId;
 import com.jrobertgardzinski.memes.application.FakeMemeErasure;
@@ -13,8 +13,8 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
- * The meme service's rows on the heap — a thin subclass of {@link FakeMemeErasure},
- * memes-application's own reference stand-in for {@code MemeErasure}, reached through this
+ * The meme service's rows in this process — a thin subclass of {@link FakeMemeErasure},
+ * memes-application's own reference fake for {@code MemeErasure}, reached through this
  * repository's test-jar dependency on it. What is added here is the {@code MemeRepository} axis
  * over the SAME backing map (bytes are never read by a saga, so every posted meme carries an empty
  * one) and the convenience readers the specs already call by name.
@@ -26,23 +26,27 @@ import java.util.stream.Stream;
  * here exercised the difference — this repository axis is dead weight for the sagas' own specs,
  * still worth answering correctly since it is part of the port.
  */
-public final class HeapMemes extends FakeMemeErasure implements MemeRepository {
+public final class FakeMemes extends FakeMemeErasure implements MemeRepository {
 
     private final Map<String, Meme> memes;
 
-    public HeapMemes() {
+    public FakeMemes() {
         this(new HashMap<>());
     }
 
-    private HeapMemes(Map<String, Meme> memes) {
+    private FakeMemes(Map<String, Meme> memes) {
         super(memes);
         this.memes = memes;
     }
 
-    /** {@code howMany} memes of one person; the prefix only keeps the ids readable in a failure. */
+    /**
+     * {@code howMany} memes of one person, under the ids {@link ContentIds} mints for
+     * {@code <prefix>-meme-<n>} — the same ids a step asking for "their first meme" gets back,
+     * and ids the deletion cascade's wire contract will actually carry.
+     */
     public void posted(String prefix, UserId userId, int howMany) {
         for (int i = 1; i <= howMany; i++) {
-            posted(prefix + "-meme-" + i, userId);
+            posted(ContentIds.of(prefix + "-meme-" + i), userId);
         }
     }
 
@@ -50,7 +54,7 @@ public final class HeapMemes extends FakeMemeErasure implements MemeRepository {
         memes.put(id, new Meme(id, userId, "png", new byte[0]));
     }
 
-    /** Every meme of this person's, marked ones included — what "still on the heap" means. */
+    /** Every meme of this person's, marked ones included — what "the portal still holds" means. */
     public List<MemeMetadata> heldBy(UserId userId) {
         return Stream.concat(activeOf(userId).stream(), pendingOf(userId).stream()).toList();
     }

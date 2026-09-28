@@ -5,11 +5,12 @@ import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 
+import com.jrobertgardzinski.portal.world.ContentIds;
+
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
-import static com.jrobertgardzinski.portal.heap.Identities.idOf;
+import static com.jrobertgardzinski.portal.world.Identities.idOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -136,6 +137,6 @@ public class MemeDeletionSteps {
 
     /** The id the portal would have minted for a title — stable, so a step can name it twice. */
     private static String idFor(String title) {
-        return UUID.nameUUIDFromBytes(("meme:" + title).getBytes()).toString();
+        return ContentIds.of("meme:" + title);
     }
 }

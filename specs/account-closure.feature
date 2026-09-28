@@ -93,6 +93,126 @@ Feature: Closing an account — what becomes of everything the leaver left behin
       Then the portal holds 1 meme and 1 comment signed by nobody
       And the portal holds nothing of alice@example.com
 
+  Rule: The leaver's memes take other people's threads and pointers with them
+
+    A meme is not only the leaver's row. Its conversation was written by people who are not
+    leaving, and the pointers at it are in lists belonging to people who are not leaving either.
+    Destroying the leaver's memes destroys all of it — not as a second teardown written into the
+    closure, but as the SAME cascade the author's own take-down sets off, started from inside the
+    closure's irreversible half. It is the one promise here that no confirmation covers.
+
+    Example: a thread written by other people goes with the meme it hangs under
+      Given 3 other people commented under their first meme
+      And 2 other people saved their first meme, and 3 saved a comment under it
+      When security announces that alice@example.com asked to be forgotten
+      And every part of the portal answers
+      And the cascade reaches every part
+      Then nothing is left under their first meme
+      And nobody has their first meme saved any more
+      And nobody has a comment of their first meme saved any more
+
+    Example: the count security is given is the leaver's rows, and only those
+      Given 3 other people commented under their first meme
+      And 2 other people saved their first meme, and 3 saved a comment under it
+      When security announces that alice@example.com asked to be forgotten
+      And every part of the portal answers
+      And the cascade reaches every part
+      Then the memes part confirmed 2 reserved
+      But 8 rows belonging to other people went too, named in no confirmation
+
+  Rule: The cascade starts after the pivot, so the portal reports done before it has run
+
+    The saga is finished when the last answer lands. What that last answer SET OFF is still in
+    the air: a choreography with no orchestrator, no confirmation, nobody waiting and nothing to
+    compensate with. This is not a bug to be fixed at this level — it is the shape of the trade,
+    and the reason it is written down is that until it was, nobody had said it out loud.
+
+    Example: security is told the content is purged while the cascade is still on the wire
+      Given 3 other people commented under their first meme
+      When security announces that alice@example.com asked to be forgotten
+      And every part of the portal answers
+      Then security is told the portal purged the content of alice@example.com
+      But the 3 comments under their first meme are still there
+      And a cascade nobody is waiting for is still on the wire
+
+  Rule: What the readers keep, keeps its thread
+
+    The popularity condition splits one part from within, and the cascade is what carries that
+    split OUT of that part: the meme that stays announces nothing, so its conversation is never
+    told to go. One command, one author, two memes, and the thread under one of them survives
+    because strangers liked the picture above it.
+
+    Example: one closure, and only the thread of the meme that went
+      Given 3 other people commented under their first meme
+      And 2 other people commented under their second meme
+      And 3 people upvoted 1 of alice@example.com's memes
+      When an administrator closes alice@example.com, choosing memes=KEEP_POPULAR_ANONYMIZED:2
+      And every part of the portal answers
+      And the cascade reaches every part
+      Then the 3 comments under their first meme are still there
+      But nothing is left under their second meme
+
+  Rule: A cascade can take a row the saga had already reserved, and the saga must survive it
+
+    The two protocols reach the same rows from different directions, and neither holds a lock on
+    the other. A stranger deleting a meme of their own takes the whole thread under it, including
+    a comment the running closure had counted and promised. The closure does not break — its
+    irreversible half acts on what is still reserved, not on the number it sent — but the number
+    it sent was already wrong when it was sent, and the compensation cannot put back what the
+    other protocol took.
+
+    Example: the thread goes while the saga is still collecting answers
+      Given bob@example.com posted a meme and alice@example.com commented under it
+      When security announces that alice@example.com asked to be forgotten
+      And every part except collections answers
+      And bob@example.com takes their meme down
+      And the cascade reaches every part
+      And collections answers after all
+      Then security is told the portal purged the content of alice@example.com
+      And the portal holds nothing of alice@example.com
+      But the comments part had confirmed 4 reserved, one of which was gone before it was erased
+
+    Example: what the cascade took does not come back when the portal gives up
+      Given bob@example.com posted a meme and alice@example.com commented under it
+      When security announces that alice@example.com asked to be forgotten
+      And every part except memes answers
+      And bob@example.com takes their meme down
+      And the cascade reaches every part
+      And the portal gives up waiting
+      Then security is told the purge of alice@example.com failed
+      And alice@example.com sees their 2 memes, 3 comments and 4 favourites again
+      But the comment they wrote under bob@example.com's meme is not among them
+
+  Rule: A comment the closure destroys is announced, so nobody is left pointing at it
+
+    Whatever the closure destroys, nobody is left holding a pointer at it — for a comment exactly
+    as for a meme. The collections part cleans only the leaver's OWN rows, by their user id, so a
+    stranger's saved pointer at the leaver's words can be collected in one way only: by being told
+    which words went. The closure says so on the deletion cascade's own topic, with the message
+    that cascade already carries and the consumer it already has.
+
+    The meme side of this was promised from the start (`meme-deletion.feature`) and the comment
+    side was not, which is the whole reason this rule is written down rather than assumed.
+
+    Example: a stranger's saved pointer goes with the comment it points at
+      Given bob@example.com posted a meme and alice@example.com commented under it
+      And a stranger saved that comment
+      When security announces that alice@example.com asked to be forgotten
+      And every part of the portal answers
+      And the cascade reaches every part
+      Then the portal holds nothing of alice@example.com
+      And nobody has that comment saved any more
+
+    Example: a comment the readers kept keeps the pointers at it
+      Given bob@example.com posted a meme and alice@example.com commented under it
+      And a stranger saved that comment
+      And 3 people upvoted that comment
+      When an administrator closes alice@example.com, choosing comments=KEEP_POPULAR_ANONYMIZED:2
+      And every part of the portal answers
+      And the cascade reaches every part
+      Then the stranger still has that comment saved
+      But the portal holds no memes and no favourites of alice@example.com
+
   Rule: A saved reference has no conditions to honour
 
     A favourite is a pointer at somebody else's meme: nothing to anonymise, nothing to keep for

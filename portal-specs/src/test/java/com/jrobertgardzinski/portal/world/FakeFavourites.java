@@ -1,4 +1,4 @@
-package com.jrobertgardzinski.portal.heap;
+package com.jrobertgardzinski.portal.world;
 
 import com.jrobertgardzinski.identity.UserId;
 import com.jrobertgardzinski.collections.application.InMemoryCollectionRepository;
@@ -11,25 +11,30 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 /**
- * The favourites service's rows on the heap — now a thin subclass of
- * {@link InMemoryCollectionRepository}, collections-application's own reference stand-in for
+ * The favourites service's rows in this process — a thin subclass of
+ * {@link InMemoryCollectionRepository}, collections-application's own reference fake for
  * {@code CollectionRepository}/{@code ItemErasure}, reached through this repository's test-jar
  * dependency on it. Used to be a byte-for-byte copy of that class, kept only because this runner
  * could not see any test source of collections-application's — it can, and always could, since
  * portal-specs already depends on {@code collections-application} as a test-jar for its
  * {@code ItemErasureContractTest}.
  *
+ * <p>Named {@code Fake} and not {@code InMemory} like the class it extends: in this repository a
+ * {@code Fake} is a working test double and an {@code InMemory} is a production adapter that keeps
+ * its rows in RAM. The parent predates the rule and lives in another repository's history; see
+ * portal-specs/README.md.
+ *
  * <p>What is left here is exactly what {@link InMemoryCollectionRepository} does not do: name a few
  * convenience readers the Gherkin steps and {@code CollectionsClosureParticipantTest} already
  * speak in ({@link #heldBy}, {@link #visibleOf}, {@link #saved}). No erasure logic lives in this
- * class any more — there is nothing left here that could drift from the class it stands in for.
+ * class any more — there is nothing left here that could drift from the fake it extends.
  */
-public final class HeapFavourites extends InMemoryCollectionRepository {
+public final class FakeFavourites extends InMemoryCollectionRepository {
 
     /** Whom this fake has saved for: the repository it extends keys by user and walks none. */
     private final Set<UserId> savers = new LinkedHashSet<>();
 
-    /** Every row of this user's, marked ones included — what "still on the heap" means. */
+    /** Every row of this user's, marked ones included — what "the portal still holds" means. */
     public List<SavedItem> heldBy(UserId userId) {
         return Stream.concat(activeOf(userId).stream(), pendingOf(userId).stream()).toList();
     }
@@ -42,7 +47,7 @@ public final class HeapFavourites extends InMemoryCollectionRepository {
     /** Saves {@code howMany} distinct favourites for a user. */
     public void saved(UserId userId, int howMany) {
         for (int i = 1; i <= howMany; i++) {
-            savedPointingAt(userId, "meme", "someones-meme-" + i);
+            savedPointingAt(userId, "meme", ContentIds.of("someones-meme-" + i));
         }
     }
 

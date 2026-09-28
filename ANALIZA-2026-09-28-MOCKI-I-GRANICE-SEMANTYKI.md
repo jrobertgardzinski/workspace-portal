@@ -17,7 +17,7 @@
 ## 0. Co się wydarzyło tego dnia i dlaczego to zmienia lekturę
 
 `Portal.java` budował prawdziwych uczestników obu protokołów i podawał im cztery grupy mocków.
-Tego dnia dwie z nich zostały zastąpione prawdziwymi implementacjami in-memory (`FakeVoteRepository`,
+Tego dnia dwie z nich zostały zastąpione fake'ami (`FakeVoteRepository`,
 `FakeCommentVotes`, `FakePurgePolicyOverride`, wszystkie z test-jarów serwisów).
 
 Efekt był większy niż sprzątanie. **`KEEP_POPULAR_ANONYMIZED` — jedna z trzech reguł `PurgeRule`
@@ -68,8 +68,11 @@ Zdania, których nikt nie wypowiedział ani nie sprawdził:
 - RESTORE po tym, jak autor sam skasował swojego mema w trakcie czekania: saga oddaje konto
   z memem bez wątku i bez zapisanych referencji. To decyzja, nie bug — ale nigdzie jej nie ma.
 
-**Ten punkt jest wprost zablokowany przez `mock(MemeEvents.class)`.** Dopóki tam stoi, żaden
-z tych scenariuszy nie da się napisać, bo drut między protokołami jest przecięty.
+**Ten punkt był wprost zablokowany przez `mock(MemeEvents.class)`.** Drut jest już zszyty
+(patrz §6): `ClosureInOneProcess` buduje `DeletionInOneProcess` nad tym samym `Portal`em i podaje
+uczestnikowi memów prawdziwy port. Sześć powyższych zdań jest teraz wypowiedzianych w
+`account-closure.feature` — z dwoma poprawkami, które wyszły dopiero przy pisaniu, opisanymi
+w §6.2.
 
 ### 1.2 Asymetria, która jest dziurą w danych, nie w stylu
 
@@ -82,6 +85,8 @@ czyści wyłącznie referencje *odchodzącego*, po jego `user_id`.
 
 Widać to dopiero patrząc na oba protokoły naraz — czyli dokładnie z tego poziomu, którego dziś
 nie ma.
+
+**Rozstrzygnięte tego samego dnia: port dodany.** Szczegóły i dlaczego akurat tak — §6.4.
 
 ---
 
@@ -99,7 +104,7 @@ co w punkcie 1.1, widziana z drugiej strony.
 
 Reużyte i sprawdzone: biblioteka `meme-deletion` (jedno słownictwo dla obu hopów i obu kontraktów),
 `account-closure`, `unit-of-work`, `purge-rule`, `observation`, `user-id`, oraz `Portal` jako jedna
-kopia trzech hałd.
+kopia trzech fake'ów.
 
 ### 2.2 Dług, który zostaje
 
@@ -109,8 +114,8 @@ kopia trzech hałd.
   a `CommentsClosureParticipant` (różnica: jedno słowo w logu), tak samo `markAndConfirm` i cały
   szkielet guard / `isAddressed` / switch w trzech uczestnikach. Biblioteka `account-closure`
   objęła *wiadomości*, nie objęła *zachowania*.
-- **Brakujący port w comments przy zamknięciu konta** — punkt 1.2. To reuse, którego brak ma
-  konsekwencję w danych, nie w liniach kodu.
+- ~~**Brakujący port w comments przy zamknięciu konta**~~ — punkt 1.2, **dodany, §6.4.** To był
+  reuse, którego brak miał konsekwencję w danych, nie w liniach kodu.
 - **Dwa pojęcia „użytecznego id na drucie"**: `Ids.usable` (package-private w `meme-deletion`)
   i `ClosureCommand.userIdOf`.
 
@@ -153,7 +158,7 @@ Gherkin.
    plik `.feature` to mówił, zamiast milczeć.
 2. **Jednostka pracy.** `Runnable::run` nie umie się wycofać. Obietnica
    `CommentsDeletionParticipant`, że ogłoszenie dzieli los skasowania wątku „w obie strony", jest
-   nierozstrzygalna na hałdzie — dowozi ją dopiero outbox (`KafkaMemeEventsTransactionTest`).
+   nierozstrzygalna na fake'ach — dowozi ją dopiero outbox (`KafkaMemeEventsTransactionTest`).
 3. **Serializacja omija specy kaskady.** Bus w `DeletionInOneProcess` przekazuje obiekty
    `MemeDeleted`, nigdy `fields()`. Jedyne miejsce w `portal-specs`, gdzie powstaje prawdziwa mapa,
    to `ClosureInOneProcess`. Specy zamknięcia konta są pod tym względem mocniejsze niż specy
@@ -182,7 +187,7 @@ Po zmianach z 28.09 w `Portal.java` zostały trzy:
 
 | mock | co przez niego nie istnieje | gdzie to należy |
 |---|---|---|
-| `MemeEvents` (`Portal.java:104`) | cały styk obu protokołów — punkt 1.1 | tu, poziom portalu |
+| ~~`MemeEvents`~~ | zdjęty tego samego dnia — patrz §6 | — |
 | `MemeContentIndex` (`:103`, `:130`) | „po zamknięciu konta da się wgrać ten sam obrazek ponownie, bo indeks dedup go zapomniał" | `microservice-memes/specs/account-erasure.feature` — obietnica jednego serwisu |
 | `TagRepository` (`:103`, `:131`) | to samo dla indeksu tagów | jw. |
 
@@ -200,14 +205,19 @@ zielonym buildzie.
 
 Dwa mocki zostają celowo (`MemeContentIndex`, `TagRepository`) — nie dlatego, że są nieszkodliwe,
 tylko dlatego, że to, co odsłaniają, jest obietnicą *jednego serwisu* i jego miejsce jest piętro
-niżej. Trzeci, `MemeEvents`, jest jedyną pozostałą granicą na poziomie portalu i jedyną, której
-zdjęcie wymaga realnej pracy: zszycia obu busów w jedną instancję `Portal`.
+niżej. Trzeci, `MemeEvents`, był jedyną pozostałą granicą na poziomie portalu — i jedyną, której
+zdjęcie wymagało realnej pracy: zszycia obu busów w jedną instancję `Portal`. Zdjęty; §6.
+
+Zostaje też `mock(MemeEvents.class)` w `MemesClosureParticipantTest`. Świadomie: to test jednej
+osi jednego serwisu, a styk, który ten mock tam ukrywa, ma już swoje miejsce piętro wyżej. Mock
+jest szkodliwy wtedy, kiedy jest **jedynym** miejscem, gdzie dana granica mogłaby być
+sprawdzona.
 
 ### Ryzyko odwrotne, żeby było uczciwie
 
 Fake, który rozjeżdża się z adapterem, jest **gorszy** od mocka — bo jest przekonująco zły.
 Estate ma na to wzorzec: `MemeErasureContractTest` trzyma fake i prawdziwy adapter przy jednym
-kontrakcie. Nowe stand-iny (`FakeVoteRepository`, `FakeCommentVotes`) takiego kontraktu **nie
+kontrakcie. Nowe fake'i (`FakeVoteRepository`, `FakeCommentVotes`) takiego kontraktu **nie
 mają** — niosą to ryzyko. Różnica wobec stanu sprzed 28.09 jest taka, że ryzyko jest nazwane
 i w jednym miejscu, zamiast rozsiane po siedmiu anonimowych klasach.
 
@@ -215,16 +225,150 @@ i w jednym miejscu, zamiast rozsiane po siedmiu anonimowych klasach.
 
 ## 5. Kolejność, gdyby pytać mnie
 
-1. **`MemeEvents`** — jedna instancja `Portal`, dwa busy, prawdziwy port wpięty w bus kaskady.
-   Odblokowuje cały punkt 1.1, nie wymaga żadnej decyzji architektonicznej i jest jedynym
-   pozostałym mockiem, który coś ukrywa na poziomie portalu.
-2. **Rozstrzygnięcie 1.2** — czy zamknięcie konta ma ogłaszać skasowane komentarze. To decyzja
-   produktowa, nie refaktor.
-3. **Kontrakty dla nowych fake'ów** — `VoteRepositoryContractTest` wiążący stand-in z adapterem
+1. ~~**`MemeEvents`**~~ — **zrobione tego samego dnia, §6.**
+2. ~~**Rozstrzygnięcie 1.2**~~ — **zdecydowane i zrobione tego samego dnia, §6.4:** zamknięcie
+   konta ogłasza skasowane komentarze.
+3. **Kontrakty dla nowych fake'ów** — `VoteRepositoryContractTest` wiążący fake z adapterem
    JDBC, wzorem `MemeErasureContractTest`.
 4. **Dopiero potem** `ClosureOutcome` i `requestedRule` z punktu 2.2.
 
 ---
 
-*Kontekst kodu: stan po commitach z 28.09.2026 (`69cb8c7` w `workspace-portal`, `80a9aec`
-w `microservice-memes`, `ab178cb` w `microservice-comments`). Numery linii z tego stanu.*
+---
+
+## 6. Co zostało zrobione po napisaniu powyższego (ten sam dzień)
+
+Punkty 1 i 2 z §5 są zamknięte. Nie jest to plan — to zapis tego, co jest w repo, i rzeczy, które
+wyszły dopiero przy robocie, a których §1.1 nie przewidział.
+
+### 6.1 Zszycie
+
+`ClosureInOneProcess` buduje `DeletionInOneProcess` nad **tą samą** instancją `Portal` i podaje
+`world.memesClosure(...)` prawdziwy `MemeEvents`. Ten krok to trzy klasy runnera i ani jedna linia
+kodu produkcyjnego (kod produkcyjny rusza dopiero §6.4):
+
+- `Portal.memesClosure(confirmations, memeEvents)` — port zamiast `mock(MemeEvents.class)`.
+- `DeletionInOneProcess(Portal)` — drugi konstruktor; bezargumentowy dalej robi własny świat, bo
+  specy kaskady nie mają powodu dzielić rzędów z sagą.
+- `ClosureInOneProcess` — trzyma kaskadę, **nie** drenuje jej w `everyPartAnswers()`. Saga kończy
+  się na ostatnim potwierdzeniu; to, co ono uruchomiło, dalej wisi na drucie, i dopiero krok
+  `the cascade reaches every part` je dostarcza. Bez tego rozdzielenia nie da się napisać zdania
+  o tym, co jest prawdą *pomiędzy*.
+
+W `account-closure.feature` przybyły z tego cztery reguły — wątki i wskaźniki obcych idące z memem
+odchodzącego, liczba w potwierdzeniu kontra to, co realnie znika, kaskada za piwotem, oraz zderzenie
+obu protokołów na tym samym wierszu (piąta dochodzi w §6.4). Cztery z sześciu nowych scenariuszy
+czerwienieją po wstawieniu mocka z powrotem (sprawdzone), więc trzymają to, o czym mówią.
+
+### 6.2 Dwie rzeczy, których §1.1 nie przewidział
+
+**(a) Fake'i zamknięcia konta nadawały id, których kaskada by nie uniosła.** `Ids.usable` przyjmuje
+wyłącznie kanonicznego UUID-a, a `FakeMemes.posted(prefix, …)` (wtedy jeszcze `HeapMemes`) robiło
+`alice@example.com-meme-1`.
+Po wpięciu prawdziwego portu całe zamknięcie konta ogłaszało dwa `MEME_DELETED`, które
+`MemeDeleted.of` odrzucał po cichu — i **wszystkie asercje o styku przechodziły przez to, że nie
+ogłoszono nic**. To nie jest błąd produkcji (tam id są UUID-ami); to jest dokładnie ta klasa
+rzeczy, którą mock ukrywa, bo mock przyjmuje każdy string. Naprawione jednym mennikiem,
+`world.ContentIds`, wspólnym dla obu busów — `MemeDeletionSteps` miał własny, identyczny co do
+zamiaru.
+
+Morał do §4: mock nie tylko usuwa wejście. On też **zwalnia test z kontraktu wyjścia** — tu przez
+rok nikt nie sprawdził, czy to, co portal ogłasza przy zamknięciu konta, jest w ogóle zdatne do
+wysłania.
+
+**(b) Dwa z sześciu zdań §1.1 nie mogły się wydarzyć drzwiami, które wskazywały.** Bullet
+o przeplocie MARK → ktoś kasuje mema odchodzącego → ERASE i bullet o RESTORE po tym, jak autor sam
+skasował swojego mema, zakładają, że zarezerwowanego mema da się skasować. Nie da się:
+`MemeRepository` czyta galerię, mem zamarkowany jest z niej niewidoczny, więc `DeleteMeme` odpowiada
+`NO_SUCH_MEME` (sprawdzone wprost). To zachowanie produkcyjne, nie artefakt fake'a — widok
+`active_memes` robi to samo.
+
+Zderzenie jest natomiast realne **drugimi drzwiami**: obcy kasuje *swojego* mema, pod którym
+odchodzący ma komentarz już zarezerwowany przez sagę. `deleteByMeme` jest ślepe na status —
+celowo, bo kaskada kasuje cały wątek — więc wiersz znika spod sagi. Saga to przeżywa (`pendingOf`
+nie wylistuje nieistniejącego wiersza), ale:
+
+- liczba, którą portal wysłał w potwierdzeniu, była już nieprawdziwa w chwili wysłania;
+- kompensacja nie odda tego, co zabrał drugi protokół — `RESTORE` oddaje trzy komentarze
+  z czterech, i to jest decyzja, nie awaria.
+
+Oba te zdania są teraz scenariuszami. Wersja z §1.1 była trafna co do *napięcia* i nietrafna co do
+*mechanizmu* — co samo w sobie jest argumentem za tym, żeby takie hipotezy zamieniać na testy,
+zamiast zostawiać je w pliku.
+
+### 6.3 Słownictwo: jedno słowo na jedną rzecz
+
+Przy okazji wyszło, że o tym samym mówiliśmy na pięć sposobów — *mock*, *fake*, *stub*,
+*stand-in*, *hałda*. Ustalone i zapisane w `portal-specs/README.md`:
+
+| słowo | co znaczy | gdzie |
+|---|---|---|
+| `mock` | Mockito, zero zachowania | `mock(X.class)` |
+| `Fake*` | działająca atrapa in-memory, trzymana przy kontrakcie portu | `src/test/` |
+| `InMemory*` | **prawdziwy** adapter trzymający wiersze w RAM-ie, nie atrapa | `src/main/` |
+| stub | samodzielny serwis zastępujący stronę trzecią w deploymencie | docker/k8s (IdP, SMS) |
+
+`portal-specs` jest zgodne: pakiet `heap` to teraz `world`, a `HeapMemes/HeapComments/`
+`HeapFavourites` to `FakeMemes/FakeComments/FakeFavourites`. Słowo „heap" mówiło, *gdzie* leżą
+wiersze, a nie *czym* jest klasa, która je trzyma — i dlatego zaczęło wyglądać na trzeci rodzaj
+atrapy obok mocka i fake'a.
+
+Dwie klasy, których `portal-specs` używa, zgodne **nie są**: `InMemoryCollectionRepository`
+(collections-application) i `InMemorySagaStore` (offboarding-system) — to fake'i noszące nazwę
+zarezerwowaną dla adapterów produkcyjnych. Siedzą w osobnych repozytoriach z własną historią
+(sam offboarding ma ponad dziewięć wywołań), więc ich zmiana nazwy to commit w tamtych repo, nie
+w tym. Zapisane jako dług, nie przeoczone.
+
+### 6.4 Punkt 1.2: zamknięcie konta ogłasza skasowane komentarze
+
+Decyzja zapadła (wariant „dodać port", odrzucone: sprzątacz w kolekcjach i zostawienie tego
+w spokoju). Argument, który przeważył: kasowanie mema **już** obiecuje, że wskaźniki na komentarze
+znikną razem z wątkiem, a zamknięcie konta kasowało te same komentarze i nie mówiło nic. Po
+zszyciu z §6.1 asymetria zrobiła się jeszcze ostrzejsza — to samo zamknięcie konta sprzątało już
+skutki uboczne dla **memów** (bo reużywa kaskady), a dla **komentarzy** nadal nie.
+
+Zmierzone przed zmianą: komentarz znika, wskaźnik obcego na niego zostaje.
+
+Jak to zrobione — wzorem, który ten serwis już ma:
+
+- `PurgeUserComments.execute` zwraca `Purged` — skasowane id, pogrupowane po memie, bo tym kluczuje
+  się `COMMENTS_DELETED`. **Nie ogłasza samo.** Ta klasa nosi własny dekorator transakcyjny
+  (`CommentsConfig`), a ogłoszenie ma dzielić los kasowania w obie strony, więc należy do unit of
+  work wołającego — dokładnie tak, jak `DeleteThread` oddaje swoje id
+  `CommentsDeletionParticipant`owi. Javadoc `DeleteThread` mówi to wprost i nie było powodu robić
+  drugiego wzorca obok.
+- Zanonimizowane **nie** są raportowane. Komentarz, który reguła zachowuje, wraca do wątku, więc
+  każdy wskaźnik na niego jest dalej dobry, a ogłoszenie kazałoby kolekcjom zdjąć referencję do
+  czegoś, co stoi.
+- `CommentsClosureParticipant` ogłasza w swoim unit of work. Nic nowego na drucie: ta sama
+  wiadomość, ten sam konsument w kolekcjach, żadnego nowego kontraktu.
+- To kolejny hop **za piwotem**, bez potwierdzenia i bez kompensacji — ten sam handel, który strona
+  memów już przyjęła.
+
+Dwa scenariusze w `account-closure.feature`: wskaźnik obcego znika razem z komentarzem, i —
+kontrast — komentarz, który czytelnicy zachowali, zachowuje wskaźniki na siebie. Pierwszy
+czerwienieje po wycięciu ogłoszenia (sprawdzone mutacją).
+
+Koszty poboczne, żeby było uczciwie: `PurgeCommandsListener` dostał parametr, więc trzeba było
+tknąć siedem plików testowych w `comments-infrastructure`; w dwóch z nich `PurgeUserComments` jest
+mockiem, a mock oddawał `null` tam, gdzie prawdziwy use case oddaje raport — stąd
+`Purged.NOTHING` i jawne zaślepki. To ta sama mechanika co w §6.2(a), tylko od drugiej strony.
+
+### 6.5 Co z tego zostaje na później
+
+Z kolejności w §5 zostały dwie ostatnie pozycje: kontrakty dla nowych fake'ów
+(`VoteRepositoryContractTest` wzorem `MemeErasureContractTest`), a potem `ClosureOutcome`
+i `requestedRule` z §2.2. Doszły trzy:
+
+- Obietnica „mema zarezerwowanego przez trwającą sagę nikt nie zdejmie" nie ma nigdzie
+  scenariusza. To obietnica *jednego serwisu*, więc jej miejsce to `microservice-memes/specs`.
+- `InMemoryCollectionRepository` i `InMemorySagaStore` to fake'i pod nazwą zarezerwowaną dla
+  adapterów produkcyjnych — §6.3. Commit w tamtych repozytoriach.
+- Ogłoszenie z §6.4 nie ma paktu. `COMMENTS_DELETED` z kaskady ma
+  (`CommentsDeletedPactProviderTest`), a to samo zdarzenie wychodzące z zamknięcia konta idzie tą
+  samą drogą i tym samym outboxem — ale nic tego nie sprawdza od strony transportu.
+
+*Kontekst kodu: §§0–5 opisują stan po commitach z 28.09.2026 (`69cb8c7` w `workspace-portal`,
+`80a9aec` w `microservice-memes`, `ab178cb` w `microservice-comments`) i numery linii są z tego
+stanu — §6 je przesunął. W szczególności `Portal.java` leży teraz w `portal/world/`, a `Heap*`
+nazywają się `Fake*` (§6.3), więc odwołania w §1.1 i §4 trafiają w pliki pod innymi ścieżkami.*
