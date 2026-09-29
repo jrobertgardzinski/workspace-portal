@@ -79,6 +79,29 @@ public final class FakeMemes extends FakeMemeErasure implements MemeRepository {
                 .toList();
     }
 
+    /**
+     * Every row this fake holds, one canonical line each, sorted — the meme half of
+     * {@link Portal#fingerprint()}.
+     *
+     * <p>The reservation is read as a BOOLEAN and not as the instant {@code marks()} keeps. When a
+     * row was reserved is the clock's business: two schedules that differ only in how many
+     * timeouts passed before the same thing happened are not two different outcomes, and a
+     * fingerprint carrying the instant would say they are.
+     */
+    public List<String> rows() {
+        return memes.values().stream()
+                .map(meme -> "meme " + meme.id()
+                        + " by " + meme.authorId().map(UserId::toString).orElse("nobody")
+                        + (isMarked(meme.id()) ? " RESERVED" : ""))
+                .sorted()
+                .toList();
+    }
+
+    /** Every id held right now, marked ones included — what "the portal still holds" enumerates. */
+    public List<String> everyId() {
+        return memes.keySet().stream().sorted().toList();
+    }
+
     // posting and reading a meme are not part of closing an account
     @Override
     public void save(Meme meme) {

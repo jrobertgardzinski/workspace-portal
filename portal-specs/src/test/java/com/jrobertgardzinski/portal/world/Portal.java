@@ -29,11 +29,17 @@ import com.jrobertgardzinski.observation.Observations;
 import com.jrobertgardzinski.purge.PurgeRule;
 import com.jrobertgardzinski.unitofwork.UnitOfWork;
 
+import com.jrobertgardzinski.voting.VoteDirection;
+
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.mockito.Mockito.mock;
 
@@ -63,8 +69,11 @@ public final class Portal {
      * — is invisible to a store that answers 0 whatever happens to it. They come from the services'
      * own test-jars, so the specs and each service's use-case tests count votes the same way.
      */
-    public final FakeVoteRepository memeVotes = new FakeVoteRepository();
-    public final FakeCommentVotes commentVotes = new FakeCommentVotes();
+    private final Map<String, Map<String, VoteDirection>> memeBallots = new HashMap<>();
+    private final Map<String, Map<String, VoteDirection>> commentBallots = new HashMap<>();
+
+    public final FakeVoteRepository memeVotes = new FakeVoteRepository(memeBallots);
+    public final FakeCommentVotes commentVotes = new FakeCommentVotes(commentBallots);
     public final FakePurgePolicyOverride purgePolicy = new FakePurgePolicyOverride();
 
     /** The specs' clock; a saga's patience is measured against it. */
@@ -91,6 +100,54 @@ public final class Portal {
 
     public void windForward(Duration by) {
         now = now.plus(by);
+    }
+
+    // ---- the whole world, read at once -------------------------------------------------------
+
+    /**
+     * Every row in this process, canonically ordered — the one total read of the world.
+     *
+     * <p>Every assertion in {@code ../specs} is a POINT read: "nothing is left under their first
+     * meme", "the stranger still has that comment saved". A point read answers a question somebody
+     * already thought to ask. Comparing two runs — which is what asking "does the order matter"
+     * means — needs a read that answers all of them at once, including the ones nobody asked.
+     *
+     * <p>Three uses, and each is a reason this is one method and not three: it groups
+     * interleavings into their distinct outcomes, it prunes the search (two interleavings that
+     * reached the same fingerprint with the same wire in front of them have the same future), and
+     * it IS the idempotence law — a duplicate that changed nothing changed no character here.
+     *
+     * <p>What it deliberately leaves out: the instant of a reservation (see
+     * {@link FakeMemes#rows()}) and the identity of a saga row. What the saga DID is read where
+     * the portal can see it — the verdicts the bus sent to security — and not out of the
+     * orchestrator's private map.
+     */
+    public String fingerprint() {
+        List<String> lines = new ArrayList<>();
+        lines.addAll(memes.rows());
+        lines.addAll(comments.rows());
+        lines.addAll(favourites.rows());
+        lines.addAll(ballots("meme-vote", memeBallots));
+        lines.addAll(ballots("comment-vote", commentBallots));
+        purgePolicy.current().ifPresent(rule -> lines.add("purge-dial " + rule));
+        return String.join("\n", lines);
+    }
+
+    private List<String> ballots(String what, Map<String, Map<String, VoteDirection>> votes) {
+        List<String> lines = new ArrayList<>();
+        votes.forEach((subject, cast) -> cast.forEach((voter, direction) ->
+                lines.add(what + " " + subject + " " + voter + " " + direction)));
+        return lines.stream().sorted().toList();
+    }
+
+    /** Every meme id held right now — what a dangling pointer is checked against. */
+    public List<String> memeIds() {
+        return memes.everyId();
+    }
+
+    /** Every comment id held right now. */
+    public List<String> commentIds() {
+        return comments.everyId();
     }
 
     // ---- account closure: this service's participant, as deployed ----------------------------

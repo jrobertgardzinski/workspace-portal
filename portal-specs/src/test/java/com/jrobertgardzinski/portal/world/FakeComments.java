@@ -63,6 +63,25 @@ public final class FakeComments extends FakeCommentErasure implements CommentRep
         return activeOf(userId);
     }
 
+    /**
+     * Every row this fake holds, one canonical line each, sorted — the comment half of
+     * {@link com.jrobertgardzinski.portal.world.Portal#fingerprint()}. The reservation is read as
+     * a boolean, for the reason {@link FakeMemes#rows()} gives.
+     */
+    public List<String> rows() {
+        return rows.stream()
+                .map(row -> "comment " + row.id() + " under " + row.memeId()
+                        + " by " + row.authorId().map(UserId::toString).orElse("nobody")
+                        + (isMarked(row.id()) ? " RESERVED" : ""))
+                .sorted()
+                .toList();
+    }
+
+    /** Every id held right now, marked ones included. */
+    public List<String> everyId() {
+        return rows.stream().map(Comment::id).sorted().toList();
+    }
+
     // writing a comment is not part of closing an account
     @Override
     public void save(Comment comment) {

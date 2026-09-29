@@ -16,6 +16,13 @@ part`) so a scenario can say what is true in between. Content ids are minted by
 `world.ContentIds` as UUIDs, because the cascade's wire contract accepts nothing else and a
 readable id is an announcement every hop would drop.
 
+Over both buses sits one `races.Wire`: a queue per (topic, partition key, consumer group), which
+is what a broker actually serialises, and a `Scheduler` that decides which of the records it could
+hand over next actually goes next. `Scheduler.FIFO` is the `while (!inFlight.isEmpty())` loop that
+was there before, named — every scenario in `../specs` runs under it and not one of them had to
+change. `races.Explorer` is every OTHER answer: it walks the whole tree of legal orders and reports
+the distinct states the portal can end in, which is what `../specs/races` holds.
+
 What runs here: the decisions. What does not: Kafka, Postgres, HTTP, Spring, containers. A whole
 account closure and a whole deletion cascade take milliseconds, which is what lets these
 promises be stated without first deciding whether the portal ships as six services or one.

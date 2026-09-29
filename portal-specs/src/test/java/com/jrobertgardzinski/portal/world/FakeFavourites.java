@@ -54,6 +54,21 @@ public final class FakeFavourites extends FakeCollectionRepository {
     }
 
     /**
+     * Every row this fake holds, one canonical line each, sorted — the favourites half of
+     * {@link Portal#fingerprint()}. Only the people this fake has saved for, for the reason
+     * {@link #pointingAt} gives: the repository it extends keys by user and walks none.
+     */
+    public List<String> rows() {
+        return savers.stream()
+                .flatMap(userId -> heldBy(userId).stream())
+                .map(item -> "saved " + item.ref().itemType() + ":" + item.ref().itemId()
+                        + " by " + item.user() + " in " + item.collection()
+                        + (item.isPendingErasure() ? " RESERVED" : ""))
+                .sorted()
+                .toList();
+    }
+
+    /**
      * Every row anybody still has pointing at this thing, marked ones included — the reader the
      * deletion specs ask "did the cascade reach it".
      *
