@@ -6,9 +6,13 @@ import com.jrobertgardzinski.comments.application.CommentRepository;
 import com.jrobertgardzinski.comments.application.FakeCommentErasure;
 import com.jrobertgardzinski.comments.domain.Comment;
 
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -80,6 +84,32 @@ public final class FakeComments extends FakeCommentErasure implements CommentRep
     /** Every id held right now, marked ones included. */
     public List<String> everyId() {
         return rows.stream().map(Comment::id).sorted().toList();
+    }
+
+    /**
+     * Every row and every mark as they are now, and the way back to them — the comment half of
+     * {@link Portal#snapshot()}.
+     *
+     * <p>A mark whose row the cascade has already deleted is a state this fake really reaches —
+     * {@link #deleteByMeme} is status-blind, exactly like the adapter — so the way back cannot
+     * assume a row for every mark, and builds the record {@link #store} needs out of the id alone.
+     */
+    public Snapshot snapshot() {
+        List<Comment> rowsThen = List.copyOf(rows);
+        Map<String, Instant> marksThen = marks();
+        return () -> {
+            rows.clear();
+            rows.addAll(rowsThen);
+            Set<String> touched = new HashSet<>(marks().keySet());
+            touched.addAll(marksThen.keySet());
+            for (String id : touched) {
+                Instant marked = marksThen.get(id);
+                store(new Comment(id, ContentIds.of("a thread this store never reads"),
+                        Optional.empty(), "a comment",
+                        marked == null ? CommentStatus.ACTIVE : CommentStatus.PENDING_ERASURE,
+                        marked));
+            }
+        };
     }
 
     // writing a comment is not part of closing an account

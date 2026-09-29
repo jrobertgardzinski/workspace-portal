@@ -105,7 +105,8 @@ public final class DeletionInOneProcess {
 
         deleteMeme = world.deleteMeme(memeEvents);
         // the hop's unit of work: in one process there is one, and running the step IS it
-        commentsParticipant = world.commentsDeletion(commentEvents, Runnable::run);
+        // the cascade's hop shares the world's transactions: one service, one manager
+        commentsParticipant = world.commentsDeletion(commentEvents, world.unitsOfWork());
         collectionsParticipant = world.collectionsDeletion();
     }
 

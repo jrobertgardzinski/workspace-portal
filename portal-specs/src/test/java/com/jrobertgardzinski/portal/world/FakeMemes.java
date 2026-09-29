@@ -5,11 +5,15 @@ import com.jrobertgardzinski.memes.application.FakeMemeErasure;
 import com.jrobertgardzinski.memes.application.MemeRepository;
 import com.jrobertgardzinski.memes.domain.Meme;
 import com.jrobertgardzinski.memes.domain.MemeMetadata;
+import com.jrobertgardzinski.memes.domain.MemeStatus;
 
+import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -100,6 +104,31 @@ public final class FakeMemes extends FakeMemeErasure implements MemeRepository {
     /** Every id held right now, marked ones included — what "the portal still holds" enumerates. */
     public List<String> everyId() {
         return memes.keySet().stream().sorted().toList();
+    }
+
+    /**
+     * Every row and every mark as they are now, and the way back to them — what a unit of work that
+     * fails leaves behind ({@link UnitsOfWork}).
+     *
+     * <p>The way back goes through {@link #store}, the same door the saga's own use cases write a
+     * mark through, rather than into the map the superclass keeps them in. A mark whose row is gone
+     * is put back the same way: the store reads nothing off the record it is handed but the id and
+     * the instant, which is why a synthetic one does here what it could not do anywhere else.
+     */
+    public Snapshot snapshot() {
+        Map<String, Meme> rowsThen = new HashMap<>(memes);
+        Map<String, Instant> marksThen = marks();
+        return () -> {
+            memes.clear();
+            memes.putAll(rowsThen);
+            Set<String> touched = new HashSet<>(marks().keySet());
+            touched.addAll(marksThen.keySet());
+            for (String id : touched) {
+                Instant marked = marksThen.get(id);
+                store(new MemeMetadata(id, Optional.empty(), "png",
+                        marked == null ? MemeStatus.ACTIVE : MemeStatus.PENDING_ERASURE, marked));
+            }
+        };
     }
 
     // posting and reading a meme are not part of closing an account

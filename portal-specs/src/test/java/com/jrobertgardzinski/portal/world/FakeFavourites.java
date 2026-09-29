@@ -5,8 +5,10 @@ import com.jrobertgardzinski.collections.application.FakeCollectionRepository;
 import com.jrobertgardzinski.collections.domain.ItemRef;
 import com.jrobertgardzinski.collections.domain.SavedItem;
 
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -66,6 +68,42 @@ public final class FakeFavourites extends FakeCollectionRepository {
                         + (item.isPendingErasure() ? " RESERVED" : ""))
                 .sorted()
                 .toList();
+    }
+
+    /**
+     * Every row of everybody this fake has saved for, as it is now, and the way back to it — the
+     * favourites half of {@link Portal#snapshot()}.
+     *
+     * <p>The only way in is the port: {@link #add}, {@link #remove} and {@link #store}. A reserved
+     * row is not removable — the fake refuses it, exactly as the JDBC twin does — so a row this
+     * unit of work both saved and reserved is unmarked first and then taken out, which is the only
+     * order the repository allows.
+     */
+    public Snapshot snapshot() {
+        Set<UserId> saversThen = new LinkedHashSet<>(savers);
+        Map<UserId, List<SavedItem>> rowsThen = new LinkedHashMap<>();
+        savers.forEach(user -> rowsThen.put(user, heldBy(user)));
+        return () -> {
+            savers.clear();
+            savers.addAll(saversThen);
+            rowsThen.forEach((user, then) -> {
+                for (SavedItem now : heldBy(user)) {
+                    if (then.stream().noneMatch(was -> sameRow(was, now))) {
+                        store(now.restore());
+                        remove(user, now.collection(), now.ref());
+                    }
+                }
+                for (SavedItem was : then) {
+                    add(was.user(), was.collection(), was.ref());
+                    store(was);
+                }
+            });
+        };
+    }
+
+    /** The natural key the schema makes UNIQUE, which is what "the same row" means here. */
+    private static boolean sameRow(SavedItem left, SavedItem right) {
+        return left.collection().equals(right.collection()) && left.ref().equals(right.ref());
     }
 
     /**

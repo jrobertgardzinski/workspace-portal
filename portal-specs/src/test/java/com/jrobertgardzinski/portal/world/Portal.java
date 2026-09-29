@@ -40,6 +40,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.mockito.Mockito.mock;
 
@@ -75,6 +76,14 @@ public final class Portal {
     public final FakeVoteRepository memeVotes = new FakeVoteRepository(memeBallots);
     public final FakeCommentVotes commentVotes = new FakeCommentVotes(commentBallots);
     public final FakePurgePolicyOverride purgePolicy = new FakePurgePolicyOverride();
+
+    /**
+     * This world's transactions, and the reason a participant here can be made to fail. Every
+     * participant this class builds shares it, because in the deployed stack they share the one
+     * Spring transaction manager per service — and a runner where each part failed on its own
+     * schedule would be staging something no deployment can do.
+     */
+    private final UnitsOfWork unitsOfWork = new UnitsOfWork(this);
 
     /** The specs' clock; a saga's patience is measured against it. */
     private Instant now = Instant.parse("2026-09-24T12:00:00Z");
@@ -150,6 +159,48 @@ public final class Portal {
         return comments.everyId();
     }
 
+    /**
+     * The whole world as it is now, and the one way back to it — what {@link UnitsOfWork} takes
+     * before a step and puts back when that step's transaction does not commit.
+     *
+     * <p>It is the same reach as {@link #fingerprint()} and deliberately so: anything a rollback
+     * forgot to put back would be a difference the fingerprint reports, and the laws next door read
+     * the portal through nothing else. The ballots are here for that reason and not because a
+     * closure votes — {@code PurgeUserContent} retracts the leaver's ballots before it reads a
+     * score, and a rollback that left them retracted would change what the next attempt decides.
+     */
+    public Snapshot snapshot() {
+        Snapshot rows = Snapshot.of(memes.snapshot(), comments.snapshot(), favourites.snapshot());
+        Map<String, Map<String, VoteDirection>> memeBallotsThen = ballotsNow(memeBallots);
+        Map<String, Map<String, VoteDirection>> commentBallotsThen = ballotsNow(commentBallots);
+        Optional<PurgeRule> dialThen = purgePolicy.current();
+        return () -> {
+            rows.restore();
+            putBallotsBack(memeBallots, memeBallotsThen);
+            putBallotsBack(commentBallots, commentBallotsThen);
+            dialThen.ifPresentOrElse(rule -> purgePolicy.set(rule, "a unit of work that rolled back"),
+                    () -> purgePolicy.clear("a unit of work that rolled back"));
+        };
+    }
+
+    /** The transactions every participant over this world shares. */
+    public UnitsOfWork unitsOfWork() {
+        return unitsOfWork;
+    }
+
+    private static Map<String, Map<String, VoteDirection>> ballotsNow(
+            Map<String, Map<String, VoteDirection>> votes) {
+        Map<String, Map<String, VoteDirection>> copy = new HashMap<>();
+        votes.forEach((subject, cast) -> copy.put(subject, new HashMap<>(cast)));
+        return copy;
+    }
+
+    private static void putBallotsBack(Map<String, Map<String, VoteDirection>> votes,
+                                       Map<String, Map<String, VoteDirection>> then) {
+        votes.clear();
+        votes.putAll(ballotsNow(then));
+    }
+
     // ---- account closure: this service's participant, as deployed ----------------------------
 
     /**
@@ -167,7 +218,7 @@ public final class Portal {
                         mock(MemeContentIndex.class), mock(TagRepository.class),
                         memeEvents, purgePolicy,
                         new PurgeRule.Delete()),
-                confirmations, Observations.silent(), Runnable::run);
+                confirmations, Observations.silent(), unitsOfWork);
     }
 
     /**
@@ -183,7 +234,7 @@ public final class Portal {
                 new RestoreUserComments(comments),
                 new PurgeUserComments(comments, comments, commentVotes,
                         new PurgeRule.Delete()),
-                commentEvents, confirmations, Observations.silent(), Runnable::run);
+                commentEvents, confirmations, Observations.silent(), unitsOfWork);
     }
 
     public CollectionsClosureParticipant collectionsClosure() {
