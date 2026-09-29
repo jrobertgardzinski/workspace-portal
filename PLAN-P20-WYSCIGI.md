@@ -619,8 +619,8 @@ wszystkie przeszukiwania wyczerpujące, żadne prawo złamane na żadnym harmono
 
 ### 12.10 Co zostaje
 
-- **Etap 3** (oś awarii, `UnitOfWork`, który potrafi się nie udać) — nietknięty, zgodnie z §7.
-  Prawo I7 nadal niesprawdzone i tak oznaczone.
+- ~~**Etap 3** (oś awarii, `UnitOfWork`, który potrafi się nie udać).~~ **Zrobiony — §13.**
+  Prawo I7 sprawdzone w swojej klasie.
 - ~~**Dwie sagi i kompensacja.**~~ **Zmierzone.** Wersja z dwiema sagami i czterema sweepami
   okazała się za droga (533 tys. węzłów i przeszukiwanie dalej przycięte), a przede wszystkim
   zadawała pytanie okrężnie. Ziarno `given-up-after-the-cascade` zadaje je wprost, jedną sagą:
@@ -635,3 +635,147 @@ wszystkie przeszukiwania wyczerpujące, żadne prawo złamane na żadnym harmono
   to ta sama decyzja na **każdym** przeplocie, a nie że tak akurat wyszło.
 - **Redukcja częściowego porządku.** Przycinanie po odcisku wystarczyło wszędzie poza
   `the-sweeper`. Jeśli dojdą ziarna z sweepami, będzie to pierwsze miejsce do policzenia.
+
+---
+
+## 13. Etap 3 — oś awarii (29.09.2026)
+
+Etap, który §7 kazał odciąć i zrobić osobno. Dowozi prawo I7 i jedno znalezisko, którego §§1–12 nie
+przewidziały — bo dotyczy nie portalu, a momentu, w którym wolno o portal pytać.
+
+### 13.1 Świat, który potrafi się cofnąć
+
+`world.UnitsOfWork` to `UnitOfWork`, któremu można powiedzieć, że **następna** transakcja się nie
+zacommituje. Do 29.09 runner wstawiał wszędzie `Runnable::run`, czyli jednostkę pracy, która zawsze
+się udaje — i dlatego cały powód istnienia `AtomicClosureParticipant` („ukryte wiersze, o których
+nikt nie jest winien słowa" i „słowo o wierszach, których nikt nie ukrył") był tutaj niewypowiadalny.
+
+Wycofanie stawia świat tak, jak go krok zastał: `Portal.snapshot()`, a pod nim trzy fake'i, które
+oddają `Snapshot`, zamiast dać sobie nadpisać wiersze. Droga powrotna idzie **tymi samymi drzwiami,
+którymi piszą use case'y** — `store` na marka, `add`/`remove` na zapisany wskaźnik — więc żaden
+restore nie postawi świata w stanie, do którego use case nie umiałby dojść.
+
+Zasięg snapshotu to zasięg `fingerprint()`, i to celowo: prawa czytają portal wyłącznie przez odcisk,
+więc czego odcisk nie widzi, tego nie warto przywracać, a co widzi — trzeba. Dlatego w środku są też
+głosy i dial administratora: `PurgeUserContent` wycofuje głosy odchodzącej **przed** odczytem score'u,
+a wycofanie, które zostawiłoby je wycofane, zmieniłoby decyzję następnej próby.
+
+Trzy granice wypowiedziane od razu, zamiast odkryte później:
+
+- to jest **stan postawiony z powrotem, nie odtworzony dziennik zapisów**. Jest poprawne tylko
+  dlatego, że nic tu nie biegnie obok jednostki pracy: krok kończy się przed następnym, więc „jak
+  było, gdy to się zaczęło" i „jak byłoby, gdyby to się nie wydarzyło" są tym samym światem. Runner
+  z dwoma wątkami potrzebowałby dziennika;
+- **zagnieżdżenie dołącza.** Jednostka pracy zaczęta w środku już trwającej to ta sama transakcja —
+  jeden snapshot, jedno zakończenie — czyli to, co daje prawdziwy menedżer transakcji use case'owi,
+  który otwiera swoją;
+- staged jest **kształt awarii, nie obietnica o Postgresie**. Tamto zostaje w testach JDBC i w `e2e/`.
+
+### 13.2 Outbox: słowo wychodzi z transakcją albo nie wychodzi wcale
+
+Potwierdzenie obu atomowych uczestników budował dotąd **bus**, z liczby, którą uczestnik zwrócił;
+port `ClosureConfirmations` był podłączony do `(sagaId, leaver, reserved) -> { }`. Słowo zbudowane
+w ten sposób nie umie się rozjechać z markiem, cokolwiek padnie — co jest wygodne i co czyni jedyną
+awarię, przed którą `AtomicClosureParticipant` broni, niewypowiadalną w jedynym miejscu, gdzie oba
+protokoły się spotykają.
+
+Teraz każdy atomowy uczestnik potwierdza **swoim portem**, port pisze do jednostki pracy, a
+`UnitsOfWork#onCommit` wysyła to, co transakcja zacommitowała, i wyrzuca to, co wycofała. Tymi samymi
+drzwiami idą ogłoszenia kaskady: `MEME_DELETED` z nieodwracalnej połowy zamknięcia i
+`COMMENTS_DELETED` z purge'a komentarzy — dokładnie tak, jak `KafkaMemeEvents` pisze je do tabeli
+outboxa, a nie wprost do brokera. Poza jednostką pracy rekord wychodzi od razu, bo nic go nie trzyma.
+
+Kolekcje dalej potwierdzają przez swojego **konsumenta**, i ta asymetria jest treścią, nie
+przeoczeniem: nie mają outboxa, do którego by pisały, więc nie mają transakcji do współdzielenia. To
+ten sam podział, który robią kontrakty estate'u (`ClosureParticipantContractTest` vs
+`AtomicParticipantContractTest`).
+
+### 13.3 Dwie końcówki w przeszukiwaniu — i model offsetu
+
+Na każdym kroku, którego konsument pracuje w transakcji (dwaj atomowi uczestnicy i hop komentarzy
+kaskady), eksplorator dostaje dwie dodatkowe opcje:
+
+- **transakcja się wycofuje.** Rekord wraca na **głowę** swojego pasa, bo konsument, który nie
+  zacommitował, nie przesunął też offsetu — broker wciąż jest mu ten rekord winien. Zamodelowanie
+  nieudanej dostawy jako **zgubionego** rekordu byłoby tym samym błędem, co modelowanie leżącego
+  uczestnika przez wyrzucanie jego wiadomości (§12.5), o jeden poziom niżej. Ma własny test;
+- **commituje i proces umiera, zanim outbox zostanie wysłany.** Wiersze zapisane, słowo
+  zacommitowane i niewysłane, a relay może przyjść w dowolnym momencie. Relay jest **zawsze
+  dostępny i nigdy obowiązkowy**, więc przeszukiwanie pyta, czy portal przeżyje każde jego
+  **opóźnienie** — i żaden harmonogram nie kończy się z pełnym outboxem.
+
+Zawartość outboxa jest częścią stanu (to tabela), więc wchodzi do odcisku przeszukiwania; w pliku
+konfluencji linia o niej pojawia się tylko wtedy, gdy outbox coś trzyma — pusty outbox nie jest
+faktem o harmonogramie, a linia mówiąca to w każdym pliku nie mówiłaby nic.
+
+Czego oś **nie** dotyka: kolekcji na obu protokołach (nie mają transakcji) i **orkiestratora** — jego
+własny store nie jest częścią świata, który snapshot przywraca, więc jego transakcja jest granicą tej
+warstwy, a nie czymś staged byle jak.
+
+### 13.4 Prawo I7, i kiedy wolno je pytać
+
+> **Część, która mówiła, jest trzymana przez tę samą część.**
+
+Pytane w ciszy i tylko dopóki sprawa jest **otwarta**: oba działania, które zdejmują marka — ERASE
+i RESTORE — są komenderowane w tym samym kroku, który produkuje werdykt, więc cichy harmonogram bez
+werdyktu to taki, w którym nic nie miało jeszcze okazji zdjąć rezerwacji części, która coś
+zarezerwowała. Po werdykcie pytają o to dwa inne prawa: „sprawa zamknięta i nic nie jest
+zarezerwowane" oraz „purged znaczy, że portal nie trzyma nic tej osoby".
+
+O części, która potwierdziła **zero**, prawo nie mówi nic: zero to prawdziwa odpowiedź części, która
+nie ma nic tej osoby, i re-komenderowanego MARK-a, który znajduje wszystko już zarezerwowane.
+
+### 13.5 Znalezisko 5 — prawo pytane w złym momencie
+
+Moje własne, drugie tej klasy po §12.5a, i warte tyle samo.
+
+Prawo „część nigdy nie potwierdza więcej, niż trzyma" było pytane tam, gdzie rekord **wychodzi**.
+Z outboxem to są dwa różne momenty i to jest cały sens tabeli: słowo powstaje w transakcji, która
+ukryła wiersze, a relay wysyła je, kiedy przyjdzie — a wtedy erazura może już zabrać każdy wiersz,
+o którym słowo mówiło. Pierwszy przebieg `a-word-that-waits` zgłosił dokładnie to jako część, która
+kłamie. To był outbox działający poprawnie.
+
+Naprawione: prawo jest pytane tam, gdzie słowo **powstaje**. Morał ten sam, co poprzednio:
+narzędzie do szukania wyścigów, którego nie sprawdzono na własnym mechanizmie, zgłasza swój model.
+
+### 13.6 Test mutacyjny, bez którego etap byłby zdaniem bez dowodu
+
+`SENDS_AND_THEN_ROLLS_BACK` — słowo poszło, praca nie — to jedyna awaria, którą outbox czyni
+niemożliwą, więc **nic nie oferuje jej przeszukiwaniu**: warstwa, która inscenizuje awarię wykluczoną
+własnym projektem i potem ją zgłasza, mierzy swoją inscenizację. Jeden test stawia ją ręcznie
+i sprawdza, że prawo pęka: część mówi, że zarezerwowała mema, mark się wycofuje, saga idzie dalej do
+erazury, która nie ma czego zetrzeć, i portal mówi tożsamości, że treść jest wyczyszczona, kiedy
+treść stoi. Bez tego „żadne prawo nie pękło na żadnym harmonogramie" byłoby zdaniem bez dowodu, że
+prawo w ogóle mogło pęknąć.
+
+### 13.7 Liczby
+
+| ziarno | harmonogramów | węzłów | stanów końcowych |
+|---|---:|---:|---:|
+| `a-unit-of-work-that-fails` | 10 | 983 | **1** |
+| `a-word-that-waits` | 37 | 189 331 | **3** |
+
+Oba wyczerpujące, żadne prawo złamane. Trzy końce `a-word-that-waits` to ten sam kształt, co wszędzie
+indziej w tej warstwie: **wiersze są identyczne** — portal nie trzyma nic jej — a różni się liczba
+w potwierdzeniu, bo re-komenderowany MARK znajduje wszystko już zarezerwowane i prawdziwie potwierdza
+0, kiedy pierwsze słowo leży jeszcze w outboxie. Kolejność zmienia to, co portal obiecał; nie zmienia
+tego, co trzyma.
+
+Koszt: `portal-specs` to **87 testów** (67 speców, 5 na samo wycofanie, 13 ziaren, 2 na model osi),
+`clean test` w 2 min 34 s. Jedenaście starszych ziaren kończy dokładnie tam, gdzie kończyło —
+budżet awarii jest zerowy, dopóki ziarno o niego nie poprosi.
+
+### 13.8 §3.3 poz. 2 po fakcie
+
+| poz. §3.3 | stan |
+|---|---|
+| 2. jednostka pracy | **zmierzone w swojej klasie.** `Runnable::run` zastąpiony jednostką pracy, która potrafi się nie udać; obietnica „ogłoszenie dzieli los pracy w obie strony" jest tu sprawdzona na każdym harmonogramie, w którym jedna transakcja nie commituje. Nadal **nie** dowodzi, że Postgres i outbox tak się zachowają — to zostaje w `KafkaMemeEventsTransactionTest` i w `e2e/` |
+
+### 13.9 Co zostaje
+
+- **Orkiestrator.** Jego transakcja (wiersz sagi plus outbox) nie jest staged, bo jego store nie
+  jest częścią świata, który snapshot przywraca. To pierwsze miejsce, gdzie ta oś może pójść dalej.
+- **Budżet awarii większy niż jeden.** Dwie awarie w jednym harmonogramie to iloczyn, nie suma;
+  `a-word-that-waits` przy jednej awarii i dwóch sweepach ma już 189 tys. węzłów.
+- **Redukcja częściowego porządku** — dalej pierwsza rzecz do policzenia, jeśli ziaren z sweepami
+  albo awariami dojdzie więcej (§12.10).

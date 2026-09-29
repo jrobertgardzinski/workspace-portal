@@ -41,7 +41,30 @@ schedule, and a law that breaks comes with the schedule that breaks it:
 | the portal decides once | two different verdicts for one closure — the once-latch slipped |
 | purged means the portal holds nothing of them | a person who asked to be forgotten and, on some order of the same events, was not |
 | no thread outlives the meme it hangs under | the cascade lost, on some order |
-| a part never confirms more than it is holding | a number leaving the portal that was never true |
+| a part never confirms more than it is holding | a number leaving the portal that was never true — asked where the word is WRITTEN, not where the outbox sends it, because those are two different moments on purpose |
+| a part that has spoken is holding what it spoke about | the mark and the word about it came apart: a saga waiting for a confirmation that will never come, or walking on towards an erasure with nothing reserved to erase |
+
+## The failure axis
+
+A seed may also allow one unit of work not to commit (`wherePartsMayFail`). Two endings then join
+the tree at every step whose consumer works inside a transaction — the two participants that owe the
+orchestrator a confirmation, and the cascade's comments hop:
+
+- **it rolls back.** The record goes back to the head of its lane: a consumer that did not commit did
+  not move its offset either, and the broker still owes it that record. A failed delivery is not a
+  lost one, for the same reason a part that is down does not lose its messages;
+- **it commits and the process dies before the outbox is sent.** The rows are written, the word is
+  committed and unsent, and the relay may come round at any moment. The relay is always available
+  and never compulsory, so what the search asks is whether the portal survives every DELAY of it.
+  A state carries a `held in the outbox:` line while the outbox is holding something, because an
+  outbox row is a row.
+
+What the axis leaves alone: collections on both protocols (it has no transaction to share) and the
+orchestrator (its own store is not part of the world a snapshot puts back). One failure the axis
+refuses to stage is the word leaving a transaction that then rolled back — the outbox makes it
+impossible, and a layer that stages what its own design prevents measures its own staging. It is
+staged in exactly one place, a test that asserts a law breaks there, so that "every law held" is a
+sentence with evidence behind it.
 
 ## What this level cannot decide
 

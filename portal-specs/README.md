@@ -23,6 +23,12 @@ was there before, named — every scenario in `../specs` runs under it and not o
 change. `races.Explorer` is every OTHER answer: it walks the whole tree of legal orders and reports
 the distinct states the portal can end in, which is what `../specs/races` holds.
 
+Every participant here shares one `world.UnitsOfWork` — a unit of work that can be told not to
+commit, which is what the three wiring points used to get `Runnable::run` for. A rollback puts the
+rows back through `Portal.snapshot()`, and what a participant announced inside that transaction goes
+out with it or not at all: the confirmation an atomic participant writes to its port, and the
+cascade's announcements, leave through the same outbox the deployed stack writes them to.
+
 What runs here: the decisions. What does not: Kafka, Postgres, HTTP, Spring, containers. A whole
 account closure and a whole deletion cascade take milliseconds, which is what lets these
 promises be stated without first deciding whether the portal ships as six services or one.
