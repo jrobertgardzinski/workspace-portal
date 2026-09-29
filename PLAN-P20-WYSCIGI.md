@@ -880,7 +880,7 @@ konfluencji bajt w bajt bez zmian. 89 testów zielonych.
 
 Liczby, zanim decyzja. Odsetek węzłów przyciętych jako „już widziane": `a-word-that-waits`
 178 281 / 215 507 (**83 %**), `an-orchestrator-that-fails` 22 899 / 28 761 (**80 %**),
-`the-sweeper` 233 040 / 269 820 (**86 %**).
+`the-sweeper` 218 336 / 269 820 (**81 %**), `two-people-leaving` 13 799 / 17 738 (**78 %**).
 
 To znaczy, że **memoizacja po odcisku już robi to, co dałaby POR**: diament A;B kontra B;A schodzi
 się w jeden węzeł, bo oba prowadzą do tego samego odcisku z tym samym drutem i tymi samymi budżetami.
