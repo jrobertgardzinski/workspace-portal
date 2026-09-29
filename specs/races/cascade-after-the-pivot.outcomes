@@ -1,0 +1,18 @@
+# cascade-after-the-pivot
+
+Alice's meme has a stranger's thread under it and two strangers' pointers at it and into it. 
+Erasing it starts a cascade AFTER the pivot — and the cascade's two hops are keyed by the 
+meme while the saga is keyed by the leaver, so nothing orders them against each other. The 
+specs deliver that cascade on a step of their own, always last; this asks about every other 
+placement. 
+
+search: exhaustive — every schedule this transport allows was walked
+distinct end states: 1
+
+[A]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=0, alice/comments=0, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+every law held on every schedule walked

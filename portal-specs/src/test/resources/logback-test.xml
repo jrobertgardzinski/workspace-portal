@@ -1,0 +1,18 @@
+<!--
+  Silence, which this module has been claiming to have since it was written.
+
+  The pom asks for slf4j-nop "so a no-op binding keeps the runner silent instead of warning on
+  every scenario". Logback arrives transitively behind one of the participants and WINS the
+  provider race — SLF4J says so on every run ("Actual provider is of type LogbackServiceProvider")
+  — so every scenario has been printing the participants' INFO lines all along.
+
+  It cost nothing while a run was sixty-six scenarios. It stops being free the moment the races
+  next door run the same participants tens of thousands of times: the log, not the search, was
+  the slow part, and it filled the disk before it filled the report.
+
+  Nothing in this module asserts on a log line. The three services that DO assert on theirs do it
+  in their own repositories, against their own configuration.
+-->
+<configuration>
+    <root level="OFF"/>
+</configuration>

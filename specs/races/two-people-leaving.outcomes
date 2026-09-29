@@ -1,0 +1,23 @@
+# two-people-leaving
+
+Alice and carol both ask to be forgotten, at the same time. Carol wrote under alice's meme, 
+so erasing alice's content starts a cascade that takes a row carol's own closure has 
+reserved — two sagas on two partitions, no order between them, and one of them destroying 
+what the other promised to hold. 
+
+search: exhaustive — every schedule this transport allows was walked
+distinct end states: 2
+
+[A]
+    identity was told: [PORTAL_CONTENT_PURGED, PORTAL_CONTENT_PURGED]
+    the parts confirmed: {carol/collections=0, carol/comments=1, carol/memes=0, alice/collections=0, alice/comments=0, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+[B]
+    identity was told: [PORTAL_CONTENT_PURGED, PORTAL_CONTENT_PURGED]
+    the parts confirmed: {carol/collections=0, carol/comments=0, carol/memes=0, alice/collections=0, alice/comments=0, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+every law held on every schedule walked

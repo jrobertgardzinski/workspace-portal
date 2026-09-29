@@ -1,0 +1,23 @@
+# given-up-after-the-cascade
+
+The collections service is down, so alice's closure runs out of patience and is given back. 
+Bob takes his own meme down at some moment during it, and alice's comment hangs under that 
+meme. The compensation can only return what it is still holding — and the question is 
+whether that is the same thing on every order of the same events. 
+
+search: exhaustive — every schedule this transport allows was walked
+distinct end states: 2
+
+[A]
+    identity was told: [PORTAL_PURGE_FAILED]
+    the parts confirmed: {alice/comments=1, alice/memes=0}
+    still on the wire: [content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections RESTORE_USER_CONTENT → collections]
+    rows: the portal holds nothing at all
+
+[B]
+    identity was told: [PORTAL_PURGE_FAILED]
+    the parts confirmed: {alice/comments=0, alice/memes=0}
+    still on the wire: [content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections RESTORE_USER_CONTENT → collections]
+    rows: the portal holds nothing at all
+
+every law held on every schedule walked

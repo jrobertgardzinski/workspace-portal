@@ -1,0 +1,22 @@
+# the-whole-seam
+
+Alice owns a meme a stranger wrote under, and wrote under bob's meme herself, and bob takes 
+his down while her closure runs. One closure, two cascades, four consumer groups and an 
+intrusion — every lane the portal has, busy at once, and nothing ordering any of them. 
+
+search: exhaustive — every schedule this transport allows was walked
+distinct end states: 2
+
+[A]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=0, alice/comments=1, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+[B]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=0, alice/comments=0, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+every law held on every schedule walked

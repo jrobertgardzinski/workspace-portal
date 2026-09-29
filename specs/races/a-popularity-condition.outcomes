@@ -1,0 +1,22 @@
+# a-popularity-condition
+
+An administrator closes alice's account keeping any meme with two upvotes. One of her two 
+memes has them and one does not, and each has a stranger's thread under it. One cascade 
+should start, for the meme that goes — and the thread under the meme that stays should be 
+there whichever way the records are ordered. 
+
+search: exhaustive — every schedule this transport allows was walked
+distinct end states: 1
+
+[A]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=0, alice/comments=0, alice/memes=2}
+    still on the wire: []
+    rows:
+      meme alice's meme by nobody
+      comment a stranger's comment under it under alice's meme by a stranger
+      saved meme:alice's meme by somebody who saved it in favourites
+      meme-vote alice's meme fan-1@example.com UP
+      meme-vote alice's meme fan-2@example.com UP
+
+every law held on every schedule walked

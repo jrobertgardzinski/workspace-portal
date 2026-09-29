@@ -1,0 +1,26 @@
+# the-sweeper
+
+The collections part never hears its command, the clock may reach the purge timeout at any 
+moment, and the silent part may come back at any moment too. The race is a late confirmation 
+against the capitulation: the sweeper gives up after the retries are spent, and the answer 
+it gave up on may be on its way. 
+
+search: exhaustive — every schedule this transport allows was walked
+distinct end states: 2
+
+[A]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=1, alice/comments=1, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+[B]
+    identity was told: [PORTAL_PURGE_FAILED]
+    the parts confirmed: {alice/collections=1, alice/comments=1, alice/memes=1}
+    still on the wire: []
+    rows:
+      meme alice's meme by alice
+      comment alice's own comment under somebody's meme by alice
+      saved meme:a meme alice had saved by alice in favourites
+
+every law held on every schedule walked

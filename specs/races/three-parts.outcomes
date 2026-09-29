@@ -1,0 +1,17 @@
+# three-parts
+
+One closure of an account with content on all three axes and nothing else going on. The 
+three participants are three consumer groups and the orchestrator is a fourth; nothing 
+orders any of them against the others. The question is whether the portal ends up in the 
+same place whichever way they are run. 
+
+search: exhaustive — every schedule this transport allows was walked
+distinct end states: 1
+
+[A]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=1, alice/comments=1, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+every law held on every schedule walked

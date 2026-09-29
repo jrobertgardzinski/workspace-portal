@@ -1,0 +1,23 @@
+# both-protocols-on-one-row
+
+Bob's meme with alice's comment under it, and bob takes his meme down at some point during 
+her closure. The cascade's delete is blind to the reservation — deliberately, because it 
+takes a whole thread — so the row can go out from under the saga. The feature file states 
+ONE placement of that take-down; this asks about all of them. 
+
+search: exhaustive — every schedule this transport allows was walked
+distinct end states: 2
+
+[A]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=0, alice/comments=1, alice/memes=0}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+[B]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=0, alice/comments=0, alice/memes=0}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+every law held on every schedule walked

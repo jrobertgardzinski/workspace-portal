@@ -11,8 +11,14 @@ the three services' rows and use cases — and each brings its own bus.
 | level | what it proves | what it needs running |
 |---|---|---|
 | this directory | the orchestrator and the three participants, wired in ONE process | nothing |
+| `races/` | the same, on EVERY order the transport allows — and how many ends there are | nothing |
 | `<service>/specs/` | one service's own axis | nothing |
 | `e2e/features/` | the promise to the person, over the deployed portal | the whole stack |
+
+The second row is not a fourth kind of test; it is the same two protocols with the ORDER taken
+away. Every `.feature` here is drained one message at a time in the order a list happened to hold
+them, and production orders almost none of it: `races/README.md` says what that costs and what it
+can and cannot decide.
 
 ## Why the middle column says "nothing"
 

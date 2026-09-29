@@ -1,0 +1,23 @@
+# at-least-once
+
+One closure with a thread and a pointer, and the broker may hand any ONE record over twice, 
+anywhere — a command, a confirmation, a cascade hop or the verdict. No consumer in the 
+portal keeps a record of what it has already seen, so every hop has to be idempotent by 
+construction rather than by bookkeeping. 
+
+search: exhaustive — every schedule this transport allows was walked
+distinct end states: 2
+
+[A]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=0, alice/comments=0, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+[B]
+    identity was told: [PORTAL_CONTENT_PURGED, PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=0, alice/comments=0, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+every law held on every schedule walked
