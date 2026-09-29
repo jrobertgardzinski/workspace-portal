@@ -801,3 +801,41 @@ samych zbiorach. 88 testów zielonych.
 Zostaje z tego jedna granica: wycofanie transakcji, która **otwiera** sagę. Referencyjny store nie
 umie zapomnieć wiersza (zmiana w innym repo), a sprawę otwiera wyłącznie fakt dostarczony poza
 drutem — nigdy krok, który ta warstwa umie zepsuć.
+
+### 13.11 Sweeper, i dwa rodzaje producenta (29.09.2026, wieczór)
+
+Transakcja sweepera: to, co wybrał, doliczone retry i wyprodukowane rekordy to jedna jednostka pracy.
+Zegar rusza niezależnie — transakcja, która nie commituje, nie oddaje czasu, więc następny tik
+znajduje tę samą sprawę przeterminowaną.
+
+**Znalezisko 6 — moje, trzecie tej klasy.** Pierwsza wersja modelowała rekordy sweepera jako wiersze
+outboxa, czekające na relay. `KafkaLoop#sweep` wysyła je **wprost do brokera**, flushuje i dopiero
+potem oznacza sagi (`settleDeliveries`) — więc śmierć między commitem a wysłaniem **gubi** te rekordy,
+a naprawą jest następny sweep. Model z relayem dał prawo złamane („sprawa zamknięta i nic nie jest
+zarezerwowane"): re-komenda MARK zatrzymana w outboxie, wysłana **po** kapitulacji, rezerwowała
+wiersze, których nic już nigdy nie zwolni. Brzmi jak realna wada — i nie jest, bo takiego wiersza
+outboxa w produkcji nie ma. Trzeci raz to samo: warstwa niesprawdzona na swoim własnym mechanizmie
+zgłasza swój model.
+
+Stąd dwa rodzaje producenta i dwa zakończenia:
+
+| producent | jak publikuje | zakończenie „commit i śmierć przed wysłaniem" | naprawa |
+|---|---|---|---|
+| trzech uczestników | wiersz outboxa w tej samej transakcji (`SpringOutbox` + republisher) | `COMMITS_AND_SAYS_NOTHING_YET` — wiersz czeka | relay |
+| orkiestrator i jego sweeper | wprost do brokera, znacznik po udowodnionym wysłaniu | `COMMITS_AND_LOSES_WHAT_IT_SAID` — rekord przepada | następny sweep |
+
+Przy okazji `markAnnounced` przeniesione z chwili **wyprodukowania** werdyktu na chwilę jego
+**wysłania**, bo tak robi `KafkaLoop`: werdykt zgubiony między commitem a wysłaniem musi zostać
+nieoznaczony, żeby sweeper go powtórzył.
+
+Nowe ziarno `a-sweep-that-fails` (kolekcje leżą, cztery tiki cierpliwości, jedna awaria):
+28 harmonogramów, 35 940 węzłów, **4 stany końcowe**, wyczerpujące, żadne prawo złamane.
+`an-orchestrator-that-fails` dostało jeden tik cierpliwości, żeby naprawa też była w drzewie:
+43 harmonogramy, 28 562 węzły, 4 stany.
+
+Trzy ziarna awaryjne zyskały po jednym nowym stanie końcowym tego samego kształtu: **werdykt zgubiony,
+nikomu nie powiedziano, wiersze zarezerwowane**. To prawdziwe zdanie o portalu przy skończonym budżecie
+sweepów — wdrożony sweeper tyka bez końca i następny tik te rekordy wystawia ponownie. Zapisane
+w `specs/races/README.md`, żeby nikt nie czytał tego stanu jako utraconej treści.
+
+89 testów zielonych.
