@@ -2,6 +2,9 @@ package com.jrobertgardzinski.portal.world;
 
 import com.jrobertgardzinski.unitofwork.UnitOfWork;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * The portal's transactions in this process — the first {@link UnitOfWork} here that can FAIL.
  *
@@ -47,6 +50,9 @@ public final class UnitsOfWork implements UnitOfWork {
 
     private int rolledBack;
 
+    /** What the unit of work now running has said, and has not sent yet — its outbox. */
+    private final List<Runnable> pending = new ArrayList<>();
+
     UnitsOfWork(Portal world) {
         this.world = world;
     }
@@ -70,6 +76,23 @@ public final class UnitsOfWork implements UnitOfWork {
         return rolledBack;
     }
 
+    /**
+     * A record produced INSIDE a unit of work leaves with it, or not at all. That is the whole of
+     * the transactional outbox, and the reason the deployed stack has one: a confirmation written
+     * to a table in the same transaction as the mark cannot be sent by a transaction that never
+     * committed, and cannot be lost by one that did.
+     *
+     * <p>Outside a unit of work it goes out at once, because nothing is holding it — a verdict the
+     * orchestrator publishes, an announcement an author's own teardown makes.
+     */
+    public void onCommit(Runnable record) {
+        if (depth == 0) {
+            record.run();
+            return;
+        }
+        pending.add(record);
+    }
+
     @Override
     public void run(Runnable step) {
         if (depth > 0) {
@@ -85,14 +108,19 @@ public final class UnitsOfWork implements UnitOfWork {
             step.run();
         } catch (RuntimeException failed) {
             rolledBack++;
+            pending.clear();
+            depth--;
             before.restore();
             throw failed;
-        } finally {
-            depth--;
         }
+        depth--;
+        List<Runnable> said = List.copyOf(pending);
+        pending.clear();
         if (ending == Ending.ROLLS_BACK) {
             rolledBack++;
             before.restore();
+            return;   // and nothing it said goes anywhere: the two halves fail together
         }
+        said.forEach(Runnable::run);
     }
 }

@@ -13,6 +13,7 @@ import com.jrobertgardzinski.portal.world.FakeComments;
 import com.jrobertgardzinski.portal.world.FakeFavourites;
 import com.jrobertgardzinski.portal.world.FakeMemes;
 import com.jrobertgardzinski.portal.world.Portal;
+import com.jrobertgardzinski.portal.world.UnitsOfWork;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -63,6 +64,13 @@ public final class DeletionInOneProcess {
     /** What has been announced and not yet delivered — the whole of the "broker". */
     private final Wire wire;
 
+    /**
+     * The world's transactions. Every announcement below goes out through them, so a cascade a
+     * rolled-back step announced is a cascade that was never announced — the outbox, which is what
+     * {@code KafkaMemeEvents} writes into rather than producing straight to the broker.
+     */
+    private final UnitsOfWork transactions;
+
     private final MemeEvents memeEvents;
     private final CommentEvents commentEvents;
     private final DeleteMeme deleteMeme;
@@ -93,20 +101,17 @@ public final class DeletionInOneProcess {
      */
     public DeletionInOneProcess(Portal world, Wire wire) {
         this.wire = wire;
+        this.transactions = world.unitsOfWork();
         this.memes = world.memes;
         this.comments = world.comments;
         this.favourites = world.favourites;
         memeEvents = memeId -> MemeDeleted.of(memeId).ifPresent(this::announce);
         commentEvents = (memeId, commentIds) ->
-                CommentsDeleted.of(memeId, commentIds).ifPresent(announcement -> {
-                    commentAnnouncements.add(announcement);
-                    announce(announcement);
-                });
+                CommentsDeleted.of(memeId, commentIds).ifPresent(this::announce);
 
         deleteMeme = world.deleteMeme(memeEvents);
-        // the hop's unit of work: in one process there is one, and running the step IS it
-        // the cascade's hop shares the world's transactions: one service, one manager
-        commentsParticipant = world.commentsDeletion(commentEvents, world.unitsOfWork());
+        // the hop's unit of work is the world's: one service, one transaction manager
+        commentsParticipant = world.commentsDeletion(commentEvents, transactions);
         collectionsParticipant = world.collectionsDeletion();
     }
 
@@ -121,8 +126,10 @@ public final class DeletionInOneProcess {
      * each other and neither has this.
      */
     private void announce(MemeDeleted announcement) {
-        lastMemeDeleted = announcement;
-        enqueue(announcement);
+        transactions.onCommit(() -> {
+            lastMemeDeleted = announcement;
+            enqueue(announcement);
+        });
     }
 
     private void enqueue(MemeDeleted announcement) {
@@ -137,10 +144,13 @@ public final class DeletionInOneProcess {
 
     /** COMMENTS_DELETED reaches collections alone. */
     private void announce(CommentsDeleted announcement) {
-        wire.enqueue(new Wire.Lane(COMMENTS_EVENTS, announcement.memeId(), COLLECTIONS),
-                "COMMENTS_DELETED " + announcement.memeId()
-                        + " " + announcement.commentIds().stream().sorted().toList(),
-                () -> collectionsParticipant.handle(announcement));
+        transactions.onCommit(() -> {
+            commentAnnouncements.add(announcement);
+            wire.enqueue(new Wire.Lane(COMMENTS_EVENTS, announcement.memeId(), COLLECTIONS),
+                    "COMMENTS_DELETED " + announcement.memeId()
+                            + " " + announcement.commentIds().stream().sorted().toList(),
+                    () -> collectionsParticipant.handle(announcement));
+        });
     }
 
     /**

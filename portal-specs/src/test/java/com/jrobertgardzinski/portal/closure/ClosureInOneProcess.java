@@ -147,10 +147,8 @@ public final class ClosureInOneProcess {
                 new SweepOverdue(sagas, PURGE_TIMEOUT),
                 mapper, world.clock());
 
-        // no outbox in here: the confirmation is what the wire carries back
-        ClosureConfirmations nothingToAnnounce = (sagaId, leaver, reserved) -> { };
-        memesParticipant = world.memesClosure(nothingToAnnounce, cascade.memeEvents());
-        commentsParticipant = world.commentsClosure(nothingToAnnounce, cascade.commentEvents());
+        memesParticipant = world.memesClosure(outboxOf(MEMES), cascade.memeEvents());
+        commentsParticipant = world.commentsClosure(outboxOf(COMMENTS), cascade.commentEvents());
         collectionsParticipant = world.collectionsClosure();
     }
 
@@ -269,48 +267,77 @@ public final class ClosureInOneProcess {
         }
     }
 
-    /** The part hears its command, answers or does not, and its answer is a record of its own. */
-    private void commandReaches(String participant, JsonNode command) {
-        answerOf(participant, command).ifPresent(confirmation -> {
-            String sagaId = command.path(ClosureMessages.Field.SAGA_ID).asText();
-            wire.enqueue(new Wire.Lane(confirmationsOf(participant), sagaId, ORCHESTRATOR),
-                    "confirmation from " + participant,
-                    () -> enqueue(router.handle(Source.participant(participant), confirmation)));
-        });
+    /**
+     * The port an atomic participant confirms through — its outbox.
+     *
+     * <p>The record is written INSIDE the unit of work that hid the rows, and leaves with it or not
+     * at all. Until 29.09.2026 this was {@code (sagaId, leaver, reserved) -> { }} and the bus built
+     * the confirmation itself out of the count the participant returned — which cannot come apart
+     * from the mark no matter what fails, and so made the one failure
+     * {@code AtomicClosureParticipant} exists to prevent unstatable here.
+     */
+    private ClosureConfirmations outboxOf(String participant) {
+        return (sagaId, leaver, reserved) -> world.unitsOfWork().onCommit(
+                () -> confirms(participant, sagaId, leaver, reserved));
     }
 
-    /** Built from the same record the deployed participants use, so this transport cannot carry a different message. */
-    private Optional<String> answerOf(String participant, JsonNode command) {
-        String type = command.path(ClosureMessages.Field.TYPE).asText();
-        String sagaId = command.path(ClosureMessages.Field.SAGA_ID).asText();
-        String initiatedBy = command.path(ClosureMessages.Field.INITIATED_BY).asText();
-        JsonNode rule = command.path(ClosureMessages.Field.POLICY).path(participant);
-        UserId leaver = ClosureCommand.userIdOf(command.path(ClosureMessages.Field.USER_ID).asText(null)).orElse(null);
-        ClosureCommand parsed = new ClosureCommand(type, sagaId, leaver, initiatedBy,
-                rule.isMissingNode() ? Optional.empty() : Optional.of(rule.asText()));
-
-        // one vocabulary for all three since 28.09.2026: this used to be three fully-qualified
-        // ClosureOutcome.Reserved patterns, one per service, in a switch that existed only because
-        // the three said the same thing in three types
-        ClosureParticipant axis = switch (participant) {
-            case MEMES -> memesParticipant;
-            case COMMENTS -> commentsParticipant;
-            case COLLECTIONS -> collectionsParticipant;
-            default -> throw new IllegalStateException("no such participant: " + participant);
-        };
-        // the count it reserved, or -1 for "this was not the reversible step"
-        int reserved = axis.handle(parsed) instanceof ClosureOutcome.Reserved(int rows) ? rows : -1;
-        if (reserved < 0) {
-            return Optional.empty();
+    /**
+     * The part hears its command. The two atomic parts confirm from inside their own unit of work
+     * through {@link #outboxOf}; collections confirms through its CONSUMER, which is this bus,
+     * because it has no outbox to write into and so no transaction to share.
+     */
+    private void commandReaches(String participant, JsonNode command) {
+        ClosureCommand parsed = parsed(participant, command);
+        ClosureOutcome outcome = axisOf(participant).handle(parsed);
+        if (COLLECTIONS.equals(participant)
+                && outcome instanceof ClosureOutcome.Reserved(int reserved)) {
+            confirms(participant, parsed.sagaId(), parsed.userId(), reserved);
         }
+    }
+
+    /**
+     * What a part said it reserved, on its way to the orchestrator. Called from inside the unit of
+     * work's commit for the two atomic parts and straight from the delivery for collections — which
+     * is the difference between the two kinds of participant, and the only place it shows.
+     */
+    private void confirms(String participant, String sagaId, UserId leaver, int reserved) {
         // the FIRST one: a re-commanded MARK finds everything already reserved and confirms 0,
         // which is idempotence working, not the count the saga was advanced on
         confirmedBy.putIfAbsent(participant, reserved);
         confirmedFor.putIfAbsent(leaver + "/" + participant, reserved);
         watcher.answered(participant, leaver, reserved);
+        String confirmation = written(new ClosureConfirmation(sagaId, leaver, reserved).fields());
+        wire.enqueue(new Wire.Lane(confirmationsOf(participant), sagaId, ORCHESTRATOR),
+                "confirmation from " + participant,
+                () -> enqueue(router.handle(Source.participant(participant), confirmation)));
+    }
+
+    /** Built from the same record the deployed participants read, so this transport cannot carry a different message. */
+    private ClosureCommand parsed(String participant, JsonNode command) {
+        String type = command.path(ClosureMessages.Field.TYPE).asText();
+        String sagaId = command.path(ClosureMessages.Field.SAGA_ID).asText();
+        String initiatedBy = command.path(ClosureMessages.Field.INITIATED_BY).asText();
+        JsonNode rule = command.path(ClosureMessages.Field.POLICY).path(participant);
+        UserId leaver = ClosureCommand.userIdOf(command.path(ClosureMessages.Field.USER_ID).asText(null)).orElse(null);
+        return new ClosureCommand(type, sagaId, leaver, initiatedBy,
+                rule.isMissingNode() ? Optional.empty() : Optional.of(rule.asText()));
+    }
+
+    // one vocabulary for all three since 28.09.2026: this used to be three fully-qualified
+    // ClosureOutcome.Reserved patterns, one per service, in a switch that existed only because
+    // the three said the same thing in three types
+    private ClosureParticipant axisOf(String participant) {
+        return switch (participant) {
+            case MEMES -> memesParticipant;
+            case COMMENTS -> commentsParticipant;
+            case COLLECTIONS -> collectionsParticipant;
+            default -> throw new IllegalStateException("no such participant: " + participant);
+        };
+    }
+
+    private String written(Map<String, Object> fields) {
         try {
-            return Optional.of(mapper.writeValueAsString(
-                    new ClosureConfirmation(sagaId, leaver, reserved).fields()));
+            return mapper.writeValueAsString(fields);
         } catch (Exception impossible) {
             throw new IllegalStateException("could not serialise a confirmation", impossible);
         }
