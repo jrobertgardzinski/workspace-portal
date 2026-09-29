@@ -390,10 +390,36 @@ public final class Seeds {
             .wherePartsMayFail(1)
             .patientFor(2);
 
+    /**
+     * The orchestrator's own transaction — the last one this layer could not fail.
+     *
+     * <p>The saga row it advances and the commands and verdicts it produces are one unit of work,
+     * as {@code SagaOutbox} makes them. So one of its transactions here does not commit: either it
+     * rolls back, leaving the confirmation it was reading at the head of its partition, or it
+     * commits and the process dies before the commands and the verdict leave the outbox.
+     *
+     * <p>What it cannot fail is the transaction that OPENS a saga: a case is only ever opened by a
+     * fact delivered outside the wire, and the reference saga store has no way to forget a row.
+     */
+    public static final Seed AN_ORCHESTRATOR_THAT_FAILS = about("an-orchestrator-that-fails",
+            "Alice's closure, where one of the ORCHESTRATOR's units of work does not commit: the "
+                    + "saga row it advanced and the records it produced go together, so a rollback "
+                    + "leaves the confirmation it was reading where it was and a death after the "
+                    + "commit leaves the commands in the outbox. The question is whether the case "
+                    + "can be made to finish twice, or to finish and forget that it did.")
+            .holding(portal -> {
+                portal.memes.posted(LEAVER, ALICE, 1);
+                portal.comments.wrote(LEAVER, ALICE, 1);
+            })
+            .startedBy(portal -> portal.securityAnnouncesClosureOf(
+                    LEAVER, ClosureInitiator.SELF.wire(), null))
+            .wherePartsMayFail(1);
+
     public static final List<Seed> ALL = List.of(THREE_PARTS, CASCADE_AFTER_THE_PIVOT,
             BOTH_PROTOCOLS_ON_ONE_ROW, AT_LEAST_ONCE, THE_SWEEPER, A_SECOND_REQUEST,
             THE_WHOLE_SEAM, A_POPULARITY_CONDITION, A_CASCADE_TWICE, TWO_PEOPLE_LEAVING,
-            GIVEN_UP_AFTER_THE_CASCADE, A_UNIT_OF_WORK_THAT_FAILS, A_WORD_THAT_WAITS);
+            GIVEN_UP_AFTER_THE_CASCADE, A_UNIT_OF_WORK_THAT_FAILS, A_WORD_THAT_WAITS,
+            AN_ORCHESTRATOR_THAT_FAILS);
 
     private Seeds() {
     }

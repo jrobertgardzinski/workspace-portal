@@ -18,6 +18,7 @@ import com.jrobertgardzinski.portal.world.FakeFavourites;
 import com.jrobertgardzinski.portal.world.Identities;
 import com.jrobertgardzinski.portal.deletion.DeletionInOneProcess;
 import com.jrobertgardzinski.portal.world.Portal;
+import com.jrobertgardzinski.portal.world.Snapshot;
 import com.jrobertgardzinski.portal.world.FakeComments;
 import com.jrobertgardzinski.portal.world.FakeMemes;
 import com.jrobertgardzinski.offboarding.application.Destination;
@@ -97,7 +98,8 @@ public final class ClosureInOneProcess {
             (CONTENT_COMMANDS.equals(lane.topic())
                     && (MEMES.equals(lane.group()) || COMMENTS.equals(lane.group())))
                     || (DeletionInOneProcess.MEMES_EVENTS.equals(lane.topic())
-                    && DeletionInOneProcess.COMMENTS.equals(lane.group()));
+                    && DeletionInOneProcess.COMMENTS.equals(lane.group()))
+                    || ORCHESTRATOR.equals(lane.group());
 
     private static final Duration PURGE_TIMEOUT = Duration.ofMinutes(2);
 
@@ -161,6 +163,8 @@ public final class ClosureInOneProcess {
     }
 
     public ClosureInOneProcess() {
+        // the saga table is this world's row too, and a rollback has to put it back
+        world.alsoRestoring(this::sagaRowsNow);
         Set<String> participants = Set.of(MEMES, COMMENTS, COLLECTIONS);
         router = new EventsRouter(
                 new BeginOffboarding(sagas, participants),
@@ -273,17 +277,19 @@ public final class ClosureInOneProcess {
             }
             if (message.destination() == Destination.SECURITY) {
                 JsonNode verdict = read(message.payload());
-                wire.enqueue(new Wire.Lane(OFFBOARDING_EVENTS, message.key(), SECURITY),
-                        "verdict " + verdict.path(ClosureMessages.Field.TYPE).asText(),
-                        () -> toSecurity.add(verdict));
+                String label = "verdict " + verdict.path(ClosureMessages.Field.TYPE).asText();
+                world.unitsOfWork().onCommit(label, () -> wire.enqueue(
+                        new Wire.Lane(OFFBOARDING_EVENTS, message.key(), SECURITY), label,
+                        () -> toSecurity.add(verdict)));
                 continue;
             }
             JsonNode command = read(message.payload());
             String type = command.path(ClosureMessages.Field.TYPE).asText();
             for (String participant : List.of(MEMES, COMMENTS, COLLECTIONS)) {
-                wire.enqueue(new Wire.Lane(CONTENT_COMMANDS, message.key(), participant),
-                        type + " → " + participant,
-                        () -> commandReaches(participant, command));
+                String label = type + " → " + participant;
+                world.unitsOfWork().onCommit(label, () -> wire.enqueue(
+                        new Wire.Lane(CONTENT_COMMANDS, message.key(), participant), label,
+                        () -> commandReaches(participant, command)));
             }
         }
     }
@@ -341,7 +347,10 @@ public final class ClosureInOneProcess {
         String confirmation = written(new ClosureConfirmation(sagaId, leaver, reserved).fields());
         wire.enqueue(new Wire.Lane(confirmationsOf(participant), sagaId, ORCHESTRATOR),
                 "confirmation from " + participant,
-                () -> enqueue(router.handle(Source.participant(participant), confirmation)));
+                // the orchestrator's own unit of work: the saga row it advances and the commands
+                // and verdicts it produces are one transaction, as SagaOutbox makes them
+                () -> world.unitsOfWork().run(
+                        () -> enqueue(router.handle(Source.participant(participant), confirmation))));
     }
 
     /** Built from the same record the deployed participants read, so this transport cannot carry a different message. */
@@ -425,6 +434,45 @@ public final class ClosureInOneProcess {
     public List<String> verdicts() {
         return toSecurity.stream()
                 .map(said -> said.path(ClosureMessages.Field.TYPE).asText())
+                .toList();
+    }
+
+    /**
+     * The saga rows as they are now, and the way back to them. Only the fields a step can move —
+     * the state, the instant, whose confirmations have been counted, whether the outcome has been
+     * announced and how many retries were charged.
+     *
+     * <p>A saga that a rolled-back transaction STARTED cannot be taken away again: the reference
+     * fake has no way to forget a row, and adding one is a change in another repository. It costs
+     * nothing here, because a saga is only ever opened by a fact delivered outside the wire —
+     * security announcing a closure — and never inside a step this layer can fail.
+     */
+    private Snapshot sagaRowsNow() {
+        record Row(FakeSagaStore.Saga saga, String state, java.time.Instant updatedAt,
+                   Set<String> confirmed, boolean announced, int retries) {
+        }
+        List<Row> then = sagas.all().stream()
+                .map(saga -> new Row(saga, saga.state, saga.updatedAt, Set.copyOf(saga.confirmed),
+                        saga.announced, saga.retries))
+                .toList();
+        return () -> then.forEach(row -> {
+            row.saga().state = row.state();
+            row.saga().updatedAt = row.updatedAt();
+            row.saga().confirmed.clear();
+            row.saga().confirmed.addAll(row.confirmed());
+            row.saga().announced = row.announced();
+            row.saga().retries = row.retries();
+        });
+    }
+
+    /**
+     * Cases the orchestrator has finished and not recorded as announced — its OWN query, the one
+     * {@code sweepOverdue} uses to decide what to publish again.
+     */
+    public List<String> waitingToBeAnnounced() {
+        return sagas.unannouncedOutcomes(world.clock().instant().plusSeconds(1)).stream()
+                .map(pending -> pending.state() + " " + pending.sagaId())
+                .sorted()
                 .toList();
     }
 

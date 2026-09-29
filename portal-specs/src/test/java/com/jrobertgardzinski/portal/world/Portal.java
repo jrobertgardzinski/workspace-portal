@@ -41,6 +41,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import static org.mockito.Mockito.mock;
 
@@ -84,6 +85,13 @@ public final class Portal {
      * schedule would be staging something no deployment can do.
      */
     private final UnitsOfWork unitsOfWork = new UnitsOfWork(this);
+
+    /**
+     * Rows that belong to this world and are not held by this class — the orchestrator's saga
+     * table, which lives in the bus because the bus is the only thing in the estate that has one.
+     * A transaction that rolls back has to put those back too, or half the failure would stay.
+     */
+    private final List<Supplier<Snapshot>> alsoHeld = new ArrayList<>();
 
     /** The specs' clock; a saga's patience is measured against it. */
     private Instant now = Instant.parse("2026-09-24T12:00:00Z");
@@ -170,7 +178,10 @@ public final class Portal {
      * score, and a rollback that left them retracted would change what the next attempt decides.
      */
     public Snapshot snapshot() {
-        Snapshot rows = Snapshot.of(memes.snapshot(), comments.snapshot(), favourites.snapshot());
+        List<Snapshot> parts = new ArrayList<>(
+                List.of(memes.snapshot(), comments.snapshot(), favourites.snapshot()));
+        alsoHeld.forEach(part -> parts.add(part.get()));
+        Snapshot rows = Snapshot.of(parts.toArray(Snapshot[]::new));
         Map<String, Map<String, VoteDirection>> memeBallotsThen = ballotsNow(memeBallots);
         Map<String, Map<String, VoteDirection>> commentBallotsThen = ballotsNow(commentBallots);
         Optional<PurgeRule> dialThen = purgePolicy.current();
@@ -181,6 +192,11 @@ public final class Portal {
             dialThen.ifPresentOrElse(rule -> purgePolicy.set(rule, "a unit of work that rolled back"),
                     () -> purgePolicy.clear("a unit of work that rolled back"));
         };
+    }
+
+    /** Rows of this world that somebody else holds, and how to read them back. */
+    public void alsoRestoring(Supplier<Snapshot> part) {
+        alsoHeld.add(part);
     }
 
     /** The transactions every participant over this world shares. */

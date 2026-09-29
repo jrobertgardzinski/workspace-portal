@@ -1,0 +1,18 @@
+# an-orchestrator-that-fails
+
+Alice's closure, where one of the ORCHESTRATOR's units of work does not commit: the saga row 
+it advanced and the records it produced go together, so a rollback leaves the confirmation 
+it was reading where it was and a death after the commit leaves the commands in the outbox. 
+The question is whether the case can be made to finish twice, or to finish and forget that 
+it did. 
+
+search: exhaustive — every schedule this transport allows was walked
+distinct end states: 1
+
+[A]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=0, alice/comments=1, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+every law held on every schedule walked

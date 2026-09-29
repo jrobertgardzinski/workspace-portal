@@ -340,7 +340,44 @@ public interface Invariant {
         }
     };
 
+    /**
+     * A verdict that went out is recorded as having gone out.
+     *
+     * <p>The orchestrator's half of I7, and the law that would have caught the finding of 28.09:
+     * {@code sweepOverdue()} re-publishes every saga outcome without the {@code outcome_announced}
+     * mark, so a verdict sent and not marked is a verdict the next sweep sends again. The runner
+     * did that for a year and 66 scenarios never noticed, because no scenario ever swept a saga
+     * that had already finished.
+     *
+     * <p>Asked in silence, where the outbox is empty as well as the wire: a case finished, its
+     * verdict on nobody's queue and the row still waiting to be announced, means the two halves of
+     * the orchestrator's own transaction came apart.
+     */
+    Invariant WHAT_WENT_OUT_IS_RECORDED = new Invariant() {
+        @Override
+        public String name() {
+            return "a verdict that went out is recorded as having gone out";
+        }
+
+        @Override
+        public boolean onlyInSilence() {
+            return true;
+        }
+
+        @Override
+        public Optional<String> broken(ClosureInOneProcess portal, Seed.Memory seed) {
+            if (portal.verdicts().isEmpty()) {
+                return Optional.empty();
+            }
+            List<String> waiting = portal.waitingToBeAnnounced();
+            return waiting.isEmpty() ? Optional.empty()
+                    : Optional.of("identity was told " + portal.verdicts()
+                            + " and the orchestrator still has " + waiting
+                            + " waiting to be announced, so the next sweep would say it again");
+        }
+    };
+
     List<Invariant> ALL = List.of(NO_DANGLING_POINTER, NOTHING_COMES_BACK, NOTHING_LEFT_RESERVED,
             ONE_VERDICT, PURGED_MEANS_NOTHING_LEFT, NO_ORPHANED_THREAD,
-            GIVEN_UP_MEANS_THEY_KEEP_IT, A_WORD_MEANS_ROWS);
+            GIVEN_UP_MEANS_THEY_KEEP_IT, A_WORD_MEANS_ROWS, WHAT_WENT_OUT_IS_RECORDED);
 }
