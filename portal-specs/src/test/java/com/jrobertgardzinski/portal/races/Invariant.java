@@ -289,7 +289,58 @@ public interface Invariant {
         }
     };
 
+    /**
+     * A part that has spoken is holding what it spoke about.
+     *
+     * <p>This is law I7 of the plan and the one that needed a unit of work able to fail before it
+     * could be phrased at all. {@code AtomicClosureParticipant} exists for it: the mark and the
+     * word about it are one transaction, because "hidden rows with no word owed" leaves the saga
+     * waiting for a confirmation that will never come, and "a word about rows that were never
+     * hidden" sends the saga on towards an erasure with nothing reserved to erase.
+     *
+     * <p>Asked in silence, and only while the case is still OPEN. Both things that legitimately
+     * take a mark off — ERASE and RESTORE — are commanded in the same step that produces the
+     * verdict, so a schedule with no verdict yet and an empty wire is one where nothing has had a
+     * chance to take a reservation off a part that reserved something. Once a verdict has gone out
+     * the question belongs to two other laws: the case is closed and nothing is reserved, and
+     * purged means the portal holds nothing of them.
+     *
+     * <p>It says nothing about a part that confirmed ZERO. Confirming nothing is the truthful
+     * answer of a part with nothing of that person's, and of a re-commanded MARK that finds
+     * everything already reserved.
+     */
+    Invariant A_WORD_MEANS_ROWS = new Invariant() {
+        @Override
+        public String name() {
+            return "a part that has spoken is holding what it spoke about";
+        }
+
+        @Override
+        public boolean onlyInSilence() {
+            return true;
+        }
+
+        @Override
+        public Optional<String> broken(ClosureInOneProcess portal, Seed.Memory seed) {
+            if (!portal.verdicts().isEmpty()) {
+                return Optional.empty();
+            }
+            var holding = portal.reservationsBehindConfirmations();
+            for (var said : portal.confirmations().entrySet()) {
+                if (said.getValue() <= 0) {
+                    continue;
+                }
+                if (holding.getOrDefault(said.getKey(), 0) == 0) {
+                    return Optional.of("the " + said.getKey() + " part confirmed "
+                            + said.getValue() + " reserved and is holding none of them, with no"
+                            + " verdict out to account for it");
+                }
+            }
+            return Optional.empty();
+        }
+    };
+
     List<Invariant> ALL = List.of(NO_DANGLING_POINTER, NOTHING_COMES_BACK, NOTHING_LEFT_RESERVED,
             ONE_VERDICT, PURGED_MEANS_NOTHING_LEFT, NO_ORPHANED_THREAD,
-            GIVEN_UP_MEANS_THEY_KEEP_IT);
+            GIVEN_UP_MEANS_THEY_KEEP_IT, A_WORD_MEANS_ROWS);
 }

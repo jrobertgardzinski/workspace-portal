@@ -1,0 +1,29 @@
+# a-word-that-waits
+
+The rows are hidden and the word about them is committed to the outbox, and the process dies 
+before the relay sends it. The orchestrator hears nothing, runs out of patience and commands 
+the part again — and the relay may send the first word at any moment after that, or before 
+it. Nothing orders the two, and the saga must come out of it having decided once. 
+
+search: exhaustive — every schedule this transport allows was walked
+distinct end states: 3
+
+[A]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=0, alice/comments=1, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+[B]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=0, alice/comments=0, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+[C]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=0, alice/comments=1, alice/memes=0}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+every law held on every schedule walked

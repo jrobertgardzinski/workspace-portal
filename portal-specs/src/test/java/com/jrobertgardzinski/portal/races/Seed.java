@@ -50,12 +50,13 @@ public final class Seed {
     private final Map<String, String> names;
     private final UserId leaver;
     private final int sweeps;
+    private final int failures;
     private boolean othersMayTakeTheirContentDown;
 
     private Seed(String name, String about, Consumer<ClosureInOneProcess> content,
                  Consumer<ClosureInOneProcess> trigger,
                  Map<String, Consumer<ClosureInOneProcess>> intrusions,
-                 Map<String, String> names, UserId leaver, int sweeps) {
+                 Map<String, String> names, UserId leaver, int sweeps, int failures) {
         this.name = name;
         this.about = about;
         this.content = content;
@@ -64,37 +65,47 @@ public final class Seed {
         this.names = Map.copyOf(names);
         this.leaver = leaver;
         this.sweeps = sweeps;
+        this.failures = failures;
     }
 
     public static Seed named(String name, String about) {
-        return new Seed(name, about, portal -> { }, portal -> { }, Map.of(), Map.of(), null, 0);
+        return new Seed(name, about, portal -> { }, portal -> { }, Map.of(), Map.of(), null, 0, 0);
     }
 
     /** The rows, put there before anything happens. */
     public Seed holding(Consumer<ClosureInOneProcess> content) {
-        return new Seed(name, about, content, trigger, intrusions, names, leaver, sweeps);
+        return new Seed(name, about, content, trigger, intrusions, names, leaver, sweeps, failures);
     }
 
     /** What sets a protocol off — announcing a closure, or an author taking a meme down. */
     public Seed startedBy(Consumer<ClosureInOneProcess> trigger) {
-        return new Seed(name, about, content, trigger, intrusions, names, leaver, sweeps);
+        return new Seed(name, about, content, trigger, intrusions, names, leaver, sweeps, failures);
     }
 
     /** Somebody outside both protocols, who may act at any moment at all. */
     public Seed interruptedBy(String what, Consumer<ClosureInOneProcess> action) {
         Map<String, Consumer<ClosureInOneProcess>> more = new LinkedHashMap<>(intrusions);
         more.put(what, action);
-        return new Seed(name, about, content, trigger, more, names, leaver, sweeps);
+        return new Seed(name, about, content, trigger, more, names, leaver, sweeps, failures);
+    }
+
+    /**
+     * How many units of work may fail during one schedule — a rollback, or a commit whose records
+     * die in the outbox before they are sent. Nought for every seed that does not say otherwise,
+     * because each one multiplies the tree by the number of transactional steps in it.
+     */
+    public Seed wherePartsMayFail(int failures) {
+        return new Seed(name, about, content, trigger, intrusions, names, leaver, sweeps, failures);
     }
 
     /** How many times the clock may reach a purge timeout during one schedule. */
     public Seed patientFor(int sweeps) {
-        return new Seed(name, about, content, trigger, intrusions, names, leaver, sweeps);
+        return new Seed(name, about, content, trigger, intrusions, names, leaver, sweeps, failures);
     }
 
     /** Whose closure this is — what "the portal holds nothing of them" is asked about. */
     public Seed closing(UserId leaver) {
-        return new Seed(name, about, content, trigger, intrusions, names, leaver, sweeps);
+        return new Seed(name, about, content, trigger, intrusions, names, leaver, sweeps, failures);
     }
 
     /**
@@ -113,7 +124,7 @@ public final class Seed {
     public Seed calling(String id, String what) {
         Map<String, String> more = new LinkedHashMap<>(names);
         more.put(id, what);
-        return new Seed(name, about, content, trigger, intrusions, more, leaver, sweeps);
+        return new Seed(name, about, content, trigger, intrusions, more, leaver, sweeps, failures);
     }
 
     public Started start() {
@@ -148,5 +159,9 @@ public final class Seed {
 
     public int sweeps() {
         return sweeps;
+    }
+
+    public int failures() {
+        return failures;
     }
 }

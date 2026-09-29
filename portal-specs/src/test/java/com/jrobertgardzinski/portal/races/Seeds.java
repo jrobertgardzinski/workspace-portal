@@ -332,10 +332,68 @@ public final class Seeds {
                     portal -> portal.takeDown(STRANGERS_MEME))
             .patientFor(4);
 
+    /**
+     * The failure axis, on the protocol that owes a word: one unit of work anywhere in this
+     * schedule does not commit.
+     *
+     * <p>Both halves of what a transaction can do wrong are in the tree, at every transactional
+     * step: it rolls back, or it commits and the process dies before its records leave the outbox.
+     * A rollback puts the record back at the head of its lane, because a consumer that did not
+     * commit did not move its offset either — the same lesson the silenced part taught on
+     * 28.09.2026, one level down.
+     *
+     * <p>What it asks: whether the portal can be made to break a promise by failing once. The
+     * world carries a thread and a pointer belonging to somebody else, so a cascade starts and its
+     * comments hop — which deletes a thread and announces what it deleted in one unit of work —
+     * can fail too.
+     */
+    public static final Seed A_UNIT_OF_WORK_THAT_FAILS = about("a-unit-of-work-that-fails",
+            "Alice's closure, with one unit of work somewhere in it that does not commit: it rolls "
+                    + "back, or it commits and the process dies before the outbox is sent. A "
+                    + "rollback leaves the record where it was, since the offset never moved, so "
+                    + "the question is not whether the work happens but whether anything the "
+                    + "portal already promised can come apart from it.")
+            .holding(portal -> {
+                portal.memes.posted(LEAVER, ALICE, 1);
+                String meme = memeOfTheLeaver(1);
+                portal.comments.wroteUnder(meme, strangersCommentUnder(meme),
+                        Identities.idOf("stranger-1@example.com"));
+                portal.comments.wrote(LEAVER, ALICE, 1);
+                portal.favourites.saved(ALICE, 1);
+            })
+            .startedBy(portal -> portal.securityAnnouncesClosureOf(
+                    LEAVER, ClosureInitiator.SELF.wire(), null))
+            .wherePartsMayFail(1);
+
+    /**
+     * A word that is committed and not yet said, while the clock runs out on the saga waiting for
+     * it.
+     *
+     * <p>This is the outbox's own race, and the reason the table exists: the rows are hidden and
+     * the confirmation is written in the same transaction, the process dies before the relay sends
+     * it, and the orchestrator — which knows nothing of any of this — reaches its timeout and
+     * commands the part again. So a re-commanded MARK, a duplicate confirmation arriving late from
+     * a relay, and a saga that may already have moved on are all in flight at once.
+     */
+    public static final Seed A_WORD_THAT_WAITS = about("a-word-that-waits",
+            "The rows are hidden and the word about them is committed to the outbox, and the "
+                    + "process dies before the relay sends it. The orchestrator hears nothing, runs "
+                    + "out of patience and commands the part again — and the relay may send the "
+                    + "first word at any moment after that, or before it. Nothing orders the two, "
+                    + "and the saga must come out of it having decided once.")
+            .holding(portal -> {
+                portal.memes.posted(LEAVER, ALICE, 1);
+                portal.comments.wrote(LEAVER, ALICE, 1);
+            })
+            .startedBy(portal -> portal.securityAnnouncesClosureOf(
+                    LEAVER, ClosureInitiator.SELF.wire(), null))
+            .wherePartsMayFail(1)
+            .patientFor(2);
+
     public static final List<Seed> ALL = List.of(THREE_PARTS, CASCADE_AFTER_THE_PIVOT,
             BOTH_PROTOCOLS_ON_ONE_ROW, AT_LEAST_ONCE, THE_SWEEPER, A_SECOND_REQUEST,
             THE_WHOLE_SEAM, A_POPULARITY_CONDITION, A_CASCADE_TWICE, TWO_PEOPLE_LEAVING,
-            GIVEN_UP_AFTER_THE_CASCADE);
+            GIVEN_UP_AFTER_THE_CASCADE, A_UNIT_OF_WORK_THAT_FAILS, A_WORD_THAT_WAITS);
 
     private Seeds() {
     }

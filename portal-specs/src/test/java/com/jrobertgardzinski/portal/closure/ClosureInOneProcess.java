@@ -81,6 +81,24 @@ public final class ClosureInOneProcess {
     /** Everything that is not the cascade — what {@link #everyPartAnswers()} drains. */
     public static final Predicate<Wire.Lane> SAGA = lane -> !DeletionInOneProcess.CASCADE.test(lane);
 
+    /**
+     * The lanes whose consumer does its work inside a transaction that could fail — the only
+     * records a runner may sensibly stage a rollback for.
+     *
+     * <p>Three of the six consumers, and the three the estate makes atomic: the two participants
+     * that owe the orchestrator a confirmation ({@code AtomicClosureParticipant}), and the
+     * cascade's comments hop, which deletes a thread and announces what it deleted in one unit of
+     * work. Collections is deliberately absent on both protocols — it has no outbox to write into
+     * and so no transaction to share — and so is the orchestrator: its own store is not part of the
+     * world a snapshot puts back, which makes ITS transaction a boundary of this layer rather than
+     * something staged badly.
+     */
+    public static final Predicate<Wire.Lane> TRANSACTIONAL = lane ->
+            (CONTENT_COMMANDS.equals(lane.topic())
+                    && (MEMES.equals(lane.group()) || COMMENTS.equals(lane.group())))
+                    || (DeletionInOneProcess.MEMES_EVENTS.equals(lane.topic())
+                    && DeletionInOneProcess.COMMENTS.equals(lane.group()));
+
     private static final Duration PURGE_TIMEOUT = Duration.ofMinutes(2);
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -129,6 +147,9 @@ public final class ClosureInOneProcess {
      * about the portal but a fact about the schedule.
      */
     private final Map<String, Integer> confirmedFor = new LinkedHashMap<>();
+
+    /** Whose closure, and whose part, each of those keys is — so the key can be asked again later. */
+    private final Map<String, UserId> spokenOf = new LinkedHashMap<>();
 
     /** Told whenever a part answers, so a race runner can hold it to what it said. */
     private Confirming watcher = (participant, leaver, reserved) -> { };
@@ -277,8 +298,17 @@ public final class ClosureInOneProcess {
      * {@code AtomicClosureParticipant} exists to prevent unstatable here.
      */
     private ClosureConfirmations outboxOf(String participant) {
-        return (sagaId, leaver, reserved) -> world.unitsOfWork().onCommit(
-                () -> confirms(participant, sagaId, leaver, reserved));
+        return (sagaId, leaver, reserved) -> {
+            // asked HERE, where the word is written, and not where the record is sent. With an
+            // outbox those are two different moments on purpose: the row is written inside the
+            // transaction that hid the rows, and the relay sends it whenever it comes round — by
+            // which time the erasure may have taken every row the word was about. Asking the law
+            // at the relay called that a part confirming more than it held, which is the outbox
+            // working rather than a part lying
+            watcher.answered(participant, leaver, reserved);
+            world.unitsOfWork().onCommit("confirmation from " + participant,
+                    () -> confirms(participant, sagaId, leaver, reserved));
+        };
     }
 
     /**
@@ -291,6 +321,8 @@ public final class ClosureInOneProcess {
         ClosureOutcome outcome = axisOf(participant).handle(parsed);
         if (COLLECTIONS.equals(participant)
                 && outcome instanceof ClosureOutcome.Reserved(int reserved)) {
+            // no outbox here, so writing the word and sending it are the same instant
+            watcher.answered(participant, parsed.userId(), reserved);
             confirms(participant, parsed.sagaId(), parsed.userId(), reserved);
         }
     }
@@ -305,7 +337,7 @@ public final class ClosureInOneProcess {
         // which is idempotence working, not the count the saga was advanced on
         confirmedBy.putIfAbsent(participant, reserved);
         confirmedFor.putIfAbsent(leaver + "/" + participant, reserved);
-        watcher.answered(participant, leaver, reserved);
+        spokenOf.putIfAbsent(leaver + "/" + participant, leaver);
         String confirmation = written(new ClosureConfirmation(sagaId, leaver, reserved).fields());
         wire.enqueue(new Wire.Lane(confirmationsOf(participant), sagaId, ORCHESTRATOR),
                 "confirmation from " + participant,
@@ -373,6 +405,20 @@ public final class ClosureInOneProcess {
     /** What each part said it had reserved, the first time it answered — part of an outcome. */
     public Map<String, Integer> confirmations() {
         return Map.copyOf(confirmedFor);
+    }
+
+    /**
+     * What the part behind each key of {@link #confirmations()} is holding reserved RIGHT NOW —
+     * the other side of the same word, for the law that asks whether the two agree.
+     */
+    public Map<String, Integer> reservationsBehindConfirmations() {
+        Map<String, Integer> held = new LinkedHashMap<>();
+        confirmedFor.keySet().forEach(key -> {
+            UserId leaver = spokenOf.get(key);
+            String participant = key.substring(key.lastIndexOf('/') + 1);
+            held.put(key, leaver == null ? 0 : reservedOn(participant, leaver));
+        });
+        return held;
     }
 
     /** Every verdict security was given, by type — what a fingerprint reads of the saga. */

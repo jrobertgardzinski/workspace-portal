@@ -89,6 +89,20 @@ public final class Wire {
                 .addLast(new Step(minted++, step.lane(), step.label(), step.action(), true));
     }
 
+    /**
+     * The record was handed over and its consumer did not commit — so the offset never moved, and
+     * the broker will hand the SAME record over again before anything behind it on that partition.
+     * It goes back to the HEAD of its lane, keeping the sequence it was produced with.
+     *
+     * <p>Not {@link #redeliver}, which is a broker repeating itself having gone wrong nowhere and
+     * joins the tail. A consumer whose transaction rolled back has not consumed anything at all,
+     * and modelling that as a lost record would be the same mistake as modelling a part that is
+     * down by dropping its messages.
+     */
+    public void unconsumed(Step step) {
+        lanes.computeIfAbsent(step.lane(), unused -> new ArrayDeque<>()).addFirst(step);
+    }
+
     /** The heads of every matching non-empty lane, oldest first — everything that could happen next. */
     public List<Step> ready(Predicate<Lane> only) {
         List<Step> heads = new ArrayList<>();

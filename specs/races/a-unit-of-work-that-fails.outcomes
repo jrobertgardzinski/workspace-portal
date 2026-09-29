@@ -1,0 +1,17 @@
+# a-unit-of-work-that-fails
+
+Alice's closure, with one unit of work somewhere in it that does not commit: it rolls back, 
+or it commits and the process dies before the outbox is sent. A rollback leaves the record 
+where it was, since the offset never moved, so the question is not whether the work happens 
+but whether anything the portal already promised can come apart from it. 
+
+search: exhaustive — every schedule this transport allows was walked
+distinct end states: 1
+
+[A]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=1, alice/comments=1, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+every law held on every schedule walked

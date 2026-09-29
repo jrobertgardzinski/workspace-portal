@@ -1,6 +1,7 @@
 package com.jrobertgardzinski.portal.races;
 
 import com.jrobertgardzinski.portal.closure.ClosureInOneProcess;
+import com.jrobertgardzinski.portal.world.UnitsOfWork;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -39,14 +40,19 @@ public final class Explorer {
      * search; either one being hit is reported, because a search that stopped early proves
      * nothing about what it did not reach.
      */
-    public record Bounds(int steps, int duplicates, int schedules) {
+    public record Bounds(int steps, int duplicates, int failures, int schedules) {
 
         public static Bounds ofDefault() {
-            return new Bounds(40, 0, 20_000);
+            return new Bounds(40, 0, 0, 20_000);
         }
 
         public Bounds withDuplicates(int duplicates) {
-            return new Bounds(steps, duplicates, schedules);
+            return new Bounds(steps, duplicates, failures, schedules);
+        }
+
+        /** How many units of work may fail in one schedule. Each one costs a great deal of search. */
+        public Bounds withFailures(int failures) {
+            return new Bounds(steps, duplicates, failures, schedules);
         }
     }
 
@@ -193,20 +199,29 @@ public final class Explorer {
 
         String state() {
             String rows = portal.world().fingerprint();
-            return String.join("\n", List.of(
-                    "identity was told: " + portal.verdicts(),
-                    "the parts confirmed: " + new java.util.TreeMap<>(portal.confirmations()),
-                    "still on the wire: " + portal.wire().pending(lane -> true),
-                    "rows:" + (rows.isEmpty() ? " the portal holds nothing at all"
-                            : "\n  " + rows.replace("\n", "\n  "))));
+            List<String> lines = new ArrayList<>();
+            lines.add("identity was told: " + portal.verdicts());
+            lines.add("the parts confirmed: " + new java.util.TreeMap<>(portal.confirmations()));
+            lines.add("still on the wire: " + portal.wire().pending(lane -> true));
+            // only when there is something in it: an outbox nobody has left anything in is not a
+            // fact about a schedule, and a line saying so in every file would say nothing
+            List<String> unsent = portal.world().unitsOfWork().unsent();
+            if (!unsent.isEmpty()) {
+                lines.add("held in the outbox: " + unsent);
+            }
+            lines.add("rows:" + (rows.isEmpty() ? " the portal holds nothing at all"
+                    : "\n  " + rows.replace("\n", "\n  ")));
+            return String.join("\n", lines);
         }
 
         String memo() {
-            return state() + "|sweeps=" + sweepsLeft + "|duplicates=" + duplicatesLeft;
+            return state() + "|sweeps=" + sweepsLeft + "|duplicates=" + duplicatesLeft
+                    + "|failures=" + failuresLeft;
         }
 
         int sweepsLeft;
         int duplicatesLeft;
+        int failuresLeft;
     }
 
     private static Walk replay(Seed seed, List<Integer> path, Bounds bounds) {
@@ -217,6 +232,7 @@ public final class Explorer {
         walk.path = path;
         walk.sweepsLeft = seed.sweeps();
         walk.duplicatesLeft = bounds.duplicates();
+        walk.failuresLeft = bounds.failures();
 
         // what a part says it reserved, held against what it is holding, at the instant it says it
         walk.portal.watch((participant, leaver, reserved) -> {
@@ -270,7 +286,9 @@ public final class Explorer {
 
     /**
      * Everything the transport could do next: the head of every lane, each optionally handed over
-     * twice, and — while the clock still has a timeout left to reach — the sweeper.
+     * twice or handed to a consumer whose transaction does not commit, the outbox relay while
+     * anything is waiting in it, and — while the clock still has a timeout left to reach — the
+     * sweeper.
      */
     private static List<Option> optionsOf(Walk walk) {
         List<Option> options = new ArrayList<>();
@@ -284,6 +302,37 @@ public final class Explorer {
                     walk.portal.wire().redeliver(step);
                 }));
             }
+            if (walk.failuresLeft > 0 && ClosureInOneProcess.TRANSACTIONAL.test(step.lane())) {
+                options.add(new Option(step.lane() + " " + step + " [its transaction rolls back]",
+                        () -> {
+                            walk.failuresLeft--;
+                            UnitsOfWork transactions = walk.portal.world().unitsOfWork();
+                            int failedBefore = transactions.rolledBack();
+                            transactions.theNextOne(UnitsOfWork.Ending.ROLLS_BACK);
+                            walk.portal.wire().run(step);
+                            transactions.theNextOne(UnitsOfWork.Ending.COMMITS);
+                            if (transactions.rolledBack() > failedBefore) {
+                                // its offset never moved, so the broker still owes it to them
+                                walk.portal.wire().unconsumed(step);
+                            }
+                        }));
+                options.add(new Option(
+                        step.lane() + " " + step + " [it commits and the process dies unsent]",
+                        () -> {
+                            walk.failuresLeft--;
+                            UnitsOfWork transactions = walk.portal.world().unitsOfWork();
+                            transactions.theNextOne(UnitsOfWork.Ending.COMMITS_AND_SAYS_NOTHING_YET);
+                            walk.portal.wire().run(step);
+                            transactions.theNextOne(UnitsOfWork.Ending.COMMITS);
+                        }));
+            }
+        }
+        if (!walk.portal.world().unitsOfWork().unsent().isEmpty()) {
+            // always available, never compulsory: the layer assumes the relay eventually runs and
+            // asks whether the portal survives every delay of it, which is what an outbox promises
+            options.add(new Option("the outbox relay sends "
+                    + walk.portal.world().unitsOfWork().unsent(),
+                    () -> walk.portal.world().unitsOfWork().relay()));
         }
         if (walk.sweepsLeft > 0) {
             options.add(new Option("the clock reaches the purge timeout", () -> {

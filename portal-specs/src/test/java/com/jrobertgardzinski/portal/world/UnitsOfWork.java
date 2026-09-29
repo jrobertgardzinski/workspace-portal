@@ -37,7 +37,22 @@ public final class UnitsOfWork implements UnitOfWork {
          * participant dying in the middle of ERASE, a connection lost between the mark and the
          * commit — every one of them looks like this from outside the process.
          */
-        ROLLS_BACK
+        ROLLS_BACK,
+
+        /**
+         * It commits, and the process dies before its records leave the outbox. The rows are
+         * written and nothing has been said yet; whoever restarts finds the outbox rows and sends
+         * them ({@link #relay()}), which is the half of the pattern the table exists for.
+         */
+        COMMITS_AND_SAYS_NOTHING_YET,
+
+        /**
+         * The word goes out and the work does not — the ONE failure the outbox makes impossible,
+         * kept here so a test can ask whether the laws next door would see it. Nothing offers this
+         * to a search: a layer that stages a failure its own design prevents and then reports it is
+         * a layer that measures its own staging.
+         */
+        SENDS_AND_THEN_ROLLS_BACK
     }
 
     private final Portal world;
@@ -50,8 +65,15 @@ public final class UnitsOfWork implements UnitOfWork {
 
     private int rolledBack;
 
-    /** What the unit of work now running has said, and has not sent yet — its outbox. */
-    private final List<Runnable> pending = new ArrayList<>();
+    /** What the unit of work now running has said and not sent yet — its outbox rows. */
+    private final List<Record> pending = new ArrayList<>();
+
+    /** What a dead process left in the outbox: committed, unsent, and somebody else's to send. */
+    private final List<Record> stranded = new ArrayList<>();
+
+    /** One outbox row: what it says, and the sending of it. */
+    private record Record(String what, Runnable send) {
+    }
 
     UnitsOfWork(Portal world) {
         this.world = world;
@@ -85,12 +107,27 @@ public final class UnitsOfWork implements UnitOfWork {
      * <p>Outside a unit of work it goes out at once, because nothing is holding it — a verdict the
      * orchestrator publishes, an announcement an author's own teardown makes.
      */
-    public void onCommit(Runnable record) {
+    public void onCommit(String what, Runnable send) {
         if (depth == 0) {
-            record.run();
+            send.run();
             return;
         }
-        pending.add(record);
+        pending.add(new Record(what, send));
+    }
+
+    /** What the outbox is holding, committed and unsent — part of the portal's state, like a table. */
+    public List<String> unsent() {
+        return stranded.stream().map(Record::what).sorted().toList();
+    }
+
+    /**
+     * The relay comes round and sends what a dead process left behind, oldest first. In the
+     * deployed stack this is the outbox poller on the next tick, or the next start-up.
+     */
+    public void relay() {
+        List<Record> sending = List.copyOf(stranded);
+        stranded.clear();
+        sending.forEach(record -> record.send().run());
     }
 
     @Override
@@ -114,13 +151,21 @@ public final class UnitsOfWork implements UnitOfWork {
             throw failed;
         }
         depth--;
-        List<Runnable> said = List.copyOf(pending);
+        List<Record> said = List.copyOf(pending);
         pending.clear();
-        if (ending == Ending.ROLLS_BACK) {
-            rolledBack++;
-            before.restore();
-            return;   // and nothing it said goes anywhere: the two halves fail together
+        switch (ending) {
+            case ROLLS_BACK -> {
+                rolledBack++;
+                before.restore();
+                // and nothing it said goes anywhere: the two halves fail together
+            }
+            case COMMITS_AND_SAYS_NOTHING_YET -> stranded.addAll(said);
+            case SENDS_AND_THEN_ROLLS_BACK -> {
+                rolledBack++;
+                said.forEach(record -> record.send().run());
+                before.restore();
+            }
+            case COMMITS -> said.forEach(record -> record.send().run());
         }
-        said.forEach(Runnable::run);
     }
 }

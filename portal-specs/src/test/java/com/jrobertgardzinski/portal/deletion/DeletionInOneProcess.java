@@ -44,8 +44,8 @@ public final class DeletionInOneProcess {
      * a runner that held one by holding the other would be staging a failure production cannot
      * have.
      */
-    static final String COMMENTS = "comments-cascade";
-    static final String COLLECTIONS = "collections-cascade";
+    public static final String COMMENTS = "comments-cascade";
+    public static final String COLLECTIONS = "collections-cascade";
 
     /** Keyed by the meme, so one meme's whole cascade stays on one partition — {@code KafkaMemeEvents}. */
     public static final String MEMES_EVENTS = "memes-events";
@@ -126,7 +126,7 @@ public final class DeletionInOneProcess {
      * each other and neither has this.
      */
     private void announce(MemeDeleted announcement) {
-        transactions.onCommit(() -> {
+        transactions.onCommit("MEME_DELETED " + announcement.memeId(), () -> {
             lastMemeDeleted = announcement;
             enqueue(announcement);
         });
@@ -144,7 +144,7 @@ public final class DeletionInOneProcess {
 
     /** COMMENTS_DELETED reaches collections alone. */
     private void announce(CommentsDeleted announcement) {
-        transactions.onCommit(() -> {
+        transactions.onCommit("COMMENTS_DELETED " + announcement.memeId(), () -> {
             commentAnnouncements.add(announcement);
             wire.enqueue(new Wire.Lane(COMMENTS_EVENTS, announcement.memeId(), COLLECTIONS),
                     "COMMENTS_DELETED " + announcement.memeId()
