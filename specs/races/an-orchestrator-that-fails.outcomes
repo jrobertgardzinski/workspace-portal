@@ -2,16 +2,38 @@
 
 Alice's closure, where one of the ORCHESTRATOR's units of work does not commit: the saga row 
 it advanced and the records it produced go together, so a rollback leaves the confirmation 
-it was reading where it was and a death after the commit leaves the commands in the outbox. 
-The question is whether the case can be made to finish twice, or to finish and forget that 
-it did. 
+it was reading where it was and a death after the commit loses them, because that loop sends 
+straight to the broker and marks the saga once the send is proven. One sweep is left, so the 
+recovery those records have instead of a relay — the next sweep re-issuing them — is in the 
+tree as well. The question is whether the case can be made to finish twice, or to finish and 
+forget that it did. 
 
 search: exhaustive — every schedule this transport allows was walked
-distinct end states: 1
+distinct end states: 4
 
 [A]
     identity was told: [PORTAL_CONTENT_PURGED]
     the parts confirmed: {alice/collections=0, alice/comments=1, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+[B]
+    identity was told: []
+    the parts confirmed: {alice/collections=0, alice/comments=1, alice/memes=1}
+    still on the wire: []
+    rows:
+      meme alice's meme by alice RESERVED
+      comment alice's own comment under somebody's meme by alice RESERVED
+
+[C]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=0, alice/comments=0, alice/memes=1}
+    still on the wire: []
+    rows: the portal holds nothing at all
+
+[D]
+    identity was told: [PORTAL_CONTENT_PURGED]
+    the parts confirmed: {alice/collections=0, alice/comments=1, alice/memes=0}
     still on the wire: []
     rows: the portal holds nothing at all
 

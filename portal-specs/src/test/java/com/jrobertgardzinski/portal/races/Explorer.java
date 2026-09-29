@@ -316,12 +316,18 @@ public final class Explorer {
                                 walk.portal.wire().unconsumed(step);
                             }
                         }));
-                options.add(new Option(
-                        step.lane() + " " + step + " [it commits and the process dies unsent]",
+                // an outbox row waits for a relay; a record sent straight to the broker is simply
+                // gone, and what re-issues it is the next sweep
+                boolean hasAnOutbox = ClosureInOneProcess.THROUGH_AN_OUTBOX.test(step.lane());
+                options.add(new Option(step.lane() + " " + step
+                        + (hasAnOutbox ? " [it commits and the process dies unsent]"
+                        : " [it commits and what it said is lost]"),
                         () -> {
                             walk.failuresLeft--;
                             UnitsOfWork transactions = walk.portal.world().unitsOfWork();
-                            transactions.theNextOne(UnitsOfWork.Ending.COMMITS_AND_SAYS_NOTHING_YET);
+                            transactions.theNextOne(hasAnOutbox
+                                    ? UnitsOfWork.Ending.COMMITS_AND_SAYS_NOTHING_YET
+                                    : UnitsOfWork.Ending.COMMITS_AND_LOSES_WHAT_IT_SAID);
                             walk.portal.wire().run(step);
                             transactions.theNextOne(UnitsOfWork.Ending.COMMITS);
                         }));
@@ -339,6 +345,32 @@ public final class Explorer {
                 walk.sweepsLeft--;
                 walk.portal.sweep();
             }));
+            if (walk.failuresLeft > 0) {
+                // the sweep is not a record, so there is no offset to leave alone: a sweeper whose
+                // transaction did not commit has selected nothing and charged nothing, and the next
+                // tick finds the same cases overdue. The clock still moved
+                options.add(new Option(
+                        "the clock reaches the purge timeout [the sweep's transaction rolls back]",
+                        () -> {
+                            walk.sweepsLeft--;
+                            walk.failuresLeft--;
+                            UnitsOfWork transactions = walk.portal.world().unitsOfWork();
+                            transactions.theNextOne(UnitsOfWork.Ending.ROLLS_BACK);
+                            walk.portal.sweep();
+                            transactions.theNextOne(UnitsOfWork.Ending.COMMITS);
+                        }));
+                options.add(new Option(
+                        "the clock reaches the purge timeout [it commits and what it said is lost]",
+                        () -> {
+                            walk.sweepsLeft--;
+                            walk.failuresLeft--;
+                            UnitsOfWork transactions = walk.portal.world().unitsOfWork();
+                            transactions.theNextOne(
+                                    UnitsOfWork.Ending.COMMITS_AND_LOSES_WHAT_IT_SAID);
+                            walk.portal.sweep();
+                            transactions.theNextOne(UnitsOfWork.Ending.COMMITS);
+                        }));
+            }
         }
         return options;
     }

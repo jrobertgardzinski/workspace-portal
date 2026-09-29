@@ -94,6 +94,21 @@ public final class ClosureInOneProcess {
      * world a snapshot puts back, which makes ITS transaction a boundary of this layer rather than
      * something staged badly.
      */
+    /**
+     * Of those, the ones whose records are written to an OUTBOX TABLE inside the transaction — the
+     * three participant consumers, which publish through `SpringOutbox` and a republisher.
+     *
+     * <p>The orchestrator is transactional and not here: its loop and its sweeper send straight to
+     * the broker and mark the saga once the send is proven, so a death before the send loses the
+     * records and the next sweep re-issues them. Modelling those as relayable outbox rows staged a
+     * failure the deployed loop cannot have — and produced a law break to match.
+     */
+    public static final Predicate<Wire.Lane> THROUGH_AN_OUTBOX = lane ->
+            (CONTENT_COMMANDS.equals(lane.topic())
+                    && (MEMES.equals(lane.group()) || COMMENTS.equals(lane.group())))
+                    || (DeletionInOneProcess.MEMES_EVENTS.equals(lane.topic())
+                    && DeletionInOneProcess.COMMENTS.equals(lane.group()));
+
     public static final Predicate<Wire.Lane> TRANSACTIONAL = lane ->
             (CONTENT_COMMANDS.equals(lane.topic())
                     && (MEMES.equals(lane.group()) || COMMENTS.equals(lane.group())))
@@ -231,12 +246,18 @@ public final class ClosureInOneProcess {
      * and the verdict are in the air at the same time.
      */
     public void sweep() {
+        // the clock moves whatever happens next: a transaction that does not commit does not give
+        // the time back, and the next tick finds the same cases overdue
         world.windForward(PURGE_TIMEOUT.plusSeconds(1));
         Instant now = world.clock().instant();
-        List<EventsRouter.Outgoing> swept = router.sweepOverdue();
-        swept.stream().map(EventsRouter.Outgoing::countsRetryFor).filter(Objects::nonNull)
-                .forEach(charge -> sagas.retryDelivered(charge.sagaId(), charge.retriesSoFar(), now));
-        enqueue(swept);
+        // the sweeper's own unit of work: what it selects, the retries it charges and the records it
+        // produces are one transaction, exactly as the participants' work and word are
+        world.unitsOfWork().run(() -> {
+            List<EventsRouter.Outgoing> swept = router.sweepOverdue();
+            swept.stream().map(EventsRouter.Outgoing::countsRetryFor).filter(Objects::nonNull)
+                    .forEach(charge -> sagas.retryDelivered(charge.sagaId(), charge.retriesSoFar(), now));
+            enqueue(swept);
+        });
     }
 
     /** The part comes back — a restarted consumer, which is how a silence ends in production. */
@@ -272,15 +293,21 @@ public final class ClosureInOneProcess {
             // mark; nothing here can fail to send, so publishing IS the proof. Without this the
             // sweeper is a machine for re-announcing verdicts, and no spec noticed because no
             // spec had ever swept a saga that was already finished.
-            if (message.announcesSaga() != null) {
-                sagas.markAnnounced(message.announcesSaga());
-            }
             if (message.destination() == Destination.SECURITY) {
                 JsonNode verdict = read(message.payload());
                 String label = "verdict " + verdict.path(ClosureMessages.Field.TYPE).asText();
-                world.unitsOfWork().onCommit(label, () -> wire.enqueue(
-                        new Wire.Lane(OFFBOARDING_EVENTS, message.key(), SECURITY), label,
-                        () -> toSecurity.add(verdict)));
+                world.unitsOfWork().onCommit(label, () -> {
+                    // marked when the record is SENT and not when it is produced, because
+                    // KafkaLoop marks a saga announced once the broker has proven the send and
+                    // the sweeper re-publishes whatever never got the mark. Marking at produce
+                    // time would make a verdict lost between the commit and the send look
+                    // announced, and nothing would ever say it
+                    if (message.announcesSaga() != null) {
+                        sagas.markAnnounced(message.announcesSaga());
+                    }
+                    wire.enqueue(new Wire.Lane(OFFBOARDING_EVENTS, message.key(), SECURITY), label,
+                            () -> toSecurity.add(verdict));
+                });
                 continue;
             }
             JsonNode command = read(message.payload());

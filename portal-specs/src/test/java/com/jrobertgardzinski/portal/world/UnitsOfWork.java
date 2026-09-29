@@ -47,6 +47,15 @@ public final class UnitsOfWork implements UnitOfWork {
         COMMITS_AND_SAYS_NOTHING_YET,
 
         /**
+         * It commits and what it said is LOST — the ending of a producer that has no outbox to
+         * write into. The orchestrator's loop and its sweeper send straight to the broker and mark
+         * the saga afterwards ({@code KafkaLoop#settleDeliveries}), so a death between the commit
+         * and the send loses those records for good; the next sweep re-issues the commands and
+         * re-publishes the outcome, which is the recovery those two have instead of a relay.
+         */
+        COMMITS_AND_LOSES_WHAT_IT_SAID,
+
+        /**
          * The word goes out and the work does not — the ONE failure the outbox makes impossible,
          * kept here so a test can ask whether the laws next door would see it. Nothing offers this
          * to a search: a layer that stages a failure its own design prevents and then reports it is
@@ -160,6 +169,9 @@ public final class UnitsOfWork implements UnitOfWork {
                 // and nothing it said goes anywhere: the two halves fail together
             }
             case COMMITS_AND_SAYS_NOTHING_YET -> stranded.addAll(said);
+            case COMMITS_AND_LOSES_WHAT_IT_SAID -> {
+                // nothing: no outbox row was written, so there is nothing for anybody to relay
+            }
             case SENDS_AND_THEN_ROLLS_BACK -> {
                 rolledBack++;
                 said.forEach(record -> record.send().run());

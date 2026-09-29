@@ -59,6 +59,17 @@ orchestrator a confirmation, and the cascade's comments hop:
   A state carries a `held in the outbox:` line while the outbox is holding something, because an
   outbox row is a row.
 
+Two producers, two endings, because the estate has two kinds. The three participant consumers write
+their records to an **outbox table** inside the transaction, so a death after the commit leaves a row
+for the republisher and the relay is what sends it. The orchestrator's loop and its sweeper send
+straight to the broker and mark the saga once the send is proven, so a death after the commit **loses**
+those records for good, and their recovery is the next sweep re-issuing them.
+
+**Reading an end state where nobody was told.** A state with no verdict and rows still reserved means
+the seed's sweep budget ran out before the recovery did its work. The deployed sweeper has no budget:
+it ticks for ever, and the next tick re-issues the commands and re-publishes the outcome. What the
+state records is that nothing but a sweep can get the case out of there.
+
 What the axis leaves alone: collections on both protocols (it has no transaction to share) and the
 orchestrator (its own store is not part of the world a snapshot puts back). One failure the axis
 refuses to stage is the word leaving a transaction that then rolled back — the outbox makes it

@@ -1,0 +1,43 @@
+# a-sweep-that-fails
+
+The collections service is down, so the case runs out of patience — and one of the sweeper's 
+own units of work does not commit: it rolls back, having selected and charged nothing, or it 
+commits and the process dies before the re-commands and the verdict leave the outbox. The 
+clock moved either way. 
+
+search: exhaustive — every schedule this transport allows was walked
+distinct end states: 4
+
+[A]
+    identity was told: [PORTAL_PURGE_FAILED]
+    the parts confirmed: {alice/comments=1, alice/memes=1}
+    still on the wire: [content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections RESTORE_USER_CONTENT → collections]
+    rows:
+      meme alice's meme by alice
+      comment alice's own comment under somebody's meme by alice
+
+[B]
+    identity was told: []
+    the parts confirmed: {alice/comments=1, alice/memes=1}
+    still on the wire: [content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections]
+    rows:
+      meme alice's meme by alice RESERVED
+      comment alice's own comment under somebody's meme by alice RESERVED
+
+[C]
+    identity was told: [PORTAL_PURGE_FAILED]
+    the parts confirmed: {alice/comments=0, alice/memes=1}
+    still on the wire: [content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections RESTORE_USER_CONTENT → collections]
+    rows:
+      meme alice's meme by alice
+      comment alice's own comment under somebody's meme by alice
+
+[D]
+    identity was told: [PORTAL_PURGE_FAILED]
+    the parts confirmed: {alice/comments=1, alice/memes=0}
+    still on the wire: [content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections PURGE_USER_CONTENT → collections, content-commands→collections RESTORE_USER_CONTENT → collections]
+    rows:
+      meme alice's meme by alice
+      comment alice's own comment under somebody's meme by alice
+
+every law held on every schedule walked

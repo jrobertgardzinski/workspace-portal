@@ -405,21 +405,50 @@ public final class Seeds {
             "Alice's closure, where one of the ORCHESTRATOR's units of work does not commit: the "
                     + "saga row it advanced and the records it produced go together, so a rollback "
                     + "leaves the confirmation it was reading where it was and a death after the "
-                    + "commit leaves the commands in the outbox. The question is whether the case "
-                    + "can be made to finish twice, or to finish and forget that it did.")
+                    + "commit loses them, because that loop sends straight to the broker and marks "
+                    + "the saga once the send is proven. One sweep is left, so the recovery those "
+                    + "records have instead of a relay — the next sweep re-issuing them — is in the "
+                    + "tree as well. The question is whether the case can be made to finish twice, "
+                    + "or to finish and forget that it did.")
             .holding(portal -> {
                 portal.memes.posted(LEAVER, ALICE, 1);
                 portal.comments.wrote(LEAVER, ALICE, 1);
             })
             .startedBy(portal -> portal.securityAnnouncesClosureOf(
                     LEAVER, ClosureInitiator.SELF.wire(), null))
+            .patientFor(1)
+            .wherePartsMayFail(1);
+
+    /**
+     * The sweeper's own transaction — what it selected, the retries it charged and the records it
+     * produced are one unit of work, and one of them here does not commit.
+     *
+     * <p>The clock moves whatever happens: a transaction that does not commit does not give the
+     * time back, so the next tick finds the same case overdue and charges the retry again. Which is
+     * the question — whether a sweep that failed can leave a case counted twice, or a capitulation
+     * half-made.
+     */
+    public static final Seed A_SWEEP_THAT_FAILS = about("a-sweep-that-fails",
+            "The collections service is down, so the case runs out of patience — and one of the "
+                    + "sweeper's own units of work does not commit: it rolls back, having selected "
+                    + "and charged nothing, or it commits and the process dies before the "
+                    + "re-commands and the verdict leave the outbox. The clock moved either way.")
+            .holding(portal -> {
+                portal.memes.posted(LEAVER, ALICE, 1);
+                portal.comments.wrote(LEAVER, ALICE, 1);
+            })
+            .startedBy(portal -> {
+                portal.silence("collections");
+                portal.securityAnnouncesClosureOf(LEAVER, ClosureInitiator.SELF.wire(), null);
+            })
+            .patientFor(4)
             .wherePartsMayFail(1);
 
     public static final List<Seed> ALL = List.of(THREE_PARTS, CASCADE_AFTER_THE_PIVOT,
             BOTH_PROTOCOLS_ON_ONE_ROW, AT_LEAST_ONCE, THE_SWEEPER, A_SECOND_REQUEST,
             THE_WHOLE_SEAM, A_POPULARITY_CONDITION, A_CASCADE_TWICE, TWO_PEOPLE_LEAVING,
             GIVEN_UP_AFTER_THE_CASCADE, A_UNIT_OF_WORK_THAT_FAILS, A_WORD_THAT_WAITS,
-            AN_ORCHESTRATOR_THAT_FAILS);
+            AN_ORCHESTRATOR_THAT_FAILS, A_SWEEP_THAT_FAILS);
 
     private Seeds() {
     }
