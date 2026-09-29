@@ -773,9 +773,31 @@ budżet awarii jest zerowy, dopóki ziarno o niego nie poprosi.
 
 ### 13.9 Co zostaje
 
-- **Orkiestrator.** Jego transakcja (wiersz sagi plus outbox) nie jest staged, bo jego store nie
-  jest częścią świata, który snapshot przywraca. To pierwsze miejsce, gdzie ta oś może pójść dalej.
+- ~~**Orkiestrator.**~~ **Zrobione — §13.10.**
 - **Budżet awarii większy niż jeden.** Dwie awarie w jednym harmonogramie to iloczyn, nie suma;
   `a-word-that-waits` przy jednej awarii i dwóch sweepach ma już 189 tys. węzłów.
 - **Redukcja częściowego porządku** — dalej pierwsza rzecz do policzenia, jeśli ziaren z sweepami
   albo awariami dojdzie więcej (§12.10).
+
+### 13.10 Orkiestrator też ma transakcję (29.09.2026, później tego dnia)
+
+`Portal.alsoRestoring(...)` wpuszcza do snapshotu wiersze, które należą do tego świata, a trzyma je
+ktoś inny — czyli tabelę sag, bo mieszka w busie. Krok z potwierdzeniem biegnie teraz w jednostce
+pracy świata, a każdy rekord, który orkiestrator produkuje, wychodzi przez outbox: wycofana obsługa
+zostawia potwierdzenie na głowie partycji i sagę taką, jaka była. Pas orkiestratora wchodzi do
+`TRANSACTIONAL`.
+
+Nowe prawo, jego połowa I7: **werdykt, który wyszedł, jest zapisany jako wyszedł.** Sprawdzone
+mutacją i okazało się mocniejsze od błędu, który je podpowiedział: po wyjęciu `markAnnounced` — czyli
+w stanie, w jakim ten runner był do 29.09 — prawo pęka na **13 z 16** testów, każdy na pierwszym
+przejrzanym harmonogramie. §12.4 potrzebowało ziarna, które zamiecie już zakończoną sprawę; to prawo
+pada na każdym ziarnie, które sprawę domyka.
+
+`an-orchestrator-that-fails`: 11 harmonogramów, 766 węzłów, **1 stan końcowy**, wyczerpujące. I wynik
+wart ziarna: udostępnienie transakcji orkiestratora do awarii **nie dodaje ani jednego nowego stanu
+końcowego** — dwa starsze ziarna awaryjne urosły o kilka tysięcy węzłów i kończą dokładnie w tych
+samych zbiorach. 88 testów zielonych.
+
+Zostaje z tego jedna granica: wycofanie transakcji, która **otwiera** sagę. Referencyjny store nie
+umie zapomnieć wiersza (zmiana w innym repo), a sprawę otwiera wyłącznie fakt dostarczony poza
+drutem — nigdy krok, który ta warstwa umie zepsuć.
