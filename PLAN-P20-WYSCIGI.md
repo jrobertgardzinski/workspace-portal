@@ -775,8 +775,7 @@ budżet awarii jest zerowy, dopóki ziarno o niego nie poprosi.
 
 - ~~**Orkiestrator.**~~ **Zrobione — §13.10.**
 - ~~**Budżet awarii większy niż jeden.**~~ **Zmierzone — §13.12.**
-- **Redukcja częściowego porządku** — dalej pierwsza rzecz do policzenia, jeśli ziaren z sweepami
-  albo awariami dojdzie więcej (§12.10).
+- **Redukcja częściowego porządku** — policzona i świadomie NIE zrobiona, §13.14.
 
 ### 13.10 Orkiestrator też ma transakcję (29.09.2026, później tego dnia)
 
@@ -876,3 +875,24 @@ tej osoby i przestała go rezerwować.
 Trzy ziarna zyskały po jednym stanie: **nic się nie stało** — sprawa otwarta, jej komendy zgubione
 między commitem a wysłaniem, i ani jednego tiku, żeby je wystawić ponownie. Pozostałe dziesięć plików
 konfluencji bajt w bajt bez zmian. 89 testów zielonych.
+
+### 13.14 Redukcja częściowego porządku — policzona, nie zrobiona
+
+Liczby, zanim decyzja. Odsetek węzłów przyciętych jako „już widziane": `a-word-that-waits`
+178 281 / 215 507 (**83 %**), `an-orchestrator-that-fails` 22 899 / 28 761 (**80 %**),
+`the-sweeper` 233 040 / 269 820 (**86 %**).
+
+To znaczy, że **memoizacja po odcisku już robi to, co dałaby POR**: diament A;B kontra B;A schodzi
+się w jeden węzeł, bo oba prowadzą do tego samego odcisku z tym samym drutem i tymi samymi budżetami.
+POR oszczędziłaby nie węzły, a **odwiedziny** — czyli replay prefiksu, bo eksplorator buduje każdy
+węzeł od nowa.
+
+Zdjęcie replayu to nie POR, to trzymanie stanu na stosie — i wymagałoby wciągnięcia do snapshotu całej
+księgowości busa (`toSecurity`, `confirmedFor`, `spokenOf`, `commentAnnouncements`, `lastMemeDeleted`,
+zegar, `held`, licznik `minted`). Każde przeoczone pole to cicha, fałszywa redukcja: dokładnie klasa
+błędu z §12.5a, tylko że tam narzędzie zgłaszało swój model, a tu **przestałoby zgłaszać** cudzy.
+Za samą prędkość — przy suicie, która robi `clean test` w około trzy minuty, jest wyczerpująca wszędzie
+i nigdzie nie odbija się od limitu — to zła wymiana.
+
+Zostaje policzone i zapisane. Wraca do stołu, kiedy jakieś ziarno **przytnie** przeszukiwanie —
+raport mówi wtedy `TRUNCATED` wielkimi literami i to jest ten moment, nie wcześniej.
