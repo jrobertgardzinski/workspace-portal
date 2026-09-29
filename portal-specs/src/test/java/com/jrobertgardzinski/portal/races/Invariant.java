@@ -308,6 +308,13 @@ public interface Invariant {
      * <p>It says nothing about a part that confirmed ZERO. Confirming nothing is the truthful
      * answer of a part with nothing of that person's, and of a re-commanded MARK that finds
      * everything already reserved.
+     *
+     * <p><strong>And nothing about rows the other protocol destroyed</strong> — the third law here
+     * to learn what it may not demand. A comment of the leaver's under somebody else's meme goes
+     * when that meme goes, reservation and all: {@code account-closure.feature} states it and calls
+     * it a decision. So the question is only asked where the part still HOLDS a row of theirs and
+     * has stopped reserving it; a part left holding nothing of theirs was emptied by a cascade, not
+     * by a word coming apart from its work.
      */
     Invariant A_WORD_MEANS_ROWS = new Invariant() {
         @Override
@@ -325,15 +332,18 @@ public interface Invariant {
             if (!portal.verdicts().isEmpty()) {
                 return Optional.empty();
             }
-            var holding = portal.reservationsBehindConfirmations();
+            var reserved = portal.reservationsBehindConfirmations();
+            var rows = portal.rowsBehindConfirmations();
             for (var said : portal.confirmations().entrySet()) {
                 if (said.getValue() <= 0) {
                     continue;
                 }
-                if (holding.getOrDefault(said.getKey(), 0) == 0) {
+                if (reserved.getOrDefault(said.getKey(), 0) == 0
+                        && rows.getOrDefault(said.getKey(), 0) > 0) {
                     return Optional.of("the " + said.getKey() + " part confirmed "
-                            + said.getValue() + " reserved and is holding none of them, with no"
-                            + " verdict out to account for it");
+                            + said.getValue() + " reserved, holds " + rows.get(said.getKey())
+                            + " row(s) of theirs and has none of them reserved, with no verdict out"
+                            + " to account for it");
                 }
             }
             return Optional.empty();

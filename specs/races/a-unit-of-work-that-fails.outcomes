@@ -6,7 +6,7 @@ where it was, since the offset never moved, so the question is not whether the w
 but whether anything the portal already promised can come apart from it. 
 
 search: exhaustive — every schedule this transport allows was walked
-distinct end states: 2
+distinct end states: 3
 
 [A]
     identity was told: [PORTAL_CONTENT_PURGED]
@@ -23,5 +23,15 @@ distinct end states: 2
       comment alice's own comment under somebody's meme by alice RESERVED
       comment a stranger's comment under it under alice's meme by a stranger
       saved meme:a meme alice had saved by alice in favourites RESERVED
+
+[C]
+    identity was told: []
+    the parts confirmed: {}
+    still on the wire: []
+    rows:
+      meme alice's meme by alice
+      comment alice's own comment under somebody's meme by alice
+      comment a stranger's comment under it under alice's meme by a stranger
+      saved meme:a meme alice had saved by alice in favourites
 
 every law held on every schedule walked

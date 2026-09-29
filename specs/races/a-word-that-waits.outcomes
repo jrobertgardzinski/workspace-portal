@@ -6,7 +6,7 @@ the part again — and the relay may send the first word at any moment after tha
 it. Nothing orders the two, and the saga must come out of it having decided once. 
 
 search: exhaustive — every schedule this transport allows was walked
-distinct end states: 4
+distinct end states: 5
 
 [A]
     identity was told: [PORTAL_CONTENT_PURGED]
@@ -33,5 +33,13 @@ distinct end states: 4
     the parts confirmed: {alice/collections=0, alice/comments=1, alice/memes=0}
     still on the wire: []
     rows: the portal holds nothing at all
+
+[E]
+    identity was told: []
+    the parts confirmed: {}
+    still on the wire: []
+    rows:
+      meme alice's meme by alice
+      comment alice's own comment under somebody's meme by alice
 
 every law held on every schedule walked

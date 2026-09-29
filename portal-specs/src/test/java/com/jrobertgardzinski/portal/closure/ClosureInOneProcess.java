@@ -69,6 +69,15 @@ public final class ClosureInOneProcess {
     /** The single verdict identity waits for. */
     public static final String OFFBOARDING_EVENTS = "offboarding-events";
 
+    /**
+     * What identity announces a closure on, keyed by the leaver — the record that OPENS a case.
+     *
+     * <p>It used to be no record at all: a step called {@code router.handle(SECURITY, fact)}
+     * straight, so the one delivery the orchestrator's own transaction could fail was the one
+     * delivery that had no transaction. A request from outside is a record like any other.
+     */
+    public static final String SECURITY_EVENTS = "security-events";
+
     /** One per participant, keyed by the saga it echoes — {@code PurgeConfirmations}. */
     public static String confirmationsOf(String participant) {
         return participant + "-purge-events";
@@ -168,6 +177,18 @@ public final class ClosureInOneProcess {
     /** Whose closure, and whose part, each of those keys is — so the key can be asked again later. */
     private final Map<String, UserId> spokenOf = new LinkedHashMap<>();
 
+    /**
+     * Whether a closure request arrives as a RECORD on its own lane, or is handed to the
+     * orchestrator where it is announced.
+     *
+     * <p>A record is the faithful answer and it is off by default, which is a cost decision written
+     * down rather than an oversight: with the request on a lane the clock can tick before it
+     * arrives, and a seed with a held participant then ends in as many states as there are ways to
+     * spend its patience — all of them "nothing has happened yet" and none of them a decision the
+     * portal made. Seeds that want to fail the opening transaction ask for it.
+     */
+    private boolean requestsAreRecords;
+
     /** Told whenever a part answers, so a race runner can hold it to what it said. */
     private Confirming watcher = (participant, leaver, reserved) -> { };
 
@@ -219,7 +240,19 @@ public final class ClosureInOneProcess {
                 + "\"" + ClosureMessages.Field.INITIATED_BY + "\":\"" + initiatedBy + "\""
                 + (policyJson == null ? "" : ",\"" + ClosureMessages.Field.POLICY + "\":" + policyJson)
                 + ",\"version\":1}";
-        enqueue(router.handle(Source.SECURITY, fact));
+        if (requestsAreRecords) {
+            wire.enqueue(new Wire.Lane(SECURITY_EVENTS, email, ORCHESTRATOR),
+                    "a closure of " + email + " is announced",
+                    () -> world.unitsOfWork().run(
+                            () -> enqueue(router.handle(Source.SECURITY, fact))));
+            return;
+        }
+        world.unitsOfWork().run(() -> enqueue(router.handle(Source.SECURITY, fact)));
+    }
+
+    /** The requests after this one arrive as records on their own lane — see the field's javadoc. */
+    public void deliverRequestsAsRecords() {
+        requestsAreRecords = true;
     }
 
     /** Each delivered re-command buys the silent part another timeout; spend the budget, then the one that gives up. */
@@ -438,6 +471,30 @@ public final class ClosureInOneProcess {
         };
     }
 
+    /**
+     * How many rows of this person's that part still holds at all, reserved or not — what tells a
+     * reservation somebody ELSE destroyed from one that came apart from its word.
+     */
+    public int heldOn(String participant, UserId leaver) {
+        return switch (participant) {
+            case MEMES -> memes.heldBy(leaver).size();
+            case COMMENTS -> comments.heldBy(leaver).size();
+            case COLLECTIONS -> favourites.heldBy(leaver).size();
+            default -> throw new IllegalStateException("no such participant: " + participant);
+        };
+    }
+
+    /** The same, for every key of {@link #confirmations()}. */
+    public Map<String, Integer> rowsBehindConfirmations() {
+        Map<String, Integer> held = new LinkedHashMap<>();
+        confirmedFor.keySet().forEach(key -> {
+            UserId leaver = spokenOf.get(key);
+            String participant = key.substring(key.lastIndexOf('/') + 1);
+            held.put(key, leaver == null ? 0 : heldOn(participant, leaver));
+        });
+        return held;
+    }
+
     /** What each part said it had reserved, the first time it answered — part of an outcome. */
     public Map<String, Integer> confirmations() {
         return Map.copyOf(confirmedFor);
@@ -469,10 +526,10 @@ public final class ClosureInOneProcess {
      * the state, the instant, whose confirmations have been counted, whether the outcome has been
      * announced and how many retries were charged.
      *
-     * <p>A saga that a rolled-back transaction STARTED cannot be taken away again: the reference
-     * fake has no way to forget a row, and adding one is a change in another repository. It costs
-     * nothing here, because a saga is only ever opened by a fact delivered outside the wire —
-     * security announcing a closure — and never inside a step this layer can fail.
+     * <p>A case OPENED inside the failed transaction is forgotten, row and fact claim together, so
+     * redelivering the announcement opens it again. That is what {@code FakeSagaStore#forget}
+     * exists for: this class is the table and the transaction at once, while the JDBC twin gets
+     * the same thing for nothing, since a transaction that does not commit takes its INSERT along.
      */
     private Snapshot sagaRowsNow() {
         record Row(FakeSagaStore.Saga saga, String state, java.time.Instant updatedAt,
@@ -482,14 +539,21 @@ public final class ClosureInOneProcess {
                 .map(saga -> new Row(saga, saga.state, saga.updatedAt, Set.copyOf(saga.confirmed),
                         saga.announced, saga.retries))
                 .toList();
-        return () -> then.forEach(row -> {
-            row.saga().state = row.state();
-            row.saga().updatedAt = row.updatedAt();
-            row.saga().confirmed.clear();
-            row.saga().confirmed.addAll(row.confirmed());
-            row.saga().announced = row.announced();
-            row.saga().retries = row.retries();
-        });
+        Set<java.util.UUID> thereThen = then.stream().map(row -> row.saga().id)
+                .collect(java.util.stream.Collectors.toSet());
+        return () -> {
+            // a case OPENED by the transaction that failed is a case that was never opened
+            sagas.all().stream().map(saga -> saga.id).filter(id -> !thereThen.contains(id))
+                    .toList().forEach(sagas::forget);
+            then.forEach(row -> {
+                row.saga().state = row.state();
+                row.saga().updatedAt = row.updatedAt();
+                row.saga().confirmed.clear();
+                row.saga().confirmed.addAll(row.confirmed());
+                row.saga().announced = row.announced();
+                row.saga().retries = row.retries();
+            });
+        };
     }
 
     /**

@@ -52,6 +52,7 @@ public final class Seed {
     private final int sweeps;
     private final int failures;
     private boolean othersMayTakeTheirContentDown;
+    private boolean requestsAreRecords;
 
     private Seed(String name, String about, Consumer<ClosureInOneProcess> content,
                  Consumer<ClosureInOneProcess> trigger,
@@ -120,6 +121,20 @@ public final class Seed {
         return this;
     }
 
+    /**
+     * The closure request arrives as a record on its own lane, like everything else — so the
+     * transaction that OPENS the case can fail, and the case can be opened at any moment relative
+     * to whatever else is going on.
+     *
+     * <p>Opt-in, because it lets the clock tick before the request arrives: a seed with a held
+     * participant then ends in one state per way of spending its patience, and none of those is a
+     * decision the portal made.
+     */
+    public Seed whereTheRequestIsARecord() {
+        requestsAreRecords = true;
+        return this;
+    }
+
     /** A name for an id, so the report reads as sentences rather than as hexadecimal. */
     public Seed calling(String id, String what) {
         Map<String, String> more = new LinkedHashMap<>(names);
@@ -129,6 +144,9 @@ public final class Seed {
 
     public Started start() {
         ClosureInOneProcess portal = new ClosureInOneProcess();
+        if (requestsAreRecords) {
+            portal.deliverRequestsAsRecords();
+        }
         content.accept(portal);
         Memory memory = new Memory(portal.world().memeIds(), portal.world().commentIds(),
                 Optional.ofNullable(leaver),

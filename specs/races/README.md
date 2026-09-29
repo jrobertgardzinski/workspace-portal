@@ -65,6 +65,13 @@ for the republisher and the relay is what sends it. The orchestrator's loop and 
 straight to the broker and mark the saga once the send is proven, so a death after the commit **loses**
 those records for good, and their recovery is the next sweep re-issuing them.
 
+**The request that opens a case** is a record on its own lane wherever a seed asks for it
+(`whereTheRequestIsARecord`), so the transaction that opens a saga can fail like any other and the
+opening can land anywhere. It is opt-in and not the default, which is a cost decision rather than an
+oversight: on a lane, the clock can tick before the request arrives, and a seed with a held
+participant then ends in one state per way of spending its patience — none of them a decision the
+portal made.
+
 **Reading an end state where nobody was told.** A state with no verdict and rows still reserved means
 the seed's sweep budget ran out before the recovery did its work. The deployed sweeper has no budget:
 it ticks for ever, and the next tick re-issues the commands and re-publishes the outcome. What the

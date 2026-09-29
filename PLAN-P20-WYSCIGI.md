@@ -849,3 +849,30 @@ zawsze bada stan, do którego pierwsza już doszła, a memoizacja po odcisku to 
 realnym ryzykiem tylko tam, gdzie awaria **zmienia** stan trwale — czyli przy „commituje i gubi", i
 w ziarnach ze sweepami (`a-word-that-waits` ma 209 tys. węzłów przy jednej awarii i dwóch sweepach,
 i tam budżetu nie podnoszę bez policzenia).
+
+### 13.13 Żądanie, które otwiera sprawę, jest rekordem (29.09.2026, noc)
+
+Do teraz jedna dostawa nie miała transakcji — ta jedna, która otwiera sagę: runner wołał
+`router.handle(SECURITY, fact)` wprost z triggera. `FakeSagaStore.forget(UUID)` (commit w
+`microservice-offboarding`) daje snapshotowi to, czego mu brakowało: sprawa **otwarta** w wycofanej
+transakcji jest zapominana razem z roszczeniem faktu, więc ponowna dostawa otwiera ją znowu. Twin
+JDBC nie potrzebuje takiej metody — transakcja, która nie commituje, zabiera INSERT ze sobą; ten fake
+jest tabelą i transakcją naraz.
+
+Żądanie jako rekord jest **opcjonalne per ziarno** (`whereTheRequestIsARecord`) i to jest decyzja
+kosztowa, nie przeoczenie: na pasie zegar może tyknąć, zanim żądanie dojdzie, a ziarno z leżącym
+uczestnikiem kończy wtedy w tylu stanach, ile jest sposobów wydania cierpliwości — i żaden z nich nie
+jest decyzją portalu. Włączone w trzech małych ziarnach awaryjnych; `a-sweep-that-fails`
+i `given-up-after-the-cascade` mierzyły po 14 i 10 stanów, kiedy było domyślne, i wszystkie dodatkowe
+różniły się wyłącznie liczbą re-komend wiszących na wstrzymanym pasie.
+
+**Znalezisko 7 — trzecie prawo, które musiało się nauczyć, czego nie wolno mu żądać.** Nowa wolność
+w kolejności pokazała harmonogram, w którym prawo I7 („część, która mówiła, jest trzymana przez tę
+samą część") padało na `given-up-after-the-cascade`: część komentarzy potwierdziła 1, a trzyma 0 — bo
+kaskada zabrała cały wątek razem z rezerwacją. To jest handel, który `account-closure.feature` nazywa
+decyzją, nie rozjazd słowa z pracą. Prawo pyta teraz tylko tam, gdzie część **wciąż trzyma** wiersz
+tej osoby i przestała go rezerwować.
+
+Trzy ziarna zyskały po jednym stanie: **nic się nie stało** — sprawa otwarta, jej komendy zgubione
+między commitem a wysłaniem, i ani jednego tiku, żeby je wystawić ponownie. Pozostałe dziesięć plików
+konfluencji bajt w bajt bez zmian. 89 testów zielonych.

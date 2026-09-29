@@ -368,7 +368,8 @@ public final class Seeds {
             })
             .startedBy(portal -> portal.securityAnnouncesClosureOf(
                     LEAVER, ClosureInitiator.SELF.wire(), null))
-            .wherePartsMayFail(2);
+            .wherePartsMayFail(2)
+            .whereTheRequestIsARecord();
 
     /**
      * A word that is committed and not yet said, while the clock runs out on the saga waiting for
@@ -393,7 +394,8 @@ public final class Seeds {
             .startedBy(portal -> portal.securityAnnouncesClosureOf(
                     LEAVER, ClosureInitiator.SELF.wire(), null))
             .wherePartsMayFail(1)
-            .patientFor(2);
+            .patientFor(2)
+            .whereTheRequestIsARecord();
 
     /**
      * The orchestrator's own transaction — the last one this layer could not fail.
@@ -422,7 +424,8 @@ public final class Seeds {
             .startedBy(portal -> portal.securityAnnouncesClosureOf(
                     LEAVER, ClosureInitiator.SELF.wire(), null))
             .patientFor(1)
-            .wherePartsMayFail(1);
+            .wherePartsMayFail(1)
+            .whereTheRequestIsARecord();
 
     /**
      * The sweeper's own transaction — what it selected, the retries it charged and the records it
