@@ -342,6 +342,11 @@ public final class Seeds {
      * commit did not move its offset either — the same lesson the silenced part taught on
      * 28.09.2026, one level down.
      *
+     * <p>Two failures, not one, and they cost almost nothing: 983 nodes became 1 900 and the set of
+     * end states did not move. Memoisation is why — a step that rolled back leaves the world where
+     * it found it, so the second failure is nearly always exploring a state the first already
+     * reached. "Two failures are a product, not a sum" was the guess; here it is a sum.
+     *
      * <p>What it asks: whether the portal can be made to break a promise by failing once. The
      * world carries a thread and a pointer belonging to somebody else, so a cascade starts and its
      * comments hop — which deletes a thread and announces what it deleted in one unit of work —
@@ -363,7 +368,7 @@ public final class Seeds {
             })
             .startedBy(portal -> portal.securityAnnouncesClosureOf(
                     LEAVER, ClosureInitiator.SELF.wire(), null))
-            .wherePartsMayFail(1);
+            .wherePartsMayFail(2);
 
     /**
      * A word that is committed and not yet said, while the clock runs out on the saga waiting for

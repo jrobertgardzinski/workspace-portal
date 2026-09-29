@@ -774,8 +774,7 @@ budżet awarii jest zerowy, dopóki ziarno o niego nie poprosi.
 ### 13.9 Co zostaje
 
 - ~~**Orkiestrator.**~~ **Zrobione — §13.10.**
-- **Budżet awarii większy niż jeden.** Dwie awarie w jednym harmonogramie to iloczyn, nie suma;
-  `a-word-that-waits` przy jednej awarii i dwóch sweepach ma już 189 tys. węzłów.
+- ~~**Budżet awarii większy niż jeden.**~~ **Zmierzone — §13.12.**
 - **Redukcja częściowego porządku** — dalej pierwsza rzecz do policzenia, jeśli ziaren z sweepami
   albo awariami dojdzie więcej (§12.10).
 
@@ -839,3 +838,14 @@ sweepów — wdrożony sweeper tyka bez końca i następny tik te rekordy wystaw
 w `specs/races/README.md`, żeby nikt nie czytał tego stanu jako utraconej treści.
 
 89 testów zielonych.
+
+### 13.12 Dwie awarie w jednym harmonogramie — zmierzone
+
+`a-unit-of-work-that-fails` podniesione do dwóch awarii: **983 → 1 900 węzłów, 10 → 21 harmonogramów,
+zbiór stanów końcowych bez zmian.** Czyli suma, nie iloczyn — wbrew temu, co §13.9 zgadywało.
+
+Dlaczego: krok, który się wycofał, zostawia świat tam, gdzie go znalazł, więc druga awaria prawie
+zawsze bada stan, do którego pierwsza już doszła, a memoizacja po odcisku to ścina. Iloczyn zostaje
+realnym ryzykiem tylko tam, gdzie awaria **zmienia** stan trwale — czyli przy „commituje i gubi", i
+w ziarnach ze sweepami (`a-word-that-waits` ma 209 tys. węzłów przy jednej awarii i dwóch sweepach,
+i tam budżetu nie podnoszę bez policzenia).
