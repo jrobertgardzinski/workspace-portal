@@ -172,6 +172,27 @@ public class AccountClosureSteps {
         portal.takeDown(strangersMeme);
     }
 
+    /**
+     * The same collision as the step above, on the other side of the comments part's mark. The
+     * closure is in the air, the comments part has not heard its command yet — its records are
+     * waiting on its partition, which is what a consumer that has not got there yet IS — and the
+     * cascade takes the row out from under it.
+     *
+     * <p>What it costs the portal is not a lost row but a different PROMISE: the comments part
+     * reserves nothing, confirms nothing, and the pointer at the leaver's words is collected by
+     * the other protocol instead.
+     */
+    @When("{word} takes their meme down before the comments part hears anything")
+    public void theStrangerTakesTheirMemeDownFirst(String owner) {
+        // the other two parts hear their command and mark; the comments part's copy is still
+        // waiting on its own partition, which is what a consumer that has not got there yet IS
+        portal.silence("comments");
+        portal.everyPartAnswers();
+        portal.takeDown(strangersMeme);
+        portal.cascadeReachesEveryPart();
+        portal.hearsAgain("comments");
+    }
+
     @When("the portal gives up waiting")
     public void thePortalGivesUp() {
         portal.givesUpWaiting();
@@ -325,6 +346,23 @@ public class AccountClosureSteps {
     public void aCascadeIsStillInFlight() {
         assertTrue(portal.cascadeIsInFlight(),
                 "the closure announced nothing, so there was no cascade to be honest about");
+    }
+
+    /**
+     * The other end of the same collision. Above, the part reserved the row and then lost it, so
+     * the number it sent was wrong the moment it was sent; here it never saw the row at all, so
+     * the number is right — and different. Both are this rule, and which one happens is decided
+     * by nothing the portal controls.
+     */
+    @Then("the {word} part confirmed {int} reserved, not the {int} it would have found a moment earlier")
+    public void thePartConfirmedFewer(String participant, int reserved, int wouldHave) {
+        assertEquals(reserved, portal.confirmedBy(participant),
+                "the count that left the portal is not the count that part reserved");
+        assertEquals(wouldHave, reserved + 1,
+                "this contrast is only worth writing down while the two numbers differ by the row "
+                        + "the other protocol took");
+        assertEquals(List.of(), portal.comments.under(strangersMeme),
+                "the other protocol did not take the thread after all");
     }
 
     @Then("the {word} part had confirmed {int} reserved, one of which was gone before it was erased")

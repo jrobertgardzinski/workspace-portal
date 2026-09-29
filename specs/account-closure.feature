@@ -172,6 +172,22 @@ Feature: Closing an account — what becomes of everything the leaver left behin
       And the portal holds nothing of alice@example.com
       But the comments part had confirmed 4 reserved, one of which was gone before it was erased
 
+    # Found by enumerating the orders this rule allows rather than by picking one: the example
+    # above places the take-down after the comments part has marked, and this one places it
+    # before. They are the only two ends this situation has (../specs/races/
+    # both-protocols-on-one-row.outcomes), and they differ in what the portal PROMISES — so the
+    # file says both rather than the one somebody happened to write first.
+    Example: the thread goes before the comments part has reserved anything
+      Given bob@example.com posted a meme and alice@example.com commented under it
+      And a stranger saved that comment
+      When security announces that alice@example.com asked to be forgotten
+      And bob@example.com takes their meme down before the comments part hears anything
+      And every part of the portal answers
+      And the cascade reaches every part
+      Then security is told the portal purged the content of alice@example.com
+      And the comments part confirmed 3 reserved, not the 4 it would have found a moment earlier
+      But nobody has that comment saved any more
+
     Example: what the cascade took does not come back when the portal gives up
       Given bob@example.com posted a meme and alice@example.com commented under it
       When security announces that alice@example.com asked to be forgotten
