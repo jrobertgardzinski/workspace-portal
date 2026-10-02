@@ -102,102 +102,71 @@ config 38, system 101, application 36 zielone, infrastructure 338 z dwoma upadka
 tam były wcześniej (`CorsPreflightTest`, `TrustedProxyHttpTest`). `memes-ui` (npm) czerwony
 niezależnie od zmian — patrz `../shared/todo.md`.
 
-### ZOSTAŁO
+### ZROBIONE 2026-10-02 — moduł stoi, obie suity zielone
 
-**Jak w to wejść (zielone światło właściciela 2026-10-02):**
-- Najpierw szkielet modułu i JEDEN scenariusz główny (ukryj ×3 → konto → zniszcz ×3) do
-  zieleni. Rozgałęzienia i race'y dopiero potem — jeśli główny łańcuch nie przejdzie przez
-  glue, reszta nie ma sensu.
-- Przed glue przeczytać sygnatury `Restore*` w trzech `*-system` — nie były weryfikowane,
-  wiadomo tylko, że istnieją. `Mark*`, `Purge*`, `DeleteAccount`, `StartAccountDeletion`
-  i fejki są sprawdzone.
-- Pytania otwarte (niżej) nie blokują i `-2` ich nie rozstrzyga po drodze; co z nich
-  wypłynie, idzie do tego pliku, nie do kodu.
-- **Pierwszy czerwony test będzie kusił, żeby naprawić feature pod kod** (dopisać fazę,
-  zlać dwa kroki). Nie. Kolejność i słownictwo są decyzją właściciela — jeśli kod się nie
-  zgadza, to kod jest dziurą do nazwania w feature'rze, nie specka do zmiany.
+`portal/account-closure-2/` + `portal/specs-2/` (2 pliki `.feature`, 16 scenariuszy, **0 upadków**).
+Moduł wszedł do reaktora `workspace-portal` jako ostatni, obok `portal-specs`, bez parenta.
+Zależy **wyłącznie** od `*-domain` (+ ich `test-jar`y z fejkami) i `*-system` — plus `purge-rule`
+z `portal-libs` i `email-domain`/`user-id`/`password-domain` z kernela. Zero `*-application`,
+zero `offboarding`, zero `account-closure`, zero wire'u.
 
+**Co stoi w `specs-2`** (`closing-an-account.feature` 230 linii, `deleting-a-meme.feature` 70):
+łańcuch główny (ukryj ×3 → konto → zniszcz ×3) wraz z krokiem kaskady boba; odnośnik boba znika
+z memem, nie z kontem; konto nie daje się usunąć → wszystko wraca; jeden serwis nie ukrył →
+konto stoi, nic nie zniszczone; poddanie się → wraca; konto usunięte a jeden serwis nie zniszczył
+→ konto NIE wraca, treść czeka ukryta; dwa klucze (adres nie prowadzi już nikąd, treść dalej
+znajdowalna po id); admin zachowuje komentarz, który czytelnicy zachowali, i odnośnik boba do
+niego się trzyma; to samo zażądane przez alice jest ignorowane; trzy race'y — mem wrzucony po
+ukryciu zostaje, odnośnik zapisany po ukryciu zostaje i jest zliczony (`leftBehind`), autor
+usuwa własny ukryty mem i słyszy „nie ma takiego mema", a po cofnięciu zamknięcia mem wraca.
+Drugi plik: pełna kaskada mem → wątek → odnośniki (dwa osobne kroki collections), to samo dwa
+razy nic nie zmienia i nie ogłasza drugi raz, mem bez wątku nie ogłasza nic o komentarzach,
+mem którego nie ma nie dociera do nikogo.
 
-1. **Założyć moduł** `portal/account-closure-2/` + `portal/specs-2/` na `.feature`
-   (wzorem `portal-specs` + `portal/specs`: `build-helper` dokłada `../specs-2` jako
-   test-resource). Bez parenta — `workspace-portal` jest czystym agregatorem.
-2. **Napisać dwie suity.** Szkic scenariusza głównego, zaakceptowany przez właściciela
-   („podoba mi sie ostatni gherkin"), jest w historii sesji i brzmi tak:
-   `Given alice has 2 memes, 3 comments and 4 saved references` /
-   `And bob saved one of alice's memes` /
-   `When the closure of alice's account is requested` → `Then alice is still in the user repository` /
-   `When memes has hidden alice's content` → `Then alice's memes are out of sight`
-   `But the meme repository still holds them` `And alice is still in the user repository` /
-   (to samo dla comments) / (to samo dla collections) → `And only now is alice gone from
-   the user repository` `And alice is gone from the session, factor and recovery-code
-   repositories` `But the portal still holds 2 memes, 3 comments and 4 references of hers` /
-   `When memes has destroyed alice's content` → `Then alice's memes are gone` / (comments,
-   collections) → `And nothing of alice is left anywhere`.
-   Szkic sprzed 2026-10-02 (`has finished` → od razu `gone`, konto na końcu) jest
-   nieaktualny: niszczył przed usunięciem konta, więc nieudane usunięcie konta zastawało
-   memy już bez bloba. `When <serwis> has hidden/destroyed` to „ten kawałek roboty się
-   wykonał" — zero wiedzy o tym, czy to były eventy, komendy, czy wywołanie metody.
-   **Odnośnik boba NIE znika przy comments** (szkic z sesji miał go tam i to był błąd).
-   Łańcuch w kodzie: `PurgeUserContent` → `MemeEvents.memeDeleted(id)` → collections
-   `PurgeDeletedItem("meme", ids)` (dziś `CascadeConsumer`). Comments nie mają z tym nic
-   wspólnego. Collections mają więc w tej historii **dwa osobne kroki**: reakcja na mema
-   alice (kaskada, `When collections has heard that alice's meme is gone` → `Then bob's
-   reference to it is gone`) i własne zamknięcie (`PurgeUserItems`, zapisy alice). To jest
-   dokładnie rozgałęzienie, które ma być widoczne — nie zlewać ich w jeden krok.
-3. **Rozgałęzienia edge case'owe**, w tym samym języku. Co najmniej:
-   - jeden serwis nie ukrywa → konto zostaje, nic nie jest zniszczone; gdy zamknięcie się
-     poddaje, to co ukryte wraca: `Then alice's memes are back in the gallery`
-   - **konto nie daje się usunąć** (`FakeUserRepository` odmawia `deleteByEmail`) → wszystko
-     ukryte wraca, `Restore*` z trzech `*-system` wreszcie ma kto wołać. To jest scenariusz,
-     dla którego właściciel odwrócił decyzję „nic nie wraca".
-   - konto usunięte, jeden serwis nie niszczy → konto zostaje usunięte (nie wraca — hashy
-     sekretów nie wolno przywracać), treść zostaje ukryta i czeka. Co ją wreszcie zniszczy,
-     jest **dziurą nazwaną w feature'rze** (dziś: `WatchErasureBacklog` ją tylko liczy).
-   - komentarz, który czytelnicy zachowali (zamknięcie przez admina) → zostaje w wątku,
-     podpisany przez nikogo, a odnośnik boba do niego nadal się rozwiązuje
-   - **konto ma dwa klucze, treść zna jeden.** `StartAccountDeletion` dostaje `Email`,
-     `*-system` biorą `UserId`; mapuje `userRepository.findBy(email).map(User::id)` (tak robi
-     dziś `AccountDeletionOrchestrator`). Jeśli użytkownik zniknie, zanim treść odczyta id,
-     nie ma czym go odnaleźć — to jest fakt sprzed decyzji o architekturze i zasługuje na
-     scenariusz, nie na komentarz.
-3a. **Race'y — bo po to ten moduł jest.** Na sucho race to permutacja kolejności kroków, i
-   lista z punktu 4 daje ją za darmo: każde `When <serwis> has finished` to osobny krok, więc
-   wystarczy przestawić. Trzy kandydaty, które wynikają z kodu, nie z wyobraźni:
-   - bob zapisuje mema alice **po** tym, jak memes skończyło, a collections jeszcze nie —
-     `PurgeUserItems.Closure.leftBehind` istnieje dokładnie dla tego okna (gate offline,
-     token w zakładce żyje do `exp`).
-   - alice wrzuca nowego mema po ukryciu starych → nie należy do zamknięcia, zostaje
-     (`PurgeUserContent` działa tylko na `pendingOf`). Czy to jest obietnica, czy dziura —
-     zadać właścicielowi, ale najpierw pokazać w Gherkinie.
-   - alice usuwa własnego mema w trakcie zamykania konta → `DeleteMeme.findMetadata` nie
-     widzi ukrytego, odpowiada `NO_SUCH_MEME`; mem i tak zniknie z zamknięciem, ale autor
-     dostał „nie ma takiego mema" o czymś, co jeszcze jest — a jeśli zamknięcie się cofnie,
-     mem wraca, choć autor chciał go usunąć.
-4. **Montaż bez mechanizmu.** `StartAccountDeletion` dostaje `FakeUserRepository`,
-   `FakeSessionRepository` i **własną implementację `ContentPurge`** napisaną w tej suicie.
-   Trzech słuchaczy napędza use case'y z `*-system` na fejkach z `*-domain`. Każdy melduje
-   do **najprostszej możliwej listy z trzema polami do odhaczenia** (robocza nazwa
-   `Checklist` — nazwa z angielskiego potocznego, nie z architektury) i dopiero
-   odhaczenie wszystkich trzech wywołuje `DeleteAccount`; udane usunięcie konta każe trzem
-   słuchaczom niszczyć, odmowa — przywracać. Ta lista MUSI nieść komentarz, że jest
-   zamiennikiem tej suity, a nie decyzją o architekturze.
-   **Jeden krok Gherkina = jeden use case z `*-system`**, i tu akurat kod pasuje do specki
-   jak ulał: `has hidden` = `Mark*ForErasure`, `has destroyed` = `Purge*` (działa tylko na
-   `pendingOf`, czyli na tym, co ukryto — więc „zniszczyć coś, czego nie ukryto" nie da się
-   nawet napisać), `are back` = `Restore*`. Żadnego sklejania dwu use case'ów w jeden krok.
-   Własny `ContentPurge` robi mapowanie `Email` → `UserId` przez `FakeUserRepository.findBy`
-   **raz, na początku**, i trzyma je — bo niszczenie idzie PO `DeleteAccount`, a wtedy
-   użytkownika już nie ma, czym odczytać id (patrz 3, kreska „dwa klucze"). `PurgeRule` do scenariusza admina budować wprost z
-   `portal-libs/purge-rule` (rekordy są publiczne; `parse` jest pakietowe i niepotrzebne) —
-   żadnego `PurgeChoices` → tekst → `parse`, bo ta droga wiedzie przez `*-application`.
-5. **Rejestratory eventów** dla `MemeEvents` i `CommentEvents` — lokalne dla `-2`, bo to
-   jest własne okablowanie specki, nie fejk portu. To one dają właścicielowi widzieć
-   „rzucił event / usłyszał".
-   **`PurgeUserComments` i `DeleteThread` nie emitują** — zwracają ids (`Purged.deletedByMeme`,
-   `List<String>`), a publikuje wołający (dziś `CommentsDeletionParticipant`, bo outbox musi
-   dzielić los delete'a). W `-2` publikuje więc glue słuchacza comments, zaraz po use casie.
-   `MemeEvents.memeDeleted` dla odmiany woła sam `PurgeUserContent`/`DeleteMeme`. Ta
-   asymetria jest w produkcie, nie w specce — nie wyrównywać.
+**Czego NIE ma w specce, zgodnie z założeniem 3:** ani jednego słowa o mechanizmie. Trzy dziury
+są nazwane wprost w plikach: kto usuwa konto po trzech ukryciach, co wreszcie niszczy treść
+zostawioną po usunięciu konta, i czy treść powstała w trakcie zamknięcia ma je przeżyć.
+
+**Montaż (punkt 4 planu, zrealizowany):** `world.Checklist` — trzy pola i jeden callback, z
+komentarzem klasowym mówiącym wprost, że jest zamiennikiem tej suity, nie decyzją; trzecie
+odhaczenie woła `DeleteAccount` (wszystkie **dziewięć** repozytoriów), odmowa wiersza → werdykt
+„konto zostaje" i treść wraca. `world.Closures` to własny `ContentPurge`: mapuje `Email → UserId`
+**raz**, na początku, i trzyma — niszczenie idzie po `DeleteAccount`, więc wiersza już nie ma.
+`world.Accounts` to `FakeUserRepository` z jednym przełącznikiem (`refuseDeletion`), bo fejk jest
+`final` i zawsze potrafi usunąć. `PurgeRule` budowane wprost z rekordów (`KeepPopularAnonymized`),
+nigdy przez `parse`. `TagRepository` i `MemeContentIndex` na mockach, zgodnie z wyrokiem 28.09.
+
+**Odstępstwo od planu, świadome:** race „bob zapisuje mema alice po tym, jak memes skończyło"
+napisany jest jako **alice** zapisująca odnośnik po ukryciu swoich. `PurgeUserItems.Closure.leftBehind`
+liczy aktywne odnośniki LEAVERA, nie obcego, więc tylko ta wersja trafia w mechanizm, o którym
+plan mówił. Wersja z bobem nie miałaby czego zliczyć.
+
+**Dziura znaleziona po drodze, naprawiona w dwóch zagnieżdżonych repo** (to był pierwszy czerwony
+test i NIE był dziurą w specce): `FakeMemeRepository.deleteById` oraz `FakeCommentRepository.delete`
+/`deleteByMeme` zostawiały po zniszczonym wierszu **sierocy znacznik** w mapie `marks`, więc
+`isMarked(id)` odpowiadał `true` o treści, której już nic nie trzyma. W schemacie status jest
+KOLUMNĄ wiersza, więc adapter nie potrafi osiągnąć tego stanu. Dodany `protected forgetMark(id)`
+w obu `Fake*Erasure` i wołany przy każdym delete (`microservice-memes`, `microservice-comments`).
+Bez tego kryterium z założenia 8 („gone = nie ma w mapie") jest niesprawdzalne. `portal-specs`
+przechodzi bez zmian — jego `snapshot()` robi zdjęcie PRZED robotą, więc znacznik i tak w nim jest.
+
+**Stan zieleni:** portal **1060 testów Java, 0 upadków** (`portal-specs` zielony, `memes-infrastructure`
+dobity osobno: 238/0). `memes-ui` (npm) czerwony niezależnie od zmian.
+
+**Co ta suita naprawdę dowodzi o produkcie** (reszta dowodzi własnego okablowania): `StartAccountDeletion`
+tylko znaczy i gasi sesje; `DeleteAccount` czyści dziewięć repozytoriów; `Mark*`/`Purge*` działają
+na `pendingOf`, więc „zniszczyć coś, czego nie ukryto" jest nienapisywalne; `Restore*` z trzech
+`*-system` faktycznie przywraca to, co `Mark*` ukrył — **i to pierwszy raz, gdy ktokolwiek je woła
+z drugiej strony**; kaskada memes → comments → collections działa na fejkach; a kolejność z
+`.feature` jest tą, którą dzisiejszy orkiestrator łamie (niszczy przed `DeleteAccount`) — specka
+tego nie naprawia, tylko nazywa.
+
+### CO DALEJ (nic z tego nie jest zaczęte)
+
+1. **Pokazać właścicielowi oba pliki `.feature`** i zapytać, czy to jest ten rozmiar i ten język.
+   To było kryterium odbioru („osoba techniczna, która chce w pięć minut zobaczyć łańcuch").
+2. **Trzy dziury nazwane w plikach** czekają na decyzje, nie na kod.
+3. Hybryda AsciiDoc z założenia 5 — teraz pierwsza suita jest zielona, więc pytanie wraca.
 
 ### DECYZJE JUŻ PODJĘTE (nie otwierać od nowa)
 
@@ -234,12 +203,14 @@ niezależnie od zmian — patrz `../shared/todo.md`.
 
 ### PYTANIA OTWARTE (dla właściciela)
 
-- `collections-system` ma **zero testów** własnych (jedyny moduł `*-system` bez). Dopisać
-  mu własne, czy niech go pokrywa dopiero `-2`?
-- Czy `-2` ma w ogóle ruszać `offboarding`? Przy punkcie 4 nie jest potrzebny — lista
-  z trzema polami zastępuje go w całości. To upraszcza, ale oznacza, że `-2` nie dotyka
-  ani jednej linii prawdziwego kodu zbierającego.
-- Hybryda AsciiDoc z założenia nr 5 — wrócić do niej, gdy pierwsza suita będzie zielona?
+- `collections-system` ma **zero testów** własnych (jedyny moduł `*-system` bez). `-2` wywołuje
+  teraz wszystkie cztery jego use case'y, więc nie jest już niepokryty — ale pokrywa go SĄSIAD,
+  z innego repozytorium. Dopisać mu własne u siebie, czy uznać to za wystarczające?
+- ~~Czy `-2` ma ruszać `offboarding`?~~ **NIE** — rozstrzygnięte 2026-10-02 przy budowie:
+  `world.Checklist` zastępuje go w całości i mówi o tym wprost we własnym javadocu. Cena jest
+  taka, jak przewidziana: `-2` nie dotyka ani jednej linii prawdziwego kodu zbierającego
+  werdykt, więc o nim nie dowodzi niczego i nie udaje, że dowodzi.
+- Hybryda AsciiDoc z założenia nr 5 — pierwsza suita jest zielona, więc pytanie wraca.
 
 ### PUŁAPKI (wpadliśmy, nie wpadaj drugi raz)
 

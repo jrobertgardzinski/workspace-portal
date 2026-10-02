@@ -23,6 +23,12 @@ what that service DECIDES; the adapter next door holding only the wire. Both run
 without a broker or a database, in `portal-specs` — one world, two buses — against the features
 in `specs/`.
 
+Both subjects are stated a second time in `specs-2/`, run by `account-closure-2/` — and from the
+other side: what would have to be true of letting go of somebody's content BEFORE either of those
+two shapes was chosen. That runner reaches no higher than `*-domain` and `*-system`, so it borrows
+nobody's orchestration and has to name what it stands in for. The two runners are not alternatives;
+`specs-2/README.md` says what each one answers.
+
 The portal runs on the **shared kernel** — identity, mail chain, stub IdP,
 notification channels and every shared library — which lives in the sibling
 workspace `../shared` (repo `workspace-shared`) and is consumed through `~/.m2`
