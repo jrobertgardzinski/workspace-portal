@@ -1,7 +1,7 @@
 package com.jrobertgardzinski.portal.world;
 
 import com.jrobertgardzinski.identity.UserId;
-import com.jrobertgardzinski.collections.application.FakeCollectionRepository;
+import com.jrobertgardzinski.collections.domain.FakeCollectionRepository;
 import com.jrobertgardzinski.collections.domain.ItemRef;
 import com.jrobertgardzinski.collections.domain.SavedItem;
 

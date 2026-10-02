@@ -201,6 +201,30 @@
             <version>${allure.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <!-- the fakes of the memes ports, now beside the ports -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>memes-domain</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- the fakes of the comments ports -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>comments-domain</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- the fakes of the collections ports -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>collections-domain</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

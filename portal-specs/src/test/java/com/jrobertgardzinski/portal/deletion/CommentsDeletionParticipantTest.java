@@ -1,7 +1,7 @@
 package com.jrobertgardzinski.portal.deletion;
 
 import com.jrobertgardzinski.comments.application.CommentEvents;
-import com.jrobertgardzinski.comments.application.CommentVotes;
+import com.jrobertgardzinski.comments.domain.CommentVotes;
 import com.jrobertgardzinski.comments.application.DeleteThread;
 import com.jrobertgardzinski.comments.deletion.CommentsDeletionParticipant;
 import com.jrobertgardzinski.deletion.AtomicHopContractTest;

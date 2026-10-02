@@ -1,10 +1,10 @@
 package com.jrobertgardzinski.portal.world;
 
 import com.jrobertgardzinski.identity.UserId;
-import com.jrobertgardzinski.memes.application.FakeMemeErasure;
-import com.jrobertgardzinski.memes.application.MemeRepository;
+import com.jrobertgardzinski.memes.domain.FakeMemeErasure;
 import com.jrobertgardzinski.memes.domain.Meme;
 import com.jrobertgardzinski.memes.domain.MemeMetadata;
+import com.jrobertgardzinski.memes.domain.MemeRepository;
 import com.jrobertgardzinski.memes.domain.MemeStatus;
 
 import java.time.Instant;

@@ -149,8 +149,8 @@ public final class ClosureInOneProcess {
     private final DeletionInOneProcess cascade = new DeletionInOneProcess(world, wire);
 
     // the steps read the portal through this class; the rows themselves are the world's
-    final com.jrobertgardzinski.memes.application.FakeVoteRepository memeVotes = world.memeVotes;
-    final com.jrobertgardzinski.comments.application.FakeCommentVotes commentVotes = world.commentVotes;
+    final com.jrobertgardzinski.memes.domain.FakeVoteRepository memeVotes = world.memeVotes;
+    final com.jrobertgardzinski.comments.domain.FakeCommentVotes commentVotes = world.commentVotes;
     public final FakeMemes memes = world.memes;
     public final FakeComments comments = world.comments;
     public final FakeFavourites favourites = world.favourites;

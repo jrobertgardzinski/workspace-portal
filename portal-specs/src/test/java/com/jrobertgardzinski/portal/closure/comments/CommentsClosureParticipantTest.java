@@ -5,7 +5,7 @@ import com.jrobertgardzinski.closure.AtomicParticipantContractTest;
 import com.jrobertgardzinski.closure.ClosureCommand;
 import com.jrobertgardzinski.closure.ClosureInitiator;
 import com.jrobertgardzinski.closure.ClosureMessages;
-import com.jrobertgardzinski.comments.application.CommentVotes;
+import com.jrobertgardzinski.comments.domain.CommentVotes;
 import com.jrobertgardzinski.comments.application.CommentEvents;
 import com.jrobertgardzinski.comments.application.MarkUserCommentsForErasure;
 import com.jrobertgardzinski.comments.application.PurgeUserComments;

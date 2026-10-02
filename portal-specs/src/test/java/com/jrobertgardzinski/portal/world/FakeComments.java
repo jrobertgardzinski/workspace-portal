@@ -2,9 +2,9 @@ package com.jrobertgardzinski.portal.world;
 
 import com.jrobertgardzinski.comments.domain.CommentStatus;
 import com.jrobertgardzinski.identity.UserId;
-import com.jrobertgardzinski.comments.application.CommentRepository;
-import com.jrobertgardzinski.comments.application.FakeCommentErasure;
 import com.jrobertgardzinski.comments.domain.Comment;
+import com.jrobertgardzinski.comments.domain.CommentRepository;
+import com.jrobertgardzinski.comments.domain.FakeCommentErasure;
 
 import java.time.Instant;
 import java.util.ArrayList;
