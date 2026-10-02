@@ -104,6 +104,20 @@ niezależnie od zmian — patrz `../shared/todo.md`.
 
 ### ZOSTAŁO
 
+**Jak w to wejść (zielone światło właściciela 2026-10-02):**
+- Najpierw szkielet modułu i JEDEN scenariusz główny (ukryj ×3 → konto → zniszcz ×3) do
+  zieleni. Rozgałęzienia i race'y dopiero potem — jeśli główny łańcuch nie przejdzie przez
+  glue, reszta nie ma sensu.
+- Przed glue przeczytać sygnatury `Restore*` w trzech `*-system` — nie były weryfikowane,
+  wiadomo tylko, że istnieją. `Mark*`, `Purge*`, `DeleteAccount`, `StartAccountDeletion`
+  i fejki są sprawdzone.
+- Pytania otwarte (niżej) nie blokują i `-2` ich nie rozstrzyga po drodze; co z nich
+  wypłynie, idzie do tego pliku, nie do kodu.
+- **Pierwszy czerwony test będzie kusił, żeby naprawić feature pod kod** (dopisać fazę,
+  zlać dwa kroki). Nie. Kolejność i słownictwo są decyzją właściciela — jeśli kod się nie
+  zgadza, to kod jest dziurą do nazwania w feature'rze, nie specka do zmiany.
+
+
 1. **Założyć moduł** `portal/account-closure-2/` + `portal/specs-2/` na `.feature`
    (wzorem `portal-specs` + `portal/specs`: `build-helper` dokłada `../specs-2` jako
    test-resource). Bez parenta — `workspace-portal` jest czystym agregatorem.
