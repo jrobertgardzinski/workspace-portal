@@ -49,6 +49,11 @@ Odbiorca: osoba techniczna, która chce w pięć minut zobaczyć łańcuch i jeg
    nigdy oba naraz. Żadnego „drenowania busa" w jednym kroku. Asercje czytają fejki
    bezpośrednio (`FakeMemeErasure.isMarked(...)`, `FakeCommentErasure.activeOf(...)`,
    `FakeUserRepository.findBy(...)`), nie przez warstwę pomocniczą.
+   **„Gone" znaczy „nie ma w mapie", nigdy „repozytorium nie widzi".** `FakeMemeRepository`
+   i `FakeCommentRepository` nie widzą zaznaczonego rekordu (jak widok `active_*` w adapterze),
+   więc asercja przez `find`/`findMetadata` przechodzi już po samym zaznaczeniu, gdy nic nie
+   zniknęło. „Alice's memes are gone" = `!isMarked(id)` i `pendingOf(alice)` puste i
+   `activeOf(alice)` puste — czyta `FakeMemeErasure`, nie `MemeRepository`.
 9. **Słownictwo fejków (wyrok z 2026-09-28, `portal-specs/README.md` + `ANALIZA-2026-09-28-...md`):**
    `mock` = Mockito; `Fake*` = działający zamiennik w `src/test`; `InMemory*` = **prawdziwy**
    adapter w `src/main`; stub = osobny serwis w dockerze.
@@ -99,15 +104,39 @@ niezależnie od zmian — patrz `../shared/todo.md`.
    `And bob saved one of alice's memes` /
    `When the closure of alice's account is requested` → `Then alice is still in the user repository` /
    `When memes has finished with alice's content` → `Then alice's memes are gone from the meme repository`
-   `And alice is still in the user repository` / (to samo dla comments: + `And bob's reference
-   to alice's meme is gone`) / (to samo dla collections) → `And only now is alice gone from
-   the user repository` `And alice is gone from the session, factor and recovery-code repositories`.
+   `And alice is still in the user repository` / (to samo dla comments) / (to samo dla
+   collections) → `And only now is alice gone from the user repository` `And alice is gone
+   from the session, factor and recovery-code repositories`.
    `When <serwis> has finished` to po prostu „ten kawałek roboty się wykonał" — zero wiedzy
    o tym, czy to były eventy, komendy, czy wywołanie metody.
+   **Odnośnik boba NIE znika przy comments** (szkic z sesji miał go tam i to był błąd).
+   Łańcuch w kodzie: `PurgeUserContent` → `MemeEvents.memeDeleted(id)` → collections
+   `PurgeDeletedItem("meme", ids)` (dziś `CascadeConsumer`). Comments nie mają z tym nic
+   wspólnego. Collections mają więc w tej historii **dwa osobne kroki**: reakcja na mema
+   alice (kaskada, `When collections has heard that alice's meme is gone` → `Then bob's
+   reference to it is gone`) i własne zamknięcie (`PurgeUserItems`, zapisy alice). To jest
+   dokładnie rozgałęzienie, które ma być widoczne — nie zlewać ich w jeden krok.
 3. **Rozgałęzienia edge case'owe**, w tym samym języku. Co najmniej:
    - jeden serwis nie kończy → konto zostaje; `Then alice's memes stay gone`
    - komentarz, który czytelnicy zachowali (zamknięcie przez admina) → zostaje w wątku,
      podpisany przez nikogo, a odnośnik boba do niego nadal się rozwiązuje
+   - **konto ma dwa klucze, treść zna jeden.** `StartAccountDeletion` dostaje `Email`,
+     `*-system` biorą `UserId`; mapuje `userRepository.findBy(email).map(User::id)` (tak robi
+     dziś `AccountDeletionOrchestrator`). Jeśli użytkownik zniknie, zanim treść odczyta id,
+     nie ma czym go odnaleźć — to jest fakt sprzed decyzji o architekturze i zasługuje na
+     scenariusz, nie na komentarz.
+3a. **Race'y — bo po to ten moduł jest.** Na sucho race to permutacja kolejności kroków, i
+   lista z punktu 4 daje ją za darmo: każde `When <serwis> has finished` to osobny krok, więc
+   wystarczy przestawić. Trzy kandydaty, które wynikają z kodu, nie z wyobraźni:
+   - bob zapisuje mema alice **po** tym, jak memes skończyło, a collections jeszcze nie —
+     `PurgeUserItems.Closure.leftBehind` istnieje dokładnie dla tego okna (gate offline,
+     token w zakładce żyje do `exp`).
+   - alice wrzuca nowego mema po zaznaczeniu starych → nie należy do zamknięcia, zostaje
+     (`PurgeUserContent` działa tylko na `pendingOf`). Czy to jest obietnica, czy dziura —
+     zadać właścicielowi, ale najpierw pokazać w Gherkinie.
+   - alice usuwa własnego mema w trakcie zamykania konta → `DeleteMeme.findMetadata` nie
+     widzi zaznaczonego, odpowiada `NO_SUCH_MEME`; mem i tak zniknie z zamknięciem, ale
+     autor dostał „nie ma takiego mema" o czymś, co jeszcze jest.
 4. **Montaż bez mechanizmu.** `StartAccountDeletion` dostaje `FakeUserRepository`,
    `FakeSessionRepository` i **własną implementację `ContentPurge`** napisaną w tej suicie.
    Trzech słuchaczy napędza use case'y z `*-system` na fejkach z `*-domain`. Każdy melduje
@@ -115,9 +144,25 @@ niezależnie od zmian — patrz `../shared/todo.md`.
    `Checklist` — nazwa z angielskiego potocznego, nie z architektury) i dopiero
    odhaczenie wszystkich trzech wywołuje `DeleteAccount`. Ta lista MUSI nieść komentarz,
    że jest zamiennikiem tej suity, a nie decyzją o architekturze.
+   **Use case'y w `*-system` SĄ dwufazowe** i tego się nie obejdzie: `PurgeUserContent`,
+   `PurgeUserComments` i `PurgeUserItems` działają tylko na tym, co wcześniej zarezerwował
+   `Mark*ForErasure` (`pendingOf`), bez zaznaczenia nie usuwają nic. „`<serwis> has
+   finished`" w glue to więc Mark + Purge pod rząd, w jednym kroku. Specka o MARK-u milczy
+   (założenie 3), glue go woła — i NIE naprawiać tego dopisując fazę do feature'a przy
+   pierwszym czerwonym teście. Jednofazowego use case'u nie dopisywać: to byłaby decyzja
+   architektoniczna, czyli to, czego ta suita unika.
+   Własny `ContentPurge` robi mapowanie `Email` → `UserId` przez `FakeUserRepository.findBy`
+   (patrz 3, czwarta kreska). `PurgeRule` do scenariusza admina budować wprost z
+   `portal-libs/purge-rule` (rekordy są publiczne; `parse` jest pakietowe i niepotrzebne) —
+   żadnego `PurgeChoices` → tekst → `parse`, bo ta droga wiedzie przez `*-application`.
 5. **Rejestratory eventów** dla `MemeEvents` i `CommentEvents` — lokalne dla `-2`, bo to
    jest własne okablowanie specki, nie fejk portu. To one dają właścicielowi widzieć
    „rzucił event / usłyszał".
+   **`PurgeUserComments` i `DeleteThread` nie emitują** — zwracają ids (`Purged.deletedByMeme`,
+   `List<String>`), a publikuje wołający (dziś `CommentsDeletionParticipant`, bo outbox musi
+   dzielić los delete'a). W `-2` publikuje więc glue słuchacza comments, zaraz po use casie.
+   `MemeEvents.memeDeleted` dla odmiany woła sam `PurgeUserContent`/`DeleteMeme`. Ta
+   asymetria jest w produkcie, nie w specce — nie wyrównywać.
 
 ### DECYZJE JUŻ PODJĘTE (nie otwierać od nowa)
 
@@ -135,6 +180,14 @@ niezależnie od zmian — patrz `../shared/todo.md`.
 - **Nieudany hop nic nie cofa.** `Then alice's memes stay gone`. Na sucho nic nie wraca,
   a to, że cofanie jest nierozstrzygnięte, stoi komentarzem w feature'rze — milczenie
   w tym miejscu byłoby gorsze niż zły wybór.
+
+- **Co ta suita dowodzi o produkcie, a co o sobie.** `DeleteAccount` nie zna `ContentPurge`,
+  więc „alice is still in the user repository" po każdym hopie dowodzi wyłącznie listy
+  z punktu 4, czyli własnego okablowania specki. O produkcie dowodzi trzech rzeczy:
+  `StartAccountDeletion` tylko znaczy (`markPendingDeletion`), `DeleteAccount` czyści
+  dziewięć repozytoriów, kaskada treści (memes → comments → collections) działa na fejkach.
+  Kolejność hopów to obietnica specki do spełnienia przez przyszły mechanizm — i tak ma stać
+  w `.feature`, obok dziury z punktu „ostatni hop".
 
 ### PYTANIA OTWARTE (dla właściciela)
 
