@@ -30,12 +30,21 @@ Odbiorca: osoba techniczna, która chce w pięć minut zobaczyć łańcuch i jeg
    `pivot`, `transactional`, `2PC`, `kworum`, `kompensacja`, `MARK`/`ERASE` jako faz.
    Powód (słowa właściciela): „Skoro w account-closure-2 nie znamy architektury to po co
    piszesz saga? Robimy na sucho, a saga, transactional, 2pc czy cokolwiek innego
-   wdrożymy później." Dwufazowa rezerwacja **też jest mechanizmem** — istnieje tylko
-   dlatego, że robota idzie przez kilka procesów; w jednej transakcji nie ma żadnego MARK-a.
-   Javadoc `security-domain/.../port/ContentPurge.java` mówi to wprost: z jedną bazą
-   „every part of the saga above becomes unnecessary".
+   wdrożymy później." `MARK`/`ERASE` jako **nazwy faz** zostają zakazane, ale to, co za nimi
+   stoi, jest faktem, nie mechanizmem (zmiana z 2026-10-02, patrz założenie 4): treść jest
+   najpierw **ukryta, nie zniszczona**, i może wrócić. Specka mówi `hidden` / `out of sight` /
+   `back` / `destroyed` — słowami o stanie treści, nie o fazie protokołu. W jednej transakcji
+   to samo zdanie jest prawdą za darmo: ukrycie to niezacommitowany delete, powrót to rollback.
+   Javadoc `security-domain/.../port/ContentPurge.java`: z jedną bazą „every part of the saga
+   above becomes unnecessary" — saga tylko odgrywa to, co transakcja dostaje gratis.
 4. **Co zostaje, gdy się mechanizm zdejmie — i to jest cała treść specki:**
-   kolejność faktów i co jest prawdą pomiędzy. Konto **przeżywa** swoją treść.
+   kolejność faktów i co jest prawdą pomiędzy. Dwa zdania:
+   **Nic nie jest zniszczone, dopóki konto nie zniknie. Jeśli konto nie może zniknąć,
+   wszystko wraca.** (Decyzja właściciela z 2026-10-02: „usuwamy miękko memy alice, nie
+   udaje nam się usunąć jej konta, więc bezproblemowo przywracamy memy alice".) Konto
+   **przeżywa** swoją treść w galerii, ale **nie przeżywa jej w bazie** — kolejność jest:
+   ukryj wszystko → usuń konto → dopiero teraz niszcz. To jest zgodne z transakcją
+   (rollback = powrót) i to saga ma do tego dorosnąć, nie odwrotnie.
 5. **Gherkin, nie proza.** Rozważaliśmy hybrydę AsciiDoc + `include::...feature[tags=...]`
    (znaczniki include siedzą w komentarzach Gherkina, więc rozdział wciąga pojedyncze
    scenariusze między akapity prozy). Właściciel: „kusi, ale narazie zostawmy gherkin."
@@ -103,12 +112,17 @@ niezależnie od zmian — patrz `../shared/todo.md`.
    `Given alice has 2 memes, 3 comments and 4 saved references` /
    `And bob saved one of alice's memes` /
    `When the closure of alice's account is requested` → `Then alice is still in the user repository` /
-   `When memes has finished with alice's content` → `Then alice's memes are gone from the meme repository`
-   `And alice is still in the user repository` / (to samo dla comments) / (to samo dla
-   collections) → `And only now is alice gone from the user repository` `And alice is gone
-   from the session, factor and recovery-code repositories`.
-   `When <serwis> has finished` to po prostu „ten kawałek roboty się wykonał" — zero wiedzy
-   o tym, czy to były eventy, komendy, czy wywołanie metody.
+   `When memes has hidden alice's content` → `Then alice's memes are out of sight`
+   `But the meme repository still holds them` `And alice is still in the user repository` /
+   (to samo dla comments) / (to samo dla collections) → `And only now is alice gone from
+   the user repository` `And alice is gone from the session, factor and recovery-code
+   repositories` `But the portal still holds 2 memes, 3 comments and 4 references of hers` /
+   `When memes has destroyed alice's content` → `Then alice's memes are gone` / (comments,
+   collections) → `And nothing of alice is left anywhere`.
+   Szkic sprzed 2026-10-02 (`has finished` → od razu `gone`, konto na końcu) jest
+   nieaktualny: niszczył przed usunięciem konta, więc nieudane usunięcie konta zastawało
+   memy już bez bloba. `When <serwis> has hidden/destroyed` to „ten kawałek roboty się
+   wykonał" — zero wiedzy o tym, czy to były eventy, komendy, czy wywołanie metody.
    **Odnośnik boba NIE znika przy comments** (szkic z sesji miał go tam i to był błąd).
    Łańcuch w kodzie: `PurgeUserContent` → `MemeEvents.memeDeleted(id)` → collections
    `PurgeDeletedItem("meme", ids)` (dziś `CascadeConsumer`). Comments nie mają z tym nic
@@ -117,7 +131,14 @@ niezależnie od zmian — patrz `../shared/todo.md`.
    reference to it is gone`) i własne zamknięcie (`PurgeUserItems`, zapisy alice). To jest
    dokładnie rozgałęzienie, które ma być widoczne — nie zlewać ich w jeden krok.
 3. **Rozgałęzienia edge case'owe**, w tym samym języku. Co najmniej:
-   - jeden serwis nie kończy → konto zostaje; `Then alice's memes stay gone`
+   - jeden serwis nie ukrywa → konto zostaje, nic nie jest zniszczone; gdy zamknięcie się
+     poddaje, to co ukryte wraca: `Then alice's memes are back in the gallery`
+   - **konto nie daje się usunąć** (`FakeUserRepository` odmawia `deleteByEmail`) → wszystko
+     ukryte wraca, `Restore*` z trzech `*-system` wreszcie ma kto wołać. To jest scenariusz,
+     dla którego właściciel odwrócił decyzję „nic nie wraca".
+   - konto usunięte, jeden serwis nie niszczy → konto zostaje usunięte (nie wraca — hashy
+     sekretów nie wolno przywracać), treść zostaje ukryta i czeka. Co ją wreszcie zniszczy,
+     jest **dziurą nazwaną w feature'rze** (dziś: `WatchErasureBacklog` ją tylko liczy).
    - komentarz, który czytelnicy zachowali (zamknięcie przez admina) → zostaje w wątku,
      podpisany przez nikogo, a odnośnik boba do niego nadal się rozwiązuje
    - **konto ma dwa klucze, treść zna jeden.** `StartAccountDeletion` dostaje `Email`,
@@ -131,28 +152,28 @@ niezależnie od zmian — patrz `../shared/todo.md`.
    - bob zapisuje mema alice **po** tym, jak memes skończyło, a collections jeszcze nie —
      `PurgeUserItems.Closure.leftBehind` istnieje dokładnie dla tego okna (gate offline,
      token w zakładce żyje do `exp`).
-   - alice wrzuca nowego mema po zaznaczeniu starych → nie należy do zamknięcia, zostaje
+   - alice wrzuca nowego mema po ukryciu starych → nie należy do zamknięcia, zostaje
      (`PurgeUserContent` działa tylko na `pendingOf`). Czy to jest obietnica, czy dziura —
      zadać właścicielowi, ale najpierw pokazać w Gherkinie.
    - alice usuwa własnego mema w trakcie zamykania konta → `DeleteMeme.findMetadata` nie
-     widzi zaznaczonego, odpowiada `NO_SUCH_MEME`; mem i tak zniknie z zamknięciem, ale
-     autor dostał „nie ma takiego mema" o czymś, co jeszcze jest.
+     widzi ukrytego, odpowiada `NO_SUCH_MEME`; mem i tak zniknie z zamknięciem, ale autor
+     dostał „nie ma takiego mema" o czymś, co jeszcze jest — a jeśli zamknięcie się cofnie,
+     mem wraca, choć autor chciał go usunąć.
 4. **Montaż bez mechanizmu.** `StartAccountDeletion` dostaje `FakeUserRepository`,
    `FakeSessionRepository` i **własną implementację `ContentPurge`** napisaną w tej suicie.
    Trzech słuchaczy napędza use case'y z `*-system` na fejkach z `*-domain`. Każdy melduje
    do **najprostszej możliwej listy z trzema polami do odhaczenia** (robocza nazwa
    `Checklist` — nazwa z angielskiego potocznego, nie z architektury) i dopiero
-   odhaczenie wszystkich trzech wywołuje `DeleteAccount`. Ta lista MUSI nieść komentarz,
-   że jest zamiennikiem tej suity, a nie decyzją o architekturze.
-   **Use case'y w `*-system` SĄ dwufazowe** i tego się nie obejdzie: `PurgeUserContent`,
-   `PurgeUserComments` i `PurgeUserItems` działają tylko na tym, co wcześniej zarezerwował
-   `Mark*ForErasure` (`pendingOf`), bez zaznaczenia nie usuwają nic. „`<serwis> has
-   finished`" w glue to więc Mark + Purge pod rząd, w jednym kroku. Specka o MARK-u milczy
-   (założenie 3), glue go woła — i NIE naprawiać tego dopisując fazę do feature'a przy
-   pierwszym czerwonym teście. Jednofazowego use case'u nie dopisywać: to byłaby decyzja
-   architektoniczna, czyli to, czego ta suita unika.
+   odhaczenie wszystkich trzech wywołuje `DeleteAccount`; udane usunięcie konta każe trzem
+   słuchaczom niszczyć, odmowa — przywracać. Ta lista MUSI nieść komentarz, że jest
+   zamiennikiem tej suity, a nie decyzją o architekturze.
+   **Jeden krok Gherkina = jeden use case z `*-system`**, i tu akurat kod pasuje do specki
+   jak ulał: `has hidden` = `Mark*ForErasure`, `has destroyed` = `Purge*` (działa tylko na
+   `pendingOf`, czyli na tym, co ukryto — więc „zniszczyć coś, czego nie ukryto" nie da się
+   nawet napisać), `are back` = `Restore*`. Żadnego sklejania dwu use case'ów w jeden krok.
    Własny `ContentPurge` robi mapowanie `Email` → `UserId` przez `FakeUserRepository.findBy`
-   (patrz 3, czwarta kreska). `PurgeRule` do scenariusza admina budować wprost z
+   **raz, na początku**, i trzyma je — bo niszczenie idzie PO `DeleteAccount`, a wtedy
+   użytkownika już nie ma, czym odczytać id (patrz 3, kreska „dwa klucze"). `PurgeRule` do scenariusza admina budować wprost z
    `portal-libs/purge-rule` (rekordy są publiczne; `parse` jest pakietowe i niepotrzebne) —
    żadnego `PurgeChoices` → tekst → `parse`, bo ta droga wiedzie przez `*-application`.
 5. **Rejestratory eventów** dla `MemeEvents` i `CommentEvents` — lokalne dla `-2`, bo to
@@ -177,17 +198,25 @@ niezależnie od zmian — patrz `../shared/todo.md`.
   (`ANALIZA-2026-09-28-MOCKI-I-GRANICE-SEMANTYKI.md` §4: to, co ukrywają, jest obietnicą
   jednego serwisu należącą o poziom niżej), a `-2` nic o tagach ani o indeksie nie
   twierdzi. Odwrócenie tego wymaga zgody właściciela.
-- **Nieudany hop nic nie cofa.** `Then alice's memes stay gone`. Na sucho nic nie wraca,
-  a to, że cofanie jest nierozstrzygnięte, stoi komentarzem w feature'rze — milczenie
-  w tym miejscu byłoby gorsze niż zły wybór.
+- **Nieudane zamknięcie przywraca wszystko — ODWRÓCONE 2026-10-02.** Do tego dnia stało tu
+  „nieudany hop nic nie cofa, `alice's memes stay gone`". Właściciel odwrócił: treść jest
+  ukryta, nie zniszczona, dopóki konto stoi; nie da się usunąć konta → treść wraca. Powód:
+  to jest to samo, co daje transakcja (rollback), więc specka sprzed decyzji o architekturze
+  ma to powiedzieć. Jedyny wyjątek, nazwany w feature'rze: konto już usunięte, niszczenie
+  się nie kończy → konto nie wraca (sekrety), treść czeka ukryta.
 
 - **Co ta suita dowodzi o produkcie, a co o sobie.** `DeleteAccount` nie zna `ContentPurge`,
   więc „alice is still in the user repository" po każdym hopie dowodzi wyłącznie listy
   z punktu 4, czyli własnego okablowania specki. O produkcie dowodzi trzech rzeczy:
   `StartAccountDeletion` tylko znaczy (`markPendingDeletion`), `DeleteAccount` czyści
-  dziewięć repozytoriów, kaskada treści (memes → comments → collections) działa na fejkach.
+  dziewięć repozytoriów, kaskada treści (memes → comments → collections) działa na fejkach
+  — i czwartej: `Restore*` z trzech `*-system` faktycznie przywraca to, co `Mark*` ukrył
+  (dotąd nikt poza testami jednostkowymi tego nie wołał z drugiej strony).
   Kolejność hopów to obietnica specki do spełnienia przez przyszły mechanizm — i tak ma stać
-  w `.feature`, obok dziury z punktu „ostatni hop".
+  w `.feature`, obok dziury z punktu „ostatni hop". **Dzisiejszy kod łamie tę kolejność**:
+  orkiestrator niszczy (ERASE) PRZED `DeleteAccount`, więc nieudane usunięcie konta zastaje
+  memy bez bloba. `-2` tego nie naprawia, tylko nazywa — komentarzem przy scenariuszu „konto
+  nie daje się usunąć".
 
 ### PYTANIA OTWARTE (dla właściciela)
 
