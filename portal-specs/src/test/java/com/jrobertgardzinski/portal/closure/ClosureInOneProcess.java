@@ -25,7 +25,7 @@ import com.jrobertgardzinski.offboarding.application.Destination;
 import com.jrobertgardzinski.offboarding.application.EventsRouter;
 import com.jrobertgardzinski.offboarding.application.Source;
 import com.jrobertgardzinski.offboarding.system.BeginOffboarding;
-import com.jrobertgardzinski.offboarding.system.FakeSagaStore;
+import com.jrobertgardzinski.offboarding.domain.FakeSagaStore;
 import com.jrobertgardzinski.offboarding.system.RecordConfirmation;
 import com.jrobertgardzinski.offboarding.system.SweepOverdue;
 
