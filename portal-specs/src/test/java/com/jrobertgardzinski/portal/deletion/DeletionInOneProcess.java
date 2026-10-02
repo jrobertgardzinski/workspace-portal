@@ -1,12 +1,12 @@
 package com.jrobertgardzinski.portal.deletion;
 
 import com.jrobertgardzinski.collections.deletion.CollectionsDeletionParticipant;
-import com.jrobertgardzinski.comments.application.CommentEvents;
+import com.jrobertgardzinski.comments.domain.CommentEvents;
 import com.jrobertgardzinski.comments.deletion.CommentsDeletionParticipant;
 import com.jrobertgardzinski.deletion.CommentsDeleted;
 import com.jrobertgardzinski.deletion.MemeDeleted;
-import com.jrobertgardzinski.memes.application.DeleteMeme;
-import com.jrobertgardzinski.memes.application.MemeEvents;
+import com.jrobertgardzinski.memes.system.DeleteMeme;
+import com.jrobertgardzinski.memes.domain.MemeEvents;
 import com.jrobertgardzinski.portal.races.Scheduler;
 import com.jrobertgardzinski.portal.races.Wire;
 import com.jrobertgardzinski.portal.world.FakeComments;

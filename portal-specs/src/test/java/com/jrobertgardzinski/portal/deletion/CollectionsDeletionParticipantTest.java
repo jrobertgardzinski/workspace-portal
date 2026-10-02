@@ -1,6 +1,6 @@
 package com.jrobertgardzinski.portal.deletion;
 
-import com.jrobertgardzinski.collections.application.PurgeDeletedItem;
+import com.jrobertgardzinski.collections.system.PurgeDeletedItem;
 import com.jrobertgardzinski.collections.deletion.CollectionsDeletionParticipant;
 import com.jrobertgardzinski.deletion.CascadeHopContractTest;
 import com.jrobertgardzinski.deletion.CommentsDeleted;
