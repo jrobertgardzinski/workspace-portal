@@ -13,18 +13,18 @@ Feature: Closing an account — the order of what happens, and what is true in b
   # OUTLIVES its content in the gallery and does NOT outlive it in storage — hide everything,
   # remove the account, and only then destroy.
   #
-  # How the parts come to know any of this is not stated here, on purpose: this file is written
-  # BEFORE that decision. "When memes has hidden alice's content" means that piece of work
-  # happened, and says nothing about whether it was announced, commanded or simply called. With one
-  # database for the whole portal every sentence below is true for free — hiding is an uncommitted
-  # delete and coming back is a rollback — and with the parts in separate processes something has to
-  # be built to keep them. Whatever that is has to satisfy this file.
+  # The closure has STATES, and this file names them: HIDING while the parts hide their shares,
+  # DESTROYING once the account is gone, RESTORING when it stayed, DONE or WITHDRAWN when the parts
+  # have finished. Which report moves the closure from one to the next, and which is refused, is
+  # the runner's own file — ../account-closure-2/src/test/resources/closure-protocol.feature — and this
+  # one takes the states as given and says what is true of the CONTENT in each. "Given the closure
+  # has reached DESTROYING" is every part having hidden its share and the account having gone,
+  # played out in full through the real use cases; it is a shortcut for the reader, not for the code.
   #
-  # WHO REMOVES THE ACCOUNT ONCE EVERY PART HAS HIDDEN ITS SHARE IS A HOLE IN THIS FILE, and the
-  # most important one. Something has to notice that all three are done and then delete the
-  # account; what that something is, how long it waits and what it does when a part never answers
-  # are exactly the questions nobody has decided. This suite ticks three boxes and deletes the
-  # account on the third tick, which is the least that can stand in for it.
+  # How the parts come to know any of this is still not stated. "When memes has hidden alice's
+  # content" means that piece of work happened and was reported, and says nothing about whether it
+  # was announced, commanded or simply called. What carries a report, how long the closure waits
+  # for a part and who gives up on it are the decisions this file is written before.
 
   Background:
     Given alice has 2 memes, 3 comments and 4 saved references
@@ -32,32 +32,32 @@ Feature: Closing an account — the order of what happens, and what is true in b
 
   Rule: The account goes last, and nothing is destroyed before it
 
-    Every part hides its share, the account goes, and only then is anything destroyed. The whole
-    chain, in one scenario, because the order IS the promise.
-
-    Scenario: the chain from the request to the last thing destroyed
-      When the closure of alice's account is requested
-      Then alice is still in the user repository
+    Scenario: while the parts are hiding, the account stays and nothing is destroyed
+      Given the closure of alice's account has reached HIDING
       When memes has hidden alice's content
-      Then alice's memes are out of sight
-      But the meme repository still holds them
-      And alice is still in the user repository
-      When comments has hidden alice's content
-      Then alice's comments are out of sight
-      But the comment repository still holds them
-      And alice is still in the user repository
+      And comments has hidden alice's content
+      Then alice is still in the user repository
+      And alice's memes are out of sight
+      And alice's comments are out of sight
+      But alice's saved references are still in her list
+      And the portal still holds 2 memes, 3 comments and 4 references of hers
+
+    Scenario: the last part to hide its share is what lets the account go
+      Given the closure of alice's account has reached HIDING
+      And memes has hidden alice's content
+      And comments has hidden alice's content
       When collections has hidden alice's content
-      Then alice's saved references are out of sight
-      But the collection repository still holds them
-      And only now is alice gone from the user repository
+      Then the closure is DESTROYING
+      And alice is gone from the user repository
       And alice is gone from the session, factor and recovery-code repositories
       But the portal still holds 2 memes, 3 comments and 4 references of hers
+
+    Scenario: once the account is gone, the parts destroy what they hid
+      Given the closure of alice's account has reached DESTROYING
       When memes has destroyed alice's content
-      Then alice's memes are gone
-      When comments has destroyed alice's content
-      Then alice's comments are gone
-      When collections has destroyed alice's content
-      Then alice's saved references are gone
+      And comments has destroyed alice's content
+      And collections has destroyed alice's content
+      Then the closure is DONE
       And nothing of alice is left anywhere
 
   Rule: Alice's meme going costs bob a row, and that is a different matter from alice leaving
@@ -68,11 +68,8 @@ Feature: Closing an account — the order of what happens, and what is true in b
     reasons, and the two are separate steps.
 
     Scenario: the stranger's pointer goes with the meme, not with the account
-      When the closure of alice's account is requested
-      And memes has hidden alice's content
-      And comments has hidden alice's content
-      And collections has hidden alice's content
-      And memes has destroyed alice's content
+      Given the closure of alice's account has reached DESTROYING
+      When memes has destroyed alice's content
       Then bob still has that meme saved
       When collections has heard that alice's meme is gone
       Then bob's reference to it is gone
@@ -83,42 +80,40 @@ Feature: Closing an account — the order of what happens, and what is true in b
     This is the sentence the whole order exists for. The account cannot be deleted, so nothing may
     be destroyed and the gallery, the threads and the list are as they were.
 
-    Scenario: the account cannot be deleted
+    Scenario: the account refuses to go, and the closure turns back
       Given alice's account cannot be deleted
-      When the closure of alice's account is requested
+      And the closure of alice's account has reached HIDING
       And memes has hidden alice's content
       And comments has hidden alice's content
-      And collections has hidden alice's content
-      Then alice is still in the user repository
+      When collections has hidden alice's content
+      Then the closure is RESTORING
+      And alice is still in the user repository
       And the portal still holds 2 memes, 3 comments and 4 references of hers
+      But alice's memes are out of sight
+
+    Scenario: every part brings back what it hid, and alice is as she was
+      Given alice's account cannot be deleted
+      And the closure of alice's account has reached RESTORING
       When memes has brought alice's content back
       Then alice's memes are back in the gallery
       When comments has brought alice's content back
       Then alice's comments are back in their threads
       When collections has brought alice's content back
       Then alice's saved references are back in her list
+      And the closure is WITHDRAWN
 
-  Rule: While one part has not hidden its share, the account stays and nothing is destroyed
-
-    Scenario: one part has not hidden anything
-      When the closure of alice's account is requested
+    Scenario: the closure is given up on, and only what was hidden has to come back
+      Given the closure of alice's account has reached HIDING
       And memes has hidden alice's content
       And comments has hidden alice's content
-      Then alice is still in the user repository
-      And alice's memes are out of sight
-      But alice's saved references are still in her list
-      And the portal still holds 2 memes, 3 comments and 4 references of hers
-
-    Scenario: the closure is given up on, and what was hidden comes back
-      When the closure of alice's account is requested
-      And memes has hidden alice's content
-      And comments has hidden alice's content
-      And the closure is given up on
-      Then alice is still in the user repository
+      When the closure is given up on
+      Then the closure is RESTORING
+      And alice is still in the user repository
       When memes has brought alice's content back
-      Then alice's memes are back in the gallery
-      When comments has brought alice's content back
-      Then alice's comments are back in their threads
+      And comments has brought alice's content back
+      Then the closure is WITHDRAWN
+      And alice's memes are back in the gallery
+      And alice's comments are back in their threads
 
   Rule: Once the account is gone it does not come back, whatever happens to the content afterwards
 
@@ -128,16 +123,14 @@ Feature: Closing an account — the order of what happens, and what is true in b
 
     # WHAT FINALLY DESTROYS THE CONTENT IS A HOLE IN THIS FILE. The part that did not destroy its
     # share is sitting on rows nobody can see and nobody will ever come back for: the account they
-    # belonged to is gone, so there is nothing left to ask about them. Today one thing in the portal
-    # looks at this and only counts it.
+    # belonged to is gone, so there is nothing left to ask about them. The closure stays DESTROYING
+    # for as long as that part keeps quiet, and today one thing in the portal only counts it.
     Scenario: the account is gone and one part has not destroyed its share
-      When the closure of alice's account is requested
-      And memes has hidden alice's content
-      And comments has hidden alice's content
-      And collections has hidden alice's content
-      And memes has destroyed alice's content
+      Given the closure of alice's account has reached DESTROYING
+      When memes has destroyed alice's content
       And comments has destroyed alice's content
-      Then alice is gone from the user repository
+      Then the closure is still DESTROYING
+      And alice is gone from the user repository
       And alice's memes are gone
       And alice's comments are gone
       But alice's saved references are out of sight
@@ -151,12 +144,8 @@ Feature: Closing an account — the order of what happens, and what is true in b
     read the id while the account still existed, or there is nothing left to find her content by.
 
     Scenario: the content is still found after the account that named it is gone
-      When the closure of alice's account is requested
-      And memes has hidden alice's content
-      And comments has hidden alice's content
-      And collections has hidden alice's content
-      Then alice is gone from the user repository
-      And nothing in the portal can be found by alice's address any more
+      Given the closure of alice's account has reached DESTROYING
+      Then nothing in the portal can be found by alice's address any more
       When memes has destroyed alice's content
       Then alice's memes are gone
 
@@ -170,22 +159,18 @@ Feature: Closing an account — the order of what happens, and what is true in b
     Scenario: the words the readers kept stay in the thread, signed by nobody
       Given 3 people upvoted alice's first comment
       And bob saved alice's first comment
-      When an administrator closes alice's account, keeping the comments at least 2 readers kept
-      And memes has hidden alice's content
-      And comments has hidden alice's content
-      And collections has hidden alice's content
-      And comments has destroyed alice's content
+      And an administrator closes alice's account, keeping the comments at least 2 readers kept
+      And the closure has reached DESTROYING
+      When comments has destroyed alice's content
       Then alice's first comment is still in its thread, signed by nobody
       And bob still has that comment saved
       But alice's other comments are gone
 
     Scenario: alice's own closure ignores the same condition
       Given 3 people upvoted alice's first comment
-      When the closure of alice's account is requested, stating that popular comments be kept
-      And memes has hidden alice's content
-      And comments has hidden alice's content
-      And collections has hidden alice's content
-      And comments has destroyed alice's content
+      And the closure of alice's account is requested, stating that popular comments be kept
+      And the closure has reached DESTROYING
+      When comments has destroyed alice's content
       Then alice's comments are gone
 
   Rule: Things that happen DURING a closure are not part of it
@@ -199,31 +184,27 @@ Feature: Closing an account — the order of what happens, and what is true in b
     # honest, and the row is at worst a leftover under an address nobody holds any more. It is
     # written down here rather than decided.
     Scenario: a meme posted after the memes were hidden stays
-      When the closure of alice's account is requested
+      Given the closure of alice's account has reached HIDING
       And memes has hidden alice's content
       And alice posts one more meme
-      And comments has hidden alice's content
-      And collections has hidden alice's content
-      And memes has destroyed alice's content
+      And the closure has reached DESTROYING
+      When memes has destroyed alice's content
       Then the meme alice posted after that is still in the gallery
       But her first two memes are gone
 
     Scenario: a reference saved after the references were hidden stays, and is counted
-      When the closure of alice's account is requested
-      And memes has hidden alice's content
-      And comments has hidden alice's content
-      And collections has hidden alice's content
+      Given the closure of alice's account has reached DESTROYING
       And alice saves one more reference
-      And collections has destroyed alice's content
+      When collections has destroyed alice's content
       Then the reference alice saved after that is still in her list
       And collections had to leave 1 reference behind
 
     # The author asked for something that LOOKS gone and is not, and was told it does not exist. If
     # the closure then comes back, so does the meme — the one she had just tried to delete herself.
     Scenario: alice takes down a meme the closure has already hidden
-      When the closure of alice's account is requested
+      Given the closure of alice's account has reached HIDING
       And memes has hidden alice's content
-      And alice takes her first meme down
+      When alice takes her first meme down
       Then alice is told there is no such meme
       When the closure is given up on
       And memes has brought alice's content back

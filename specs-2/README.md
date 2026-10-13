@@ -29,18 +29,26 @@ and is still there. `back` — it is where it was, as it was. `destroyed` / `gon
 anywhere any more. `the account is gone` — the row and the eight other tables keyed by the same
 address, none of which cascades.
 
-What is deliberately NOT in these files: any word for the machinery. No phases, no confirmations,
-no quorum, no retries, nothing about what travels between the parts. A step saying
-`When memes has hidden alice's content` means that piece of work happened and nothing else — it is
-as true of a method call in one process as of a message somebody acknowledges an hour later.
+The closure has STATES and these files name them — HIDING, DESTROYING, RESTORING, DONE, WITHDRAWN —
+because a scenario has to be able to start in the middle ("Given the closure has reached
+DESTROYING") instead of replaying the whole chain every time. What moves the closure from one
+state to the next, and what is refused in each, is the runner's own file,
+[`../account-closure-2/src/test/resources/closure-protocol.feature`](../account-closure-2/src/test/resources/closure-protocol.feature).
+
+What is still deliberately NOT here: any word for the machinery. No confirmations, no quorum, no
+retries, nothing about what travels between the parts. A step saying
+`When memes has hidden alice's content` means that piece of work happened and was reported, and
+nothing else — it is as true of a method call in one process as of a message somebody acknowledges
+an hour later.
 
 ## The holes, named on purpose
 
 Three things these files state and do not settle, each marked in the file where it bites:
 
-- **Who removes the account** once every part has hidden its share. Something has to notice that
-  all of them are done. That is the decision nobody has made, so the runner ticks three boxes and
-  deletes the account on the third tick.
+- **Who removes the account** once every part has hidden its share, how long it waits for a part
+  that never reports, and who gives up. The runner answers the first with its state machine — the
+  third report of a hidden share is what asks the account to go — and leaves the other two outside
+  it. Whether the product keeps that machine, and where it lives, is not decided.
 - **What finally destroys content** left hidden when the account is already gone. Nothing will ever
   come back for it: the account that named it does not exist.
 - **Whether content created during a closure should survive it.** It does today, because a part may

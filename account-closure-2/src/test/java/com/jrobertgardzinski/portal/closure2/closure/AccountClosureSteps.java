@@ -7,7 +7,10 @@ import com.jrobertgardzinski.email.domain.Email;
 import com.jrobertgardzinski.identity.UserId;
 import com.jrobertgardzinski.memes.domain.MemeMetadata;
 import com.jrobertgardzinski.memes.system.DeleteMeme;
-import com.jrobertgardzinski.portal.closure2.world.Checklist;
+import com.jrobertgardzinski.portal.closure2.world.ClosureProtocol;
+import com.jrobertgardzinski.portal.closure2.world.ClosureProtocol.Outcome;
+import com.jrobertgardzinski.portal.closure2.world.ClosureProtocol.Report;
+import com.jrobertgardzinski.portal.closure2.world.ClosureProtocol.State;
 import com.jrobertgardzinski.portal.closure2.world.CollectionsPart;
 import com.jrobertgardzinski.portal.closure2.world.ContentIds;
 import com.jrobertgardzinski.portal.closure2.world.Portal;
@@ -28,6 +31,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -35,11 +39,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Two rules hold this file together, and both are about what a step may be.
  *
- * <p><strong>One step is one piece of work OR one assertion, never both.</strong> No step both
- * moves the chain along and checks something, and no step quietly does two parts' work — which is
- * why the feature file spells the three parts out three times instead of saying "every part".
- * Without that, an order the file promises could be broken by the code and the file would still
- * pass, because nothing would ever observe the moment in between.
+ * <p><strong>One step is one piece of work OR one assertion, never both.</strong> No {@code When}
+ * both moves the chain along and checks something, and none quietly does two parts' work. The one
+ * licence is a {@code Given}: "the closure has reached DESTROYING" plays every part's hide and the
+ * account's going through the real use cases, because the moments in between are the business of
+ * {@code closure-protocol.feature}, and a scenario here starts where its own claim starts.
  *
  * <p><strong>An assertion reads a fake directly.</strong> There is no helper layer between a
  * {@code Then} and {@code FakeMemeErasure}/{@code FakeCommentErasure}/{@code FakeCollectionRepository}
@@ -102,6 +106,38 @@ public class AccountClosureSteps {
         portal.identity().closureRequested(AccountClosure.requestedByOwner(alice()));
     }
 
+    /**
+     * The canonical road to a state, from wherever the scenario already is: a closure asked for by
+     * alice herself if none was, every part that has not yet hidden its share hiding it, and — for
+     * RESTORING — the account refusing, which the scenario has to have said first.
+     */
+    @Given("the closure of alice's account has reached {word}")
+    @Given("the closure has reached {word}")
+    public void the_closure_has_reached(String state) {
+        State target = State.valueOf(state);
+        if (!portal.identity().closures().isOpen(alice())) {
+            the_closure_is_requested();
+        }
+        if (target == State.RESTORING || target == State.WITHDRAWN) {
+            assertTrue(portal.identity().accounts().refusesDeletion(),
+                    "RESTORING needs a cause: say \"alice's account cannot be deleted\" first, or give the closure up on");
+        }
+        if (target != State.HIDING) {
+            for (String part : ClosureProtocol.PARTS) {
+                if (!protocol().hasHidden(part)) {
+                    a_part_has_hidden_alices_content(part);
+                }
+            }
+        }
+        if (target == State.DONE) {
+            ClosureProtocol.PARTS.forEach(this::a_part_has_destroyed_alices_content);
+        }
+        if (target == State.WITHDRAWN) {
+            ClosureProtocol.PARTS.forEach(this::a_part_has_brought_alices_content_back);
+        }
+        assertEquals(target, protocol().state(), "the canonical road did not lead there");
+    }
+
     @When("the closure of alice's account is requested, stating that popular comments be kept")
     public void the_closure_is_requested_stating_a_condition() {
         portal.closedBy(DeletionInitiator.SELF);
@@ -130,36 +166,35 @@ public class AccountClosureSteps {
             case "collections" -> portal.collections().hide(aliceId());
             default -> throw new IllegalArgumentException("no such part of the portal: " + part);
         }
-        checklist().hiddenBy(part);
+        reported(Report.HIDDEN, part);
     }
 
     @When("{word} has destroyed alice's content")
     public void a_part_has_destroyed_alices_content(String part) {
-        assertEquals(Checklist.Verdict.ACCOUNT_GONE, checklist().verdict(),
-                "nothing may be destroyed while the account is still there");
         switch (part) {
             case "memes" -> portal.memes().destroy(aliceId(), portal.conditionFor("memes"));
             case "comments" -> portal.comments().destroy(aliceId(), portal.conditionFor("comments"));
             case "collections" -> lastCollectionsClosure = portal.collections().destroy(aliceId());
             default -> throw new IllegalArgumentException("no such part of the portal: " + part);
         }
+        reported(Report.DESTROYED, part);
     }
 
     @When("{word} has brought alice's content back")
     public void a_part_has_brought_alices_content_back(String part) {
-        assertEquals(Checklist.Verdict.ACCOUNT_STAYS, checklist().verdict(),
-                "content comes back only when the account stayed");
         switch (part) {
             case "memes" -> portal.memes().bringBack(aliceId());
             case "comments" -> portal.comments().bringBack(aliceId());
             case "collections" -> portal.collections().bringBack(aliceId());
             default -> throw new IllegalArgumentException("no such part of the portal: " + part);
         }
+        reported(Report.RESTORED, part);
     }
 
     @When("the closure is given up on")
     public void the_closure_is_given_up_on() {
-        checklist().giveUp();
+        assertNotEquals(Outcome.REFUSED, protocol().givenUp(),
+                "the closure was given up on while it was " + protocol().state());
     }
 
     @When("collections has heard that alice's meme is gone")
@@ -184,17 +219,24 @@ public class AccountClosureSteps {
         lastTakeDown = portal.memes().takeDown(ContentIds.memeOf("alice", 1));
     }
 
+    // ------------------------------------------------------------------------------ the closure
+
+    @Then("the closure is {word}")
+    public void the_closure_is(String state) {
+        assertEquals(State.valueOf(state), protocol().state());
+    }
+
+    @Then("the closure is still {word}")
+    public void the_closure_is_still(String state) {
+        assertEquals(State.valueOf(state), protocol().state(), "the closure moved on without the missing part");
+    }
+
     // ------------------------------------------------------------------------------ the account
 
     @Then("alice is still in the user repository")
     public void alice_is_still_in_the_user_repository() {
         assertTrue(portal.identity().users().findBy(alice()).isPresent(),
                 "the account was gone and nothing had finished letting go of her content");
-    }
-
-    @Then("only now is alice gone from the user repository")
-    public void only_now_is_alice_gone_from_the_user_repository() {
-        alice_is_gone_from_the_user_repository();
     }
 
     @Then("alice is gone from the user repository")
@@ -423,8 +465,14 @@ public class AccountClosureSteps {
         return portal.idOf("alice");
     }
 
-    private Checklist checklist() {
-        return portal.identity().closures().of(alice()).checklist();
+    private ClosureProtocol protocol() {
+        return portal.identity().closures().of(alice()).protocol();
+    }
+
+    /** A part's report to the protocol, after it did the work: refused means the file broke its own order. */
+    private void reported(Report report, String part) {
+        assertNotEquals(Outcome.REFUSED, protocol().report(report, part),
+                part + " reported " + report + " while the closure was " + protocol().state());
     }
 
     /** Every meme of hers the store holds, out of sight or not. */

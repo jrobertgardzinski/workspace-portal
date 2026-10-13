@@ -37,6 +37,10 @@ public final class Accounts implements UserRepository {
         deletionRefused = true;
     }
 
+    public boolean refusesDeletion() {
+        return deletionRefused;
+    }
+
     @Override
     public void deleteByEmail(Email email) {
         if (deletionRefused) {
