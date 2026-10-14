@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Holds {@link ClosureProtocol} to the state diagram in {@code closure-protocol.adoc}, which it
+ * Holds {@link ClosureProtocol} to the state diagram in the module's {@code README.md}, which it
  * reads rather than copies. Three claims make the picture and the machine the same thing: a report
  * with an arrow out of a state is not refused there and lands where an arrow points; a report with no
  * arrow is refused and moves nothing; every arrow drawn is walked by some test here. The counting —
@@ -53,7 +53,7 @@ class ClosureProtocolTest {
         }
     }
 
-    private static final Diagram DIAGRAM = Diagram.read("/closure-protocol.adoc");
+    private static final Diagram DIAGRAM = Diagram.read("/README.md");
     private static final Set<Arrow> WALKED = new HashSet<>();
 
     // ----------------------------------------------------------------------- the picture as a whole
@@ -263,7 +263,7 @@ class ClosureProtocolTest {
         }
     }
 
-    /** The arrows between {@code @startuml} and {@code @enduml}, and nothing else of the page. */
+    /** The arrows of the {@code stateDiagram-v2} inside the page's {@code ```mermaid} fence, and nothing else of it. */
     static final class Diagram {
         private static final Pattern ARROW = Pattern.compile("^\\s*(\\S+)\\s+-+>\\s+(\\S+)\\s*(?::\\s*(.*))?$");
 
@@ -282,10 +282,10 @@ class ClosureProtocolTest {
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
-            int start = page.indexOf("@startuml");
-            int end = page.indexOf("@enduml");
-            if (start < 0 || end < start) {
-                throw new IllegalStateException(resource + " has no @startuml ... @enduml block");
+            int start = page.indexOf("```mermaid");
+            int end = start < 0 ? -1 : page.indexOf("```", start + "```mermaid".length());
+            if (start < 0 || end < 0) {
+                throw new IllegalStateException(resource + " has no ```mermaid fence");
             }
             Diagram diagram = new Diagram();
             page.substring(start, end).lines().forEach(diagram::take);
@@ -306,8 +306,8 @@ class ClosureProtocolTest {
                 terminal.add(State.valueOf(from));
                 states.add(State.valueOf(from));
             } else {
-                // the label is the trigger, then optionally "\n(" and the words the test does not read
-                String label = m.group(3).split("\\\\n|\\(")[0];
+                // the label is the trigger up to the first comma; after it, words the test does not read
+                String label = m.group(3).split(",")[0];
                 arrows.add(new Arrow(State.valueOf(from), Trigger.of(label), State.valueOf(to)));
                 states.add(State.valueOf(from));
                 states.add(State.valueOf(to));
