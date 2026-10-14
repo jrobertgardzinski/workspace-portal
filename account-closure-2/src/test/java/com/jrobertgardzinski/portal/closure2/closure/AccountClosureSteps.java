@@ -43,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * both moves the chain along and checks something, and none quietly does two parts' work. The one
  * licence is a {@code Given}: "the closure has reached DESTROYING" plays every part's hide and the
  * account's going through the real use cases, because the moments in between are the business of
- * {@code closure-protocol.feature}, and a scenario here starts where its own claim starts.
+ * {@code closure-protocol.adoc}, and a scenario here starts where its own claim starts.
  *
  * <p><strong>An assertion reads a fake directly.</strong> There is no helper layer between a
  * {@code Then} and {@code FakeMemeErasure}/{@code FakeCommentErasure}/{@code FakeCollectionRepository}

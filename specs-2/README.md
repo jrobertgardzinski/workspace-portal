@@ -32,8 +32,9 @@ address, none of which cascades.
 The closure has STATES and these files name them — HIDING, DESTROYING, RESTORING, DONE, WITHDRAWN —
 because a scenario has to be able to start in the middle ("Given the closure has reached
 DESTROYING") instead of replaying the whole chain every time. What moves the closure from one
-state to the next, and what is refused in each, is the runner's own file,
-[`../account-closure-2/src/test/resources/closure-protocol.feature`](../account-closure-2/src/test/resources/closure-protocol.feature).
+state to the next, and what is refused in each, is a drawing in the runner,
+[`../account-closure-2/closure-protocol.adoc`](../account-closure-2/closure-protocol.adoc), which the
+runner's own test reads and holds the machine to.
 
 What is still deliberately NOT here: any word for the machinery. No confirmations, no quorum, no
 retries, nothing about what travels between the parts. A step saying

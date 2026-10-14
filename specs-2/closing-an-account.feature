@@ -16,8 +16,8 @@ Feature: Closing an account — the order of what happens, and what is true in b
   # The closure has STATES, and this file names them: HIDING while the parts hide their shares,
   # DESTROYING once the account is gone, RESTORING when it stayed, DONE or WITHDRAWN when the parts
   # have finished. Which report moves the closure from one to the next, and which is refused, is
-  # the runner's own file — ../account-closure-2/src/test/resources/closure-protocol.feature — and this
-  # one takes the states as given and says what is true of the CONTENT in each. "Given the closure
+  # a drawing in the runner — ../account-closure-2/closure-protocol.adoc — and this
+  # file takes the states as given and says what is true of the CONTENT in each. "Given the closure
   # has reached DESTROYING" is every part having hidden its share and the account having gone,
   # played out in full through the real use cases; it is a shortcut for the reader, not for the code.
   #

@@ -1,0 +1,48 @@
+= The closure protocol
+
+Something has to notice that every part has hidden its share and only then let the account go;
+something has to know the account is gone before any part destroys anything, and know it stayed
+before any part brings anything back. This is that something, as small as it can be: five states,
+three reports a part can make, and the picture below of which state takes which.
+
+It is the protocol, not the transport. A monolith keeps it inside one transaction, where a refused
+report is a rollback; separate services keep it with a saga, where a refused report is a message
+nobody acts on. `../specs-2` names these states ("Given the closure has reached DESTROYING") and
+says what is true of the content in each; this page says what moves the closure between them.
+
+[plantuml, closure-protocol, svg]
+----
+@startuml
+hide empty description
+[*] --> HIDING
+HIDING --> HIDING : HIDDEN
+HIDING --> DESTROYING : HIDDEN\n(the last part; the account goes)
+HIDING --> RESTORING : HIDDEN\n(the last part; the account refuses)
+HIDING --> RESTORING : GIVEN UP
+HIDING --> WITHDRAWN : GIVEN UP\n(nothing was hidden yet)
+DESTROYING --> DESTROYING : DESTROYED
+DESTROYING --> DONE : DESTROYED\n(the last part)
+RESTORING --> RESTORING : RESTORED
+RESTORING --> RESTORING : GIVEN UP
+RESTORING --> WITHDRAWN : RESTORED\n(the last part that hid)
+DONE --> [*]
+WITHDRAWN --> [*]
+@enduml
+----
+
+The picture is the test's input, not its illustration: `ClosureProtocolTest` reads the arrows out
+of this file. An arrow out of a state is a report that state takes; a report with no arrow is
+refused and changes nothing; and every arrow drawn is walked by a test, so the picture and
+`ClosureProtocol` cannot drift apart without the build saying so.
+
+What the picture does not carry, and the same test states in code:
+
+* "the last part" is the third of memes, comments and collections, and the same report twice from
+  one part is nothing new;
+* the account is asked to go once, at the last HIDDEN, and is unlocked whenever the closure turns
+  back;
+* in RESTORING only a part that hid has anything to restore: RESTORED from any other part is
+  refused, and WITHDRAWN comes when every part that hid has restored.
+
+GitHub shows the diagram as text; IntelliJ's AsciiDoc plugin and `asciidoctor -r asciidoctor-diagram`
+draw it.

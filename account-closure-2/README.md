@@ -11,7 +11,7 @@ The two answer different questions and both answers are worth having:
 | assumes | the design: a thing that commands the parts, collects their answers, waits, gives up | nothing |
 | builds | the real router and the real three participants, plus their adapters' stand-ins | the ports, the fakes beside them, and the use cases |
 | depends on | `*-application`, `*_account-closure`, `offboarding-*` | `*-domain` + `*-system`, and nothing above them |
-| costs | ~5000 lines of Java under 312 lines of Gherkin | ~1900 under ~450, the state machine and its own file included |
+| costs | ~5000 lines of Java under 312 lines of Gherkin | ~2000 under 275 lines of Gherkin and one drawing |
 
 That dependency line is the whole constraint, and it is what shaped the module: a suite that may
 not reach above `*-system` cannot borrow anybody's orchestration, so it has to say out loud what it
@@ -21,9 +21,12 @@ is standing in for.
 
 - **`world.ClosureProtocol`** — the closure as a state machine: HIDING, DESTROYING, RESTORING, DONE,
   WITHDRAWN; a part reports its share hidden, destroyed or restored; the closure is given up on.
-  Each state accepts some reports and refuses the rest, and a refused report changes nothing. It
-  has a feature file of its own, [`src/test/resources/closure-protocol.feature`](src/test/resources/closure-protocol.feature),
-  and `../specs-2` borrows its state names ("Given the closure has reached DESTROYING"). It is the
+  Each state accepts some reports and refuses the rest, and a refused report changes nothing. The
+  machine is DRAWN, not described: [`closure-protocol.adoc`](closure-protocol.adoc) holds a PlantUML
+  state diagram, and `ClosureProtocolTest` reads the arrows out of that page and checks the class
+  against them — a report drawn is taken, a report not drawn is refused, every arrow drawn is
+  walked — so the picture cannot go stale without the build failing. `../specs-2` borrows the
+  state names ("Given the closure has reached DESTROYING"). It is the
   PROTOCOL and not the transport: a monolith keeps it inside one transaction, separate services
   keep it with a saga, and the same scenarios are meant to run against either. What carries a
   report, how long anybody waits for a part and who gives up are outside it on purpose.
@@ -49,7 +52,7 @@ what they hide is one service's own promise, a level below anything these files 
 **One step is one piece of work OR one assertion, never both.** No `When` moves the chain along and
 checks something at the same time, and none quietly does two parts' work. The one licence is a
 `Given`: "the closure has reached DESTROYING" plays every part's hide and the account's going
-through the real use cases, because the moments in between are what `closure-protocol.feature` is
+through the real use cases, because the moments in between are what `closure-protocol.adoc` is
 about, and a scenario in `../specs-2` starts where its own claim starts. Without that split an
 order the files promise could be broken by the code and the files would still pass, because nothing
 would ever observe the moment in between.

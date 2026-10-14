@@ -7,7 +7,8 @@ import java.util.Set;
 
 /**
  * The closure as a state machine: five states, three reports a part can make, and a table of which
- * report each state accepts. Its own feature file is {@code src/test/resources/closure-protocol.feature}.
+ * report each state accepts. The table is drawn in {@code closure-protocol.adoc} at the module's root,
+ * and {@code ClosureProtocolTest} reads the drawing and holds this class to it.
  * It is the protocol, not the transport: a monolith keeps it inside one transaction and separate
  * services keep it with a saga, and this class says nothing about which.
  *

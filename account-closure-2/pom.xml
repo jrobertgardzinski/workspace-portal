@@ -21,7 +21,8 @@
       So it depends on *-domain and *-system ONLY: the ports, their fakes (published as test-jars
       beside the ports) and the use cases. No *-application, no *_account-closure participant, no
       offboarding, no broker, no JDBC. What collects the three parts' answers and deletes the account
-      is a three-box list written for this suite (world.Checklist) and is NOT a design.
+      is a state machine written for this suite (world.ClosureProtocol, drawn in
+      closure-protocol.adoc) and is NOT a design.
 
       No parent: workspace-portal is a pure aggregator and deliberately not a parent, so the
       versions below are this module's own (the same ones portal-specs pins).
@@ -206,7 +207,8 @@
                 <version>${compiler-plugin.version}</version>
             </plugin>
             <!-- ../specs-2 goes onto the test classpath instead of copying the files around — the
-                 same convention portal-specs uses for ../specs -->
+                 same convention portal-specs uses for ../specs; closure-protocol.adoc goes with
+                 them, because ClosureProtocolTest reads the diagram out of it -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
@@ -224,6 +226,12 @@
                                     <directory>${project.basedir}/../specs-2</directory>
                                     <includes>
                                         <include>**/*.feature</include>
+                                    </includes>
+                                </resource>
+                                <resource>
+                                    <directory>${project.basedir}</directory>
+                                    <includes>
+                                        <include>closure-protocol.adoc</include>
                                     </includes>
                                 </resource>
                             </resources>
