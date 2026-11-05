@@ -302,8 +302,8 @@ właśnie kliknął. Token, którym przyszło żądanie, po commicie nie autoryz
 sprawdza to wprost („the access token no longer authorizes").
 
 **Krok 2** stawia flagę `users.pending_deletion = true`. To **blokada na czas sagi**: konto
-istnieje, ale nie wpuszcza. Logowanie hasłem odrzuca je w kroku `_VerifyCredentials`, filtrem
-`.filter(user -> !userRepository.isPendingDeletion(email))` — i konto zablokowane sagą
+istnieje, ale nie wpuszcza. Logowanie hasłem odrzuca je w samym `Authentication`, osobnym
+`if (userRepository.isPendingDeletion(email))` zaraz po sprawdzeniu hasła — i konto zablokowane sagą
 **zachowuje się dokładnie jak złe hasło** (klient nie dowiaduje się, że konto jest zamykane).
 Logowanie przez dostawcę zewnętrznego (OAuth) jest szczersze: zwraca `Refused("ACCOUNT_CLOSING")`.
 
@@ -1098,7 +1098,7 @@ siedem sztuk. Dla tego przepływu istotne jest pięć:
   the places where a reader actually scans a package: the file listing, imports, and IDE
   navigation"*. Uwaga: w pakiecie `account` (czyli w usuwaniu konta) **nie ma ani jednej takiej
   klasy** — ten przypadek użycia jest płaski, jego „kroki" to kolejne wywołania repozytoriów
-  w jednej metodzie. Konwencję widać w `authentication` (`_VerifyCredentials`, `_BruteForceGuard`).
+  w jednej metodzie. Konwencję widać w `authentication` (`_RequireVerifiedEmail`, `_BruteForceGuard`).
 - **0003 — kontrakty konsumenckie w plikach** (opisane wyżej).
 - **0004 — wersjonowane koperty zdarzeń.** Każda koperta niesie `"version": 1`. W ramach wersji
   ewolucja **wyłącznie addytywna**; zmiana łamiąca podbija wersję, a producent emituje stary

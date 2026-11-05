@@ -64,7 +64,7 @@ Trzy rzeczy warte zapamiętania:
 ### 3.1 Konwencja `_Krok` w praktyce
 
 Etap 1 wspominał ADR 0002 i narzekał, że w pakiecie `account` nie ma ani jednej takiej klasy.
-**Tutaj są wszystkie**: `_BruteForceGuard`, `_VerifyCredentials`, `_RequireVerifiedEmail`,
+**Tutaj są wszystkie**: `_BruteForceGuard`, `_RequireVerifiedEmail`, `_AccountStillSignsIn`,
 `_GenerateSession`, `_CleanBruteForceRecords`, `_UpdateBruteForceRecords`. Podkreślnik znaczy
 „krok wewnętrzny tego przypadku użycia, package-private". Sens jest praktyczny: w liście plików
 i w podpowiedziach IDE widać na pierwszy rzut oka, co jest wejściem (`Authentication`), a co
