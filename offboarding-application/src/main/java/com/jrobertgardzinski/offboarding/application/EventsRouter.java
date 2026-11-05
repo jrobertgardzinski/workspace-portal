@@ -3,7 +3,6 @@ package com.jrobertgardzinski.offboarding.application;
 import com.jrobertgardzinski.closure.ClosureInitiator;
 import com.jrobertgardzinski.closure.ClosureMessages;
 import java.util.stream.Stream;
-import com.jrobertgardzinski.util.constraint.Outcome;
 import com.jrobertgardzinski.envelope.Masked;
 import com.jrobertgardzinski.envelope.Envelope;
 import com.jrobertgardzinski.offboarding.domain.Compensated;
@@ -174,16 +173,16 @@ public class EventsRouter {
      * saga talking to itself.
      */
     public List<Outgoing> handle(Source source, String payload) {
-        Outcome<Envelope> read = Envelope.read(payload, mapper);
-        if (read.findValue().isEmpty()) {
+        Envelope.Result<Envelope> read = Envelope.read(payload, mapper);
+        if (!read.errors().isEmpty()) {
             // its SIZE, never its text: an unparsed payload is of unknown shape, so the scrubber
             // has the least idea what it is looking at, and a newline in it would become a new log
             // LINE — a forged ERROR planted in an operator's view
             LOG.warn("dropping an unreadable message from {} ({}): {}", source,
-                    Masked.sizeOf(payload), read.errorCodes());
+                    Masked.sizeOf(payload), read.errors());
             return List.of();
         }
-        Envelope envelope = read.findValue().orElseThrow();
+        Envelope envelope = read.value();
         String type = envelope.type();
         return switch (source) {
             case Source.Security ignored when ClosureMessages.ACCOUNT_DELETION_REQUESTED.equals(type) ->
@@ -279,38 +278,39 @@ public class EventsRouter {
      * deletion goes ahead without it.
      */
     private List<Outgoing> onDeletionRequested(Envelope fact) {
-        Outcome<String> readEmail = fact.requiredText("email");
-        Outcome<UUID> readFactId = fact.requiredUuid("id");
-        Outcome<Optional<UUID>> readSecuritySagaId = fact.optionalUuid("sagaId");
-        Outcome<Optional<JsonNode>> readPolicy = fact.objectWithin("policy", MAX_POLICY_BYTES);
-        Outcome<Optional<UUID>> readUserId = fact.optionalUuid(ClosureMessages.Field.USER_ID);
+        Envelope.Result<String> readEmail = fact.requiredText("email");
+        Envelope.Result<UUID> readFactId = fact.requiredUuid("id");
+        Envelope.Result<Optional<UUID>> readSecuritySagaId = fact.optionalUuid("sagaId");
+        Envelope.Result<Optional<JsonNode>> readPolicy = fact.objectWithin("policy", MAX_POLICY_BYTES);
+        Envelope.Result<Optional<UUID>> readUserId = fact.optionalUuid(ClosureMessages.Field.USER_ID);
         List<String> refusals = Stream.of(readEmail, readFactId, readSecuritySagaId)
-                .flatMap(outcome -> outcome.errorCodes().stream()).toList();
+                .flatMap(result -> result.errors().stream()).toList();
         if (!refusals.isEmpty()) {
             LOG.warn("dropping a deletion fact this service cannot place ({}): {}",
                     refusals, fact.summary());
             return List.of();
         }
-        if (!readPolicy.errorCodes().isEmpty() || readPolicy instanceof Outcome.AllowedWithWarning) {
+        if (!readPolicy.warnings().isEmpty()) {
             LOG.warn("the policy on this deletion fact is over the {}-byte cap; starting the saga"
                             + " without it — the purge will use the participants' defaults ({})",
                     MAX_POLICY_BYTES, fact.summary());
         }
-        String email = readEmail.findValue().orElseThrow();
-        UUID factId = readFactId.findValue().orElseThrow();
-        UUID securitySagaId = readSecuritySagaId.findValue().orElseThrow().orElse(null);
+        String email = readEmail.value();
+        UUID factId = readFactId.value();
+        UUID securitySagaId = readSecuritySagaId.value().orElse(null);
         // the leaver's identity is what every command and confirmation is keyed by: a fact
         // without one names nobody the content services could act for
-        UUID userId = readUserId.findValue().orElse(Optional.empty()).orElse(null);
+        // absent and mangled end the same way here: nobody to act for
+        UUID userId = readUserId.errors().isEmpty() ? readUserId.value().orElse(null) : null;
         if (userId == null) {
-            LOG.warn("dropping a deletion fact without a user id ({}): {}", readUserId.errorCodes(), fact.summary());
+            LOG.warn("dropping a deletion fact without a user id ({}): {}", readUserId.errors(), fact.summary());
             return List.of();
         }
         // who asked, normalised: anything that is not exactly ADMIN is the account's own owner,
         // which is also the honest reading of a fact from before the field existed — until then
         // security had one deletion route and only the owner could walk it
         String initiatedBy = ClosureInitiator.of(fact.node().path(ClosureMessages.Field.INITIATED_BY).asText()).wire();
-        JsonNode policy = readPolicy.findValue().orElseThrow().orElse(null);
+        JsonNode policy = readPolicy.value().orElse(null);
         String storedPolicy = policy == null ? null : write(policy);
         BeginOffboarding.Begun begun = begin.execute(factId, email, storedPolicy, securitySagaId,
                 initiatedBy, userId, Instant.now(clock));
@@ -347,17 +347,17 @@ public class EventsRouter {
      * same account.
      */
     private List<Outgoing> onConfirmation(Envelope confirmation, String participant) {
-        Outcome<UUID> readUserId = confirmation.requiredUuid(ClosureMessages.Field.USER_ID);
-        Outcome<Optional<UUID>> readSagaId = confirmation.optionalUuid("sagaId");
+        Envelope.Result<UUID> readUserId = confirmation.requiredUuid(ClosureMessages.Field.USER_ID);
+        Envelope.Result<Optional<UUID>> readSagaId = confirmation.optionalUuid("sagaId");
         List<String> refusals = Stream.of(readUserId, readSagaId)
-                .flatMap(outcome -> outcome.errorCodes().stream()).toList();
+                .flatMap(result -> result.errors().stream()).toList();
         if (!refusals.isEmpty()) {
             LOG.warn("dropping a {} confirmation this service cannot place ({}): {}",
                     participant, refusals, confirmation.summary());
             return List.of();
         }
-        UUID userId = readUserId.findValue().orElseThrow();
-        UUID sagaId = readSagaId.findValue().orElseThrow().orElse(null);
+        UUID userId = readUserId.value();
+        UUID sagaId = readSagaId.value().orElse(null);
         Optional<Recorded> landed =
                 confirm.execute(userId, sagaId, participant, Instant.now(clock));
         // two outcomes that used to share one line, and they are not the same event: a stray

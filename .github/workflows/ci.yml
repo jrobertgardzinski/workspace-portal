@@ -50,12 +50,7 @@ jobs:
         with:
           repository: jrobertgardzinski/observation
           path: observation
-      # envelope reads the events off the topics; constraint is its own dependency (Outcome), so
-      # it is checked out and installed too — a library's libraries are the consumer's problem here
-      - uses: actions/checkout@v7
-        with:
-          repository: jrobertgardzinski/libs
-          path: libs
+      # envelope reads the events off the topics
       - uses: actions/checkout@v7
         with:
           repository: jrobertgardzinski/envelope
@@ -83,7 +78,6 @@ jobs:
       - name: Install the shared libraries
         run: |
           mvn -B -q --no-transfer-progress -f observation/pom.xml install -DskipTests
-          mvn -B -q --no-transfer-progress -f libs/pom.xml install -DskipTests
           mvn -B -q --no-transfer-progress -f envelope/pom.xml install -DskipTests
           mvn -B -q --no-transfer-progress -f user-id/pom.xml install -DskipTests
           mvn -B -q --no-transfer-progress -f unit-of-work/pom.xml install -DskipTests
