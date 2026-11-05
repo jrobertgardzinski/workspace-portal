@@ -170,11 +170,6 @@ jobs:
           token: ${{ secrets.REPO_PAT }}
       - uses: actions/checkout@v7
         with:
-          repository: jrobertgardzinski/libs   # artifact "constraint"
-          path: shared/libs
-          token: ${{ secrets.REPO_PAT }}
-      - uses: actions/checkout@v7
-        with:
           repository: jrobertgardzinski/config
           path: shared/config
           token: ${{ secrets.REPO_PAT }}
