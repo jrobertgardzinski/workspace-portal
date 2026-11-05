@@ -115,8 +115,8 @@ export const bindSession = (handlers: typeof session) => { session = handlers; }
  * One refresh at a time, shared by every 401 that arrives while it runs.
  *
  * The refresh token ROTATES on use (security's RefreshController issues a new cookie on every
- * success) and a presented-but-already-spent token is treated as a REPLAY — RefreshSessionResult
- * .ReuseDetected, which kills the session. Two parallel refreshes would therefore log the user out
+ * success) and a presented-but-already-spent token is treated as a REPLAY —
+ * RefreshSession.Result.ReuseDetected, which kills the session. Two parallel refreshes would therefore log the user out
  * for the crime of clicking two arrows quickly: hence one promise, and everybody waits for it.
  */
 let refreshing: Promise<string | null> | null = null;
