@@ -1,0 +1,75 @@
+package com.jrobertgardzinski.collections.infrastructure;
+
+import com.jrobertgardzinski.collections.domain.Observation;
+import au.com.dius.pact.provider.PactVerifyProvider;
+import au.com.dius.pact.provider.junit5.MessageTestTarget;
+import au.com.dius.pact.provider.junit5.PactVerificationContext;
+import au.com.dius.pact.provider.junit5.PactVerificationInvocationContextProvider;
+import au.com.dius.pact.provider.junitsupport.Provider;
+import au.com.dius.pact.provider.junitsupport.loader.PactFolder;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jrobertgardzinski.observation.Observations;
+import com.jrobertgardzinski.collections.system.MarkUserItemsForErasure;
+import com.jrobertgardzinski.collections.system.PurgeUserItems;
+import com.jrobertgardzinski.collections.system.RestoreUserItems;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Story;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.TestTemplate;
+import org.junit.jupiter.api.condition.EnabledIf;
+import org.junit.jupiter.api.extension.ExtendWith;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+/**
+ * The saga contract's other direction, provider side: microservice-offboarding's committed pact
+ * states which USER_CONTENT_PURGED fields its orchestrator reads; this test proves the REAL
+ * handler — pure and broker-free, its confirmation is simply its return value — emits that shape.
+ * Skipped, not failed, when the consumer repo is not checked out next to this one — which is why
+ * the path below climbs TWO levels: this module sits inside the microservice since the layers
+ * became Maven modules (2026-09-24), and a path that stops one level short does not fail here, it
+ * disables the test.
+ */
+@Epic("Contract")
+@Feature("Account-deletion saga")
+@Story("Confirmation emitted")
+@Provider("microservice-user-collections")
+@PactFolder("../../microservice-offboarding/pacts")
+@EnabledIf(value = "consumerPactsCheckedOut",
+        disabledReason = "microservice-offboarding is not checked out next to this repo")
+class PurgeConfirmationPactProviderTest {
+
+    static boolean consumerPactsCheckedOut() {
+        return Files.isDirectory(Path.of("../../microservice-offboarding/pacts"));
+    }
+
+    @BeforeEach
+    void target(PactVerificationContext context) {
+        context.setTarget(new MessageTestTarget(List.of("com.jrobertgardzinski")));
+    }
+
+    @TestTemplate
+    @ExtendWith(PactVerificationInvocationContextProvider.class)
+    void theConfirmationShapeTheOrchestratorReliesOn(PactVerificationContext context) {
+        context.verifyInteraction();
+    }
+
+    @PactVerifyProvider("a user content purged confirmation")
+    public String aUserContentPurgedConfirmation() {
+        // the confirmation answers the MARK — the only one of the three commands that is
+        // confirmed, because it is the only one the orchestrator waits on
+        PurgeCommandsConsumer consumer = new PurgeCommandsConsumer(
+                new MarkUserItemsForErasure(null, null) {
+                    @Override
+                    public int execute(com.jrobertgardzinski.identity.UserId user) {
+                        return 1;
+                    }
+                }, new RestoreUserItems(null), new PurgeUserItems(null), new ObjectMapper(), Observations.<Observation>silent());
+        return consumer.handle("{\"type\":\"PURGE_USER_CONTENT\","
+                + "\"sagaId\":\"7d9f9e2a-1f0a-4f6e-9a1b-2c3d4e5f6a7b\","
+                + "\"userId\":\"0b7c1c2e-5d3a-4f1b-9e8d-6a5b4c3d2e1f\"}").orElseThrow();
+    }
+}

@@ -1,0 +1,154 @@
+package com.jrobertgardzinski.collections.infrastructure;
+
+import com.jrobertgardzinski.collections.domain.CollectionRepository;
+import com.jrobertgardzinski.collections.domain.ItemRef;
+import com.jrobertgardzinski.collections.domain.ItemReferences;
+import com.jrobertgardzinski.collections.domain.ItemStatus;
+import com.jrobertgardzinski.identity.UserId;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * The durable {@link CollectionRepository}: rows in {@code collection_items}, served by Postgres in prod
+ * and H2 (PostgreSQL mode) in dev/tests through the same SQL. Saving is made idempotent by the
+ * UNIQUE constraint — a duplicate insert raises SQLState 23505, which both engines use, and we read
+ * that as "already saved" rather than an error.
+ *
+ * <p>It serves {@link ItemReferences} too — the same table read along its OTHER axis (see V2's
+ * index). One adapter for one table; the ports stay two because the questions, the indexes and the
+ * guarantees are two.
+ *
+ * <p><strong>Reads come from {@code active_collection_items}, never from the table.</strong> That
+ * view is where {@code WHERE status = 'ACTIVE'} is written down once (V3), so a listing cannot
+ * return something a running account-deletion saga has reserved — and cannot forget to exclude it,
+ * because there is no condition here to forget. Writes name the table, as writes must; the erasure
+ * state itself belongs to {@link JdbcItemErasure}, the one adapter allowed to READ the table.
+ */
+public class JdbcCollectionRepository implements CollectionRepository, ItemReferences {
+
+    private static final String UNIQUE_VIOLATION = "23505";
+
+    /**
+     * How many ids one {@code IN (...)} may carry. A COMMENTS_DELETED for a busy thread can name
+     * thousands of comments in one event, and a single statement with one bind parameter per id
+     * would walk towards Postgres' hard ceiling of 65535 parameters (and towards a plan the
+     * planner stops indexing). Chunking keeps every statement small and predictable; the cost is
+     * a handful of round trips on one borrowed connection instead of one enormous statement.
+     */
+    private static final int MAX_IDS_PER_STATEMENT = 500;
+
+    private final DataSource dataSource;
+
+    public JdbcCollectionRepository(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    @Override
+    public boolean add(UserId user, String collection, ItemRef item) {
+        // INSERT names the table, not the view, and must: a view is not what a row is written to.
+        // The UNIQUE constraint underneath spans rows of BOTH statuses, so saving something a
+        // running saga has reserved is read as "already saved" rather than duplicated — see V3
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO collection_items (user_id, collection, item_type, item_id) "
+                             + "VALUES (?, ?, ?, ?)")) {
+            ps.setObject(1, user.value());
+            ps.setString(2, collection);
+            ps.setString(3, item.itemType());
+            ps.setString(4, item.itemId());
+            ps.executeUpdate();
+            return true;
+        } catch (SQLException e) {
+            if (UNIQUE_VIOLATION.equals(e.getSQLState())) {
+                return false;   // already saved — idempotent
+            }
+            throw new IllegalStateException("could not save item", e);
+        }
+    }
+
+    @Override
+    public boolean remove(UserId user, String collection, ItemRef item) {
+        // the owner may only remove what the owner can SEE, which is why the status is part of the
+        // key here. A reserved row is invisible in every listing, yet this DELETE used to destroy
+        // it outright: a tab still showing yesterday's list (the access token stays valid for up to
+        // an hour after the deletion starts — the gate here is offline) could delete a row the saga
+        // had set aside, and a RESTORE that arrived afterwards had nothing left to put back
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "DELETE FROM collection_items WHERE user_id = ? AND collection = ? "
+                             + "AND item_type = ? AND item_id = ? AND status = ?")) {
+            ps.setObject(1, user.value());
+            ps.setString(2, collection);
+            ps.setString(3, item.itemType());
+            ps.setString(4, item.itemId());
+            ps.setString(5, ItemStatus.ACTIVE.name());
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new IllegalStateException("could not remove item", e);
+        }
+    }
+
+    @Override
+    public List<ItemRef> list(UserId user, String collection) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT item_type, item_id FROM active_collection_items "
+                             + "WHERE user_id = ? AND collection = ? ORDER BY id DESC")) {
+            ps.setObject(1, user.value());
+            ps.setString(2, collection);
+            try (ResultSet rs = ps.executeQuery()) {
+                List<ItemRef> items = new ArrayList<>();
+                while (rs.next()) {
+                    items.add(new ItemRef(rs.getString(1), rs.getString(2)));
+                }
+                return items;
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("could not list items", e);
+        }
+    }
+
+    /**
+     * The item axis: one DELETE per chunk of ids, all on one borrowed connection. Deliberately
+     * NOT wrapped in a single transaction across the chunks — the cascade is best-effort and its
+     * accepted worst case is a leftover dead row, so a half-finished purge is a smaller problem
+     * than a long write transaction holding locks on rows belonging to thousands of unrelated
+     * users while the other chunks run. The count returned is what actually went.
+     */
+    @Override
+    public int purge(String itemType, List<String> itemIds) {
+        try (Connection c = dataSource.getConnection()) {
+            int removed = 0;
+            for (int from = 0; from < itemIds.size(); from += MAX_IDS_PER_STATEMENT) {
+                removed += purgeChunk(c, itemType,
+                        itemIds.subList(from, Math.min(from + MAX_IDS_PER_STATEMENT, itemIds.size())));
+            }
+            return removed;
+        } catch (SQLException e) {
+            throw new IllegalStateException("could not purge references to a deleted item", e);
+        }
+    }
+
+    /** One DELETE over at most {@link #MAX_IDS_PER_STATEMENT} ids — the V2 index's lookup. */
+    private static int purgeChunk(Connection c, String itemType, List<String> ids)
+            throws SQLException {
+        // the placeholders are generated from the COUNT of ids, never from their content: the ids
+        // arrive off a Kafka topic, so they may never reach the SQL text itself
+        String placeholders = "?, ".repeat(ids.size() - 1) + "?";
+        try (PreparedStatement ps = c.prepareStatement(
+                "DELETE FROM collection_items WHERE item_type = ? AND item_id IN ("
+                        + placeholders + ")")) {
+            ps.setString(1, itemType);
+            for (int i = 0; i < ids.size(); i++) {
+                ps.setString(i + 2, ids.get(i));
+            }
+            return ps.executeUpdate();
+        }
+    }
+}
