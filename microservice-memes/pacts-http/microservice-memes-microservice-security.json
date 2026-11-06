@@ -1,0 +1,105 @@
+{
+  "consumer": {
+    "name": "microservice-memes"
+  },
+  "interactions": [
+    {
+      "description": "an introspection of a valid access token",
+      "providerStates": [
+        {
+          "name": "a session for a signed-in user exists"
+        }
+      ],
+      "request": {
+        "headers": {
+          "Authorization": "Bearer valid-session-token"
+        },
+        "method": "GET",
+        "path": "/me"
+      },
+      "response": {
+        "body": {
+          "email": "user@example.com",
+          "id": "0f8fad5b-d9cb-469f-a165-70867728950e",
+          "mfaCompliant": true,
+          "roles": [
+            "USER"
+          ]
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$.email": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.id": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.mfaCompliant": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.roles": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type",
+                  "min": 1
+                }
+              ]
+            },
+            "$.roles[*]": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "an introspection of an invalid token",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer invalid-token"
+        },
+        "method": "GET",
+        "path": "/me"
+      },
+      "response": {
+        "status": 401
+      }
+    }
+  ],
+  "metadata": {
+    "pact-jvm": {
+      "version": "4.7.5"
+    },
+    "pactSpecification": {
+      "version": "3.0.0"
+    }
+  },
+  "provider": {
+    "name": "microservice-security"
+  }
+}

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.jrobertgardzinski</groupId>
+        <artifactId>microservice-memes</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>memes_account-closure</artifactId>
+
+    <!--
+      This service's side of ONE cross-service process: closing an account. Read this module and
+      you know what happens to a person's memes when they leave — the three commands, the order
+      they may arrive in, what is reversible and what is not — without first deciding whether the
+      portal is a monolith or six services. Nothing in here knows Kafka, HTTP, Spring or a
+      database; the adapter that carries the commands does, and lives next door in
+      memes-infrastructure.
+
+      THE UNDERSCORE IS THE POINT. `memes-<something>` is a LAYER of this service (domain, config,
+      application, infrastructure, and the two it happens to also have). `memes_<something>` is
+      this service's part in a process it shares with others, and what follows the underscore is
+      the name of the library the participants speak through — here `account-closure`. A reader
+      who meets memes_account-closure and comments_account-closure knows they are the two ends of
+      the same conversation, and that neither is a layer.
+
+      It sits between the use cases and infrastructure and belongs to neither: a use case knows
+      nothing of a saga, and an adapter should hold no decisions. What lives here is the decision —
+      which use case a command means, which rule applies, what gets confirmed.
+    -->
+    <dependencies>
+        <dependency>
+            <!-- the three words that say what becomes of a leaver's content; shared with the
+                 twin service that also holds authored content -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>purge-rule</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>memes-domain</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>unit-of-work</artifactId>
+        </dependency>
+        <dependency>
+            <!-- the words the participants and the orchestrator share: the command names, the
+                 field names, and who is allowed to attach conditions to a closure -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>account-closure</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>observation</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <dependency>
+            <!-- the use cases that take content down -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>memes-system</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+    </dependencies>
+</project>

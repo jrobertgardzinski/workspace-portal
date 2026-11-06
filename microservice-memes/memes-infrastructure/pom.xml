@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.jrobertgardzinski</groupId>
+        <artifactId>microservice-memes</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>memes-infrastructure</artifactId>
+
+    <!-- The Spring Boot application: web boundary + in-memory persistence, wiring the use cases. -->
+    <dependencies>
+        <dependency>
+            <!-- the three words that say what becomes of a leaver's content; shared with the
+                 twin service that also holds authored content -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>purge-rule</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>memes-application</artifactId>
+        </dependency>
+        <dependency>
+            <!-- the port contracts: this module holds the REFERENCE implementations, so it is
+                 the one whose answers the stand-ins are held to -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>memes-application</artifactId>
+            <!-- stated here: the reactor's dependencyManagement pins the ordinary jar, and a
+                 test-jar is a different artifact as far as that pinning is concerned -->
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- this service's side of the account-closure saga: the decisions, without the wire.
+                 The Kafka listener next door only carries commands to it. -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>memes_account-closure</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <!--
+          JACKSON 2, explicitly, since Spring Boot 4. The web starter stopped bundling a JSON mapper,
+          and Boot 4's own default is Jackson 3 under tools.jackson.* - a different package root from
+          the com.fasterxml.jackson.* this service imports. spring-boot-jackson2 is Boot 4's supported
+          module for that and contributes the ObjectMapper bean the outbox announcer wires to.
+          Moving to Jackson 3 is a separate migration, not a side effect of this one.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-jackson2</artifactId>
+        </dependency>
+        <!-- observability: /actuator/prometheus for the workspace's Prometheus+Grafana -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!--
+          The starters carry Spring Boot 4's per-technology AUTO-CONFIGURATION. It used to live in one
+          spring-boot-autoconfigure jar and switch itself on at the sight of the library; Boot 4 split
+          it up, so spring-kafka and flyway-core on their own now sit there unconfigured - no
+          KafkaTemplate bean, and migrations that never run.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka</artifactId>
+        </dependency>
+        <dependency>
+            <!-- account-deletion saga: consumes purge commands, confirms on memes-events -->
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+        <dependency>
+            <!-- the built React UI, packed as META-INF/resources — Spring serves it at / -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>memes-ui</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <!-- the no-DB_URL default: an in-memory H2 in PostgreSQL mode — dev and tests run
+                 the SAME JDBC adapters production runs, no second implementation to drift -->
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <!-- the S3 ObjectStore adapter (memes.blob-store=s3) — serves MinIO and real S3 alike -->
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Boot 4 broke the catch-all test starter apart: @AutoConfigureMockMvc and the MockMvc
+             auto-configuration behind it arrive through this one now. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-java</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-spring</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-junit-platform-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-suite</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>rest-assured</artifactId>
+            <!-- pinned here: Spring Boot 4's BOM no longer manages rest-assured -->
+            <version>${rest-assured.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-cucumber7-jvm</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- a real MinIO for the S3 adapter's round-trip; skipped where docker is absent.
+                 The `minio` MODULE is deliberately gone: its MinIOContainer commands the image
+                 the way UPSTREAM's entrypoint expects, and the only publicly pullable MinIO left
+                 is Bitnami's build, which starts the server itself (see S3ObjectStoreTest). A
+                 GenericContainer out of the core does the job in three lines.
+                 Note the 1.x: testcontainers reorganised its modules in 2.x and junit-jupiter has
+                 no 2.x release at all, so "the testcontainers version" is no longer one number
+                 for the whole set. -->
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- the shared offline verification of security's access tokens (was a local copy;
+             the five twins converged into the library) -->
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>offline-jwt</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>user-id</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>author-directory</artifactId>
+        </dependency>
+        <!-- the MEME_DELETED durability guarantee, now a kernel library: the framework-free core
+             (table, delivered-first marking, republisher, retention) plus the Spring adapter that
+             joins the ambient @Transactional unit of work. This service is where the library was
+             extracted FROM, so nothing about the guarantee changed — only its address. -->
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>transactional-outbox</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>observation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>account-closure</artifactId>
+        </dependency>
+        <dependency>
+            <!-- the message names and fields the cascade's three services share -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>meme-deletion</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>infrastructure-spring-outbox</artifactId>
+        </dependency>
+        <!-- consumer-driven contract: the pact test states which saga commands this service
+             understands; the generated pact (../pacts, committed) is verified against the REAL
+             producer code by microservice-security's provider tests -->
+        <dependency>
+            <groupId>au.com.dius.pact.consumer</groupId>
+            <artifactId>junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- the provider's half of the saga-confirmation contract: verifies security's
+                 committed pact against the REAL confirmation-building code; skipped gracefully
+                 when the consumer repo is not checked out next to this one -->
+            <groupId>au.com.dius.pact.provider</groupId>
+            <artifactId>junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- the port contracts, asked of the JDBC adapters -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>memes-domain</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- the use cases that take content down -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>memes-system</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <!-- without spring-boot-starter-parent, repackage must be bound explicitly;
+                             package then produces the executable jar the Dockerfile copies -->
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- the specs/ dir at the microservice root (one Gherkin file per use case — the
+                 entry point into this service) goes onto this module's test classpath instead of
+                 copying the files around; microservice-security's convention -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.6.2</version>
+                <executions>
+                    <execution>
+                        <id>add-specs</id>
+                        <phase>generate-test-resources</phase>
+                        <goals>
+                            <goal>add-test-resource</goal>
+                        </goals>
+                        <configuration>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}/../specs</directory>
+                                    <includes>
+                                        <include>**/*.feature</include>
+                                    </includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <!-- the contract test writes the pact to the repo root (committed, not
+                             target/) so the producer's provider tests verify it from a sibling
+                             checkout -->
+                        <pact.rootDir>${project.basedir}/../pacts</pact.rootDir>
+                        <pact_do_not_track>true</pact_do_not_track>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

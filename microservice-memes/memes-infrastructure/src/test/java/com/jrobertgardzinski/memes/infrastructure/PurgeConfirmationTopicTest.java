@@ -1,0 +1,75 @@
+package com.jrobertgardzinski.memes.infrastructure;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jrobertgardzinski.observation.Observations;
+import com.jrobertgardzinski.memes.system.MarkUserContentForErasure;
+import com.jrobertgardzinski.memes.system.PurgeUserContent;
+import com.jrobertgardzinski.memes.system.RestoreUserContent;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Story;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+
+/**
+ * WHERE the saga's confirmation goes — the half of the contract the committed pact cannot see.
+ *
+ * <p>The audit of 26.07 spelled the gap out: the provider pact answers with
+ * {@code confirmation.payload()}, so it pins the SHAPE and throws the topic away. A confirmation with
+ * a perfect shape published on {@code meme-events}, {@code memes-events-v2} or the cascade's own topic
+ * would satisfy every pact, every unit test and every green dashboard, while microservice-offboarding
+ * waited 120 seconds, re-commanded three times, capitulated, and handed each leaver back an account
+ * whose content this service had already erased. Same species as {@link MemeDeletedTopicTest}, same
+ * remedy: a literal, asserted against the record the REAL path to the broker produces.
+ *
+ * <p>The twin literal lives in <b>microservice-offboarding</b>, in the participants map
+ * {@code Main.DEFAULT_PARTICIPANTS} ({@code memes=memes-events}) and in the deployment's
+ * {@code OFFBOARDING_PARTICIPANTS}. Changing the string here REQUIRES changing it there.
+ */
+@Epic("Saga")
+@Feature("Purge confirmation")
+@Story("Topic pin")
+class PurgeConfirmationTopicTest {
+
+    /** See the class comment: the twin literal lives in microservice-offboarding. */
+    private static final String MEMES_EVENTS = "memes-events";
+
+    private static final String SAGA = "9f1d3c7a-0b52-4c1e-8d33-1e2f3a4b5c6d";
+
+    /** The real listener, the real confirmation builder, the real mapping onto a producer record. */
+    private static ProducerRecord<String, String> realConfirmation() throws Exception {
+        CapturedConfirmations confirmations = new CapturedConfirmations();
+        new PurgeCommandsListener(mock(MarkUserContentForErasure.class),
+                mock(RestoreUserContent.class), mock(PurgeUserContent.class), confirmations,
+                Observations.silent(), new ObjectMapper(), NoTransactions.template())
+                .receive("{\"type\":\"PURGE_USER_CONTENT\",\"sagaId\":\"" + SAGA + "\","
+                        + "\"userId\":\"0b7c1c2e-5d3a-4f1b-9e8d-6a5b4c3d2e1f\"}", null);
+        // the same mapping the outbox's dispatch performs on the stored row, first attempt or
+        // republication alike — a topic mangled anywhere on that way would still pass a constant check
+        return KafkaMemeDispatch.toRecord(confirmations.captured());
+    }
+
+    @Test
+    @DisplayName("the confirmation is published on the topic the orchestrator listens to for this participant")
+    void the_confirmation_goes_to_the_agreed_topic() throws Exception {
+        assertEquals(MEMES_EVENTS, realConfirmation().topic(),
+                "microservice-offboarding maps this topic to the 'memes' participant — see the class"
+                        + " comment before changing it");
+        assertEquals(MEMES_EVENTS, KafkaMemeEvents.TOPIC,
+                "one topic per producing service: the cascade's MEME_DELETED and the saga's"
+                        + " confirmations share it, and consumers tell them apart by type");
+    }
+
+    @Test
+    @DisplayName("and it is keyed by the saga run, which the outbox's 64-char key column can hold")
+    void the_confirmation_is_keyed_by_the_saga() throws Exception {
+        assertEquals(SAGA, realConfirmation().key(),
+                "the bare send used to key it by the leaver's address: 254 characters are legal and"
+                        + " the outbox's event_key is varchar(64), so a long address would have failed"
+                        + " the INSERT inside the purge's own transaction");
+    }
+}

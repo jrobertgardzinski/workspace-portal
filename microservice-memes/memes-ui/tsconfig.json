@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    // a lookup that misses is `undefined`, and the compiler says so: `scores[id]` typed as plain
+    // `number` is how the wall came to print "▲ 0" for memes whose score it had never been told.
+    // With this on, every indexed read has to admit it may find nothing — the UI cannot quietly
+    // turn "unknown" into a number again without a `?? 0` somebody has to write on purpose.
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}

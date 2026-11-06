@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>memes</title>
+    <!--
+      Where this page's API calls should go, decided by whoever deployed it rather than by whoever
+      built it. A CLASSIC script, so it runs during parsing and therefore before the deferred module
+      below - the values are simply present when the first module reads them. Served by
+      microservice-memes (UiConfigController); a 404 here is harmless, the UI falls back to the
+      VITE_* values baked at build time and then to the compose defaults.
+    -->
+    <script src="/ui-config.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
