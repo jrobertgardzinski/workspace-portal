@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.jrobertgardzinski</groupId>
+    <artifactId>microservice-comments</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <!--
+      Comments as their own microservice: the comment threads under memes, with voting from the
+      shared voting library and REAL persistence (Postgres + Flyway; H2 in tests). Spring Boot.
+      Talks to: microservice-security (token introspection), microservice-memes (meme existence,
+      MEME_DELETED thread cascade), Kafka (the account-deletion saga's comments axis).
+
+      The estate's layers, as Maven modules rather than packages (2026-09-24). Packages were a
+      convention; modules are a CLASSPATH, and one fact forced the change: this service used to
+      build a single artifact that the Spring Boot plugin repackaged, so every class of it sat
+      under BOOT-INF/classes/ and a plain Maven dependency on it put NOTHING on another module's
+      compile classpath. A monolith assembly takes each service's business layers and supplies one
+      infrastructure underneath; it could take nothing at all from here.
+
+      The names are the estate's own (memes, offboarding and security use the same ones), because
+      the assembly picks layers by name — a service that called its layers something else would not
+      slot in.
+
+        comments-domain         — the words a comment is made of: the comment itself, its status,
+                                  the leaver, and the facts this service states. The JDK plus two
+                                  vocabularies, user-id and voting
+        comments-config         — typed, validated dials: the rate limit and the erasure
+                                  tolerance. Pure JDK
+        comments-system         — the use cases that take comments DOWN: a thread when its meme
+                                  goes, a leaver's comments wherever they are. Below application
+                                  and reachable without it (2026-10-02). Framework-free
+        comments-application    — the use cases that put comments up and read them, and the ports
+                                  they speak through. Framework-free
+        comments-infrastructure — everything with the outside in it: HTTP, JDBC, Kafka, Flyway,
+                                  the probes, and the Spring Boot entry point. THE ONLY MODULE THE
+                                  SPRING BOOT PLUGIN REPACKAGES
+
+      Beside the layers, one module per cross-service process — not layers, and the underscore
+      says so: comments_account-closure (what a closing account does to a person's comments) and
+      comments_meme-deletion (this service's hop of the meme-deletion cascade).
+    -->
+    <properties>
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <spring-boot.version>4.1.2</spring-boot.version>
+        <!-- Spring Boot 4's BOM no longer manages these two; pinned here so the build
+             stays reproducible rather than resolving whatever is newest. -->
+        <rest-assured.version>6.0.1</rest-assured.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
+        <allure.version>2.35.5</allure.version>
+        <cucumber.version>7.34.8</cucumber.version>
+        <pact.version>4.7.6</pact.version>
+        <compiler-plugin.version>3.15.0</compiler-plugin.version>
+        <surefire-plugin.version>3.5.6</surefire-plugin.version>
+    </properties>
+
+    <modules>
+        <module>comments-domain</module>
+        <module>comments-config</module>
+        <module>comments-system</module>
+        <module>comments-application</module>
+        <module>comments_account-closure</module>
+        <module>comments_meme-deletion</module>
+        <module>comments-infrastructure</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-bom</artifactId>
+                <version>${allure.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- this service's own layers: one version, the reactor's -->
+            <dependency>
+                <groupId>com.jrobertgardzinski</groupId>
+                <artifactId>comments-domain</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jrobertgardzinski</groupId>
+                <artifactId>comments-config</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jrobertgardzinski</groupId>
+                <artifactId>comments-application</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jrobertgardzinski</groupId>
+                <artifactId>comments_account-closure</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jrobertgardzinski</groupId>
+                <artifactId>comments_meme-deletion</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <!-- foreign artifacts pinned explicitly -->
+            <dependency>
+                <groupId>com.jrobertgardzinski</groupId>
+                <artifactId>voting</artifactId>
+                <version>1.0.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <!-- the port a service states its own facts through; the facts themselves stay ours -->
+                <groupId>com.jrobertgardzinski</groupId>
+                <artifactId>observation</artifactId>
+                <version>1.0.0-SNAPSHOT</version>
+            </dependency>
+            <!-- the promise the mark and its confirmation commit together -->
+            <dependency>
+                <groupId>com.jrobertgardzinski</groupId>
+                <artifactId>unit-of-work</artifactId>
+                <version>1.0.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <!-- the words this service shares with identity and the orchestrator when an account
+                     closes: the command names and who asked for the closure -->
+                <groupId>com.jrobertgardzinski</groupId>
+                <artifactId>account-closure</artifactId>
+                <version>1.0.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <!-- the shared offline verification of security's access tokens (was a local copy;
+                     the five twins converged into the library) -->
+                <groupId>com.jrobertgardzinski</groupId>
+                <artifactId>offline-jwt</artifactId>
+                <version>1.0.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jrobertgardzinski</groupId>
+                <artifactId>user-id</artifactId>
+                <version>1.0.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jrobertgardzinski</groupId>
+                <artifactId>author-directory</artifactId>
+                <version>1.0.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <!-- COMMENTS_DELETED durability (round 10): the framework-free outbox core plus its
+                     Spring adapter, extracted from microservice-memes' hardened implementation. This
+                     service used to argue that an outbox was too expensive for the cascade's stakes;
+                     owning one now costs a migration and a config class, which is a different sum —
+                     see V4__comment_events_outbox.sql. -->
+                <groupId>com.jrobertgardzinski</groupId>
+                <artifactId>transactional-outbox</artifactId>
+                <version>1.0.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jrobertgardzinski</groupId>
+                <artifactId>infrastructure-spring-outbox</artifactId>
+                <version>1.0.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>io.cucumber</groupId>
+                <artifactId>cucumber-bom</artifactId>
+                <version>${cucumber.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.rest-assured</groupId>
+                <artifactId>rest-assured</artifactId>
+                <version>${rest-assured.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${testcontainers.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${testcontainers.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>au.com.dius.pact.consumer</groupId>
+                <artifactId>junit5</artifactId>
+                <version>${pact.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>au.com.dius.pact.provider</groupId>
+                <artifactId>junit5</artifactId>
+                <version>${pact.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <!-- Inherited by every module: Allure reports for all JUnit 5 tests. -->
+    <dependencies>
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${compiler-plugin.version}</version>
+                    <configuration>
+                        <!-- Spring needs parameter names (e.g. @PathVariable) at runtime. -->
+                        <parameters>true</parameters>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${surefire-plugin.version}</version>
+                    <configuration>
+                        <systemPropertyVariables>
+                            <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+                        </systemPropertyVariables>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>build-helper-maven-plugin</artifactId>
+                    <version>3.6.2</version>
+                </plugin>
+                <!-- allure reports everywhere -->
+                <plugin>
+                    <groupId>io.qameta.allure</groupId>
+                    <artifactId>allure-maven</artifactId>
+                    <version>3.0.3</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

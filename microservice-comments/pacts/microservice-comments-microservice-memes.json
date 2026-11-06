@@ -1,0 +1,40 @@
+{
+  "consumer": {
+    "name": "microservice-comments"
+  },
+  "messages": [
+    {
+      "contents": {
+        "memeId": "3f2b7c58-9a41-4d0e-b6c7-15e8d9a0b2c3",
+        "type": "MEME_DELETED"
+      },
+      "description": "a meme deleted announcement for the comment thread",
+      "matchingRules": {
+        "body": {
+          "$.memeId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metaData": {
+        "contentType": "application/json"
+      }
+    }
+  ],
+  "metadata": {
+    "pact-jvm": {
+      "version": "4.7.5"
+    },
+    "pactSpecification": {
+      "version": "3.0.0"
+    }
+  },
+  "provider": {
+    "name": "microservice-memes"
+  }
+}

@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.jrobertgardzinski</groupId>
+        <artifactId>microservice-comments</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>comments-application</artifactId>
+
+    <!-- Use cases + the ports they speak through. Depends on the domain and the shared
+         vocabularies; no framework, and no dials — nothing here reads configuration. -->
+    <dependencies>
+        <dependency>
+            <!-- the three words that say what becomes of a leaver's content; shared with the
+                 twin service that also holds authored content -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>purge-rule</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>comments-domain</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>user-id</artifactId>
+        </dependency>
+        <dependency>
+            <!-- the voting bounded context: toggle semantics + tally, shared with microservice-memes -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>voting</artifactId>
+        </dependency>
+        <dependency>
+            <!--
+              Declared, not inherited. ListComments logs the one thing only it knows — that a vote
+              store outage turned a thread into an unscored listing — and until the split it got
+              slf4j transitively from the web starter. A facade is not a framework: there is no
+              binding here, so what the use case writes to is whatever the deployable supplies.
+            -->
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- the ports' fakes, now beside the ports themselves -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>comments-domain</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- IdempotentCommandsTest drives the taking-down use cases too -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>comments-system</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <!-- the port CONTRACTS travel to whoever implements the ports: the JDBC adapter
+                     next door and the portal's one-process specs both subclass them, and a
+                     contract is only worth anything if BOTH sides run it -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

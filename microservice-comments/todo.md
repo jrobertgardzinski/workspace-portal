@@ -1,0 +1,124 @@
+# TODO — microservice-comments
+
+Tylko otwarte rzeczy. Historia = git log.
+
+**Plan pracy z instrukcjami wykonawczymi: [docs/opus-playbook.md](docs/opus-playbook.md)**
+(2026-07-07; C1–C4 ZROBIONE — playbook comments wyczerpany).
+
+## Zrobione (wydzielenie z microservice-memes)
+- Wątki komentarzy + głosy na komentarze (lib `voting`), realny Postgres + Flyway (H2 w testach).
+- Brama do security (introspekcja tokena), istnienie mema przez HEAD do memes.
+- Saga usuwania konta: oś komentarzy (reguły DELETE|ANONYMIZE_AUTHOR|KEEP_POPULAR_ANONYMIZED:n,
+  wybór z wizarda nadpisuje default), potwierdzenie na `comments-events`.
+- Kaskada `MEME_DELETED` → wątek znika razem z memem.
+- **Drugi skok kaskady** (2026-07-26): po skasowaniu wątku serwis ogłasza `COMMENTS_DELETED`
+  na `comments-events` (envelope v1: `id/type/memeId/commentIds/version`, klucz = `memeId`) —
+  tylko ten serwis wie, KTÓRE komentarze wisiały pod memem. Bez outboxa (stawka = martwy ref,
+  naprawi read-repair w UI), ale publikacja tylko po udanym commicie: `DeleteThread` zwraca
+  listę id, ogłasza dopiero `MemesEventsListener` spoza transakcji. Pusty wątek = brak zdarzenia.
+  **AWANS DO GWARANCJI OUTBOXA** (2026-07-26, paczka 10): argument „bez outboxa" był o CENIE, a
+  cena spadła — mechanizm to teraz biblioteka jądra `com.jrobertgardzinski:transactional-outbox`
+  (+ `infrastructure-spring-outbox`), wyciągnięta z utwardzonej implementacji memes, więc koszt
+  posiadania to migracja `V4__comment_events_outbox.sql` i jedna klasa konfiguracji. Przeważyło to,
+  że strata była NIENAPRAWIALNA: redostarczony `MEME_DELETED` trafia na pusty wątek i celowo nic
+  nie ogłasza, więc zgubionego `COMMENTS_DELETED` nic nigdy nie odtworzy. Teraz kasowanie wątku i
+  wiersz outboxa to JEDNA transakcja (otwiera ją `MemesEventsListener`, dekorator `DeleteThread`
+  do niej dołącza), pierwsza próba zaparkowana na commicie i nieblokująca, marka `published`
+  dopiero po potwierdzeniu brokera, republisher dosyła bajt-w-bajt to samo zdarzenie. Envelope v1,
+  klucz `memeId`, pusty wątek = brak zdarzenia — BEZ ZMIAN. `id` koperty to teraz klucz wiersza
+  (`OutboxEvent.newId()`), bo ścieżka republikacji ISTNIEJE i duplikat musi być rozpoznawalny.
+  DOMKNIĘTE PRZY OKAZJI: zegary producenta, których ten serwis NIE MIAŁ —
+  `max.block.ms=5000`/`delivery.timeout.ms=30000`/`request.timeout.ms=15000` + pin
+  `KafkaProducerClocksTest`. Suita 81 → 91.
+
+## Zrobione (cd.)
+- **Offline JWT gate** — ZROBIONE (2026-07-06, `7609b7c`+`bc408b8`): `JwtSecurityAuthenticationGate`
+  weryfikuje podpis EdDSA access tokena po JWKS security zamiast wołać `/me`; przełącznik
+  `security.verify` = `introspect` (default) | `offline` (env `SECURITY_VERIFY`); kompromis
+  świadomy — offline nie widzi logoutu/zmiany ról do `exp`. Opisane w README.
+- **Moderacja komentarzy (MODERATOR)** — ZROBIONE (2026-07-04): brama czyta role z /me security
+  (Caller{email,roles}), DELETE /memes/{memeId}/comments/{commentId} — autor swój, MODERATOR/ADMIN
+  cudzy; DeleteComment autoryzuje (DELETED/FORBIDDEN/NO_SUCH_COMMENT) i kasuje komentarz+głosy.
+  2 scenariusze Gherkin.
+
+## Zrobione (cd.)
+- **Ukrywanie komentarza przez moderatora (C4)** — ZROBIONE (2026-07-07, zgoda usera):
+  miękki środek między niczym a kasowaniem — `PUT .../comments/{id}/hidden {hidden}`
+  (MODERATOR/ADMIN, 403 NOT_A_MODERATOR), osobny store `CommentModeration` + tabela
+  `comment_flags` (V2, FK cascade), listing pokazuje tombstone `{hidden:true, text:null}`
+  czytelnikom a autorowi jego słowa z flagą (`CommentWithScore` niesie hidden+viewerIsAuthor),
+  galeria: przycisk oka moderatora + tombstone. 2 scenariusze Gherkin. PRZY OKAZJI naprawiony
+  leak połączeń: `hiddenIn`/`nsfwIds` używały `.query(...).stream()` (kursor otwarty) —
+  przełączone na `.list()` (bliźniaczo w memes `JdbcContentFlags`).
+
+## Otwarte
+- **Po sprzątaniu 2026-10-03 (przegląd warstw) zostaje do decyzji właściciela:**
+  - `CommentRepository.findByMeme(String)` (bez stron) i `countByMeme` nie mają wołającego w
+    kodzie produkcyjnym — tylko testy, fejki i adapter. Javadoc `countByMeme` i javadoc
+    `ListComments.Page` zapisują POWÓD („no client used the total"), więc to decyzja, nie
+    przeoczenie; usunięcie z portu dotyka 8 plików, czyli nie jest zmianą lokalną. Zostawione.
+  - `comments-application` deklaruje `purge-rule` w scope `compile`, a nazywa go tylko
+    `IdempotentCommandsTest` — czyli zawężenie do scope `test` byłoby poprawne, ale nic nie kupuje
+    (ten sam jar wchodzi i tak przez `comments-system`). Zostawione.
+  - `comments-infrastructure` bierze `observation` i `voting` tranzytywnie, choć nazywa je wprost;
+    jeśli pomy mają być strażnikiem kierunku, te dwie zależności powinny być zadeklarowane.
+- **Kompensacja sagi offboardingu (ADR 0007) — WDROŻONE 2026-08-08.** Komenda czyszczenia
+  **oznacza** treści (`PENDING_ERASURE` + `markedForErasureAt`), kasuje dopiero
+  `ERASE_USER_CONTENT`, a `RESTORE_USER_CONTENT` cofa oznaczenie. Filtr `ACTIVE` jest w jednym
+  miejscu — w widoku bazodanowym — a strażnik źródeł wywala build, gdy jakikolwiek SQL poza
+  adapterem wymazywania nazwie tabelę bazową. Otwarte:
+  - ~~Alarm zaległości nie ma reguły w Prometheusie~~ — ZROBIONE 2026-08-08:
+    reguła `ErasureBacklogStuck` w `../../shared/observability/alert-rules.yml`
+    (jedna na trzy serwisy, dopasowanie po sufiksie metryki; `comments_erasure_backlog`).
+    **Zostaje**: reguły żyją tylko w stosie compose — wdrożenie k3s nie ma Prometheusa
+    (zapisane w `../k8s/README.md` jako dług przyszłego overlaya observability).
+  - (opc.) `pendingSince` używa tylko `StuckErasureWatch`; gdyby kiedyś przyszła polityka
+    retencji, to jest miejsce, w którym się ją dopina — ale **nigdy** jako kasowanie z upływu czasu.
+
+- ~~Cucumber + Allure jak w pozostałych~~ — ZROBIONE (2026-07-04): `comment-thread.feature`
+  (5 scenariuszy po HTTP: komentarz zalogowanego, odmowa anonima, odmowa pod nieznanym memem,
+  głosy-przełączniki ze score w listingu, kaskada MEME_DELETED — listener wołany wprost przez
+  beana-ogłoszeniodawcę, broker to nie kontrakt; hook @Before resetuje wątek kaskadą).
+  2026-08-10: rozbite na `specs/*.feature` przy szczycie repo — jeden use-case, jeden plik
+  (konwencja microservice-security: build-helper na classpath, Rule/Example, język biznesowy).
+- ~~**Słownik `PurgeRule` zduplikowany** z memes (celowo — wspólny kontrakt tekstowy); rozważyć
+  malutką libkę, jeśli urośnie trzeci konsument.~~ **ZROBIONE 2026-09-24 — i ten werdykt został
+  ŚWIADOMIE OBALONY, nie spełniony.** Trzeciego konsumenta nadal nie ma i pewnie nie będzie:
+  collections trzyma wskaźniki, powiadomienia też nie będą miały autora do anonimizacji. Powodem
+  ekstrakcji była TRZECIA i CZWARTA PISOWNIA tej samej gramatyki — każdy uczestnik sagi dorobił
+  sobie własny regex `VOCABULARY` do czyszczenia logów, i te regeksy nie zgadzały się z `parse()`
+  (`\d{1,4}` kontra dowolny int). Czterech pisowni jednej gramatyki nikt nie upilnuje. Libka:
+  `shared/purge-rule`, obok `voting`, bo to ta sama para konsumentów. Przy okazji naprawiony
+  korzeń: `parse()` nie wkleja już surowego tekstu do wyjątku, więc regeksy zniknęły z obu
+  uczestników — bezpiecznik siedzi w typie, nie u wołających.
+- **Deduplikacja konsumenta** — purge idempotentny, więc zbędna; przy nie-idempotentnych
+  komendach dołożyć dedup po id.
+- **PROPOZYCJA (NIE IMPLEMENTOWAĆ bez zgody) — `COMMENTS_DELETED` też przy pojedynczym kasowaniu.**
+  Dziś tylko kaskada ogłasza; skasowanie jednego komentarza przez autora/moderatora zostawia
+  w collections dokładnie taki sam martwy ref. Koperta już to unosi (`commentIds` z jednym id),
+  więc kontrakt się nie zmienia — zmienia się miejsce publikacji: `DeleteComment` musiałby zwracać
+  skasowane id, a ogłaszałby `CommentController` (analogicznie: spoza transakcji, po commicie),
+  czyli publikacja wchodzi na ścieżkę HTTP. Koszt: dużo częstsze zdarzenia. Zysk: mniej pracy dla
+  read-repair. Do decyzji razem z właścicielem collections.
+- ~~Paginacja / limity długości wątków / rate-limit~~ — ZROBIONE (2026-07-04): listing
+  stronicowany (`GET ...?page=&size=`, size cap 100, domyślnie 50; port findByMeme(offset,limit)
+  + countByMeme; `ListComments.Page` z hasMore), limit długości komentarza w DOMENIE
+  (`Comment.MAX_LENGTH=2000`, boundary → 400 COMMENT_TOO_LONG), rate-limit per-autor
+  (`RateLimit` w config, env COMMENT_RATE_LIMIT, default 20/min, 429+Retry-After).
+  Kontrakt GET wstecznie zgodny (płaska lista = strona 0). 2 nowe scenariusze Gherkin +
+  RateLimitTest; wszystko zielone.
+
+## Zrobione (struktura budowania)
+- **Warstwy jako moduły Mavena** (2026-09-24): `comments-domain` / `comments-config` /
+  `comments-application` / `comments-infrastructure`. Pakiety BEZ ZMIAN — to zmiana budowania,
+  nie nazw. Powód jest jeden i konkretny: serwis budował JEDEN artefakt, który plugin Spring Boota
+  przepakowywał, więc wszystkie klasy siedziały w `BOOT-INF/classes/` i zwykła zależność mavenowa
+  na ten artefakt nie dawała nikomu ANI JEDNEJ klasy na classpath kompilacji. Monolit (portal jako
+  jeden proces) nie mógł wziąć z tego serwisu niczego. Teraz `repackage` jest tylko w
+  `comments-infrastructure`; trzy warstwy nad nim to zwykłe jary (0 wpisów `BOOT-INF`).
+  Suita bez zmian: 189 testów przed i po. Przy okazji trzeba było przesunąć ścieżki względne w
+  testach o jeden poziom (`../..` do sąsiednich repozytoriów i do `k8s/`) — dokładnie tak, jak ma
+  to memes po swoim podziale.
+  **Zostaje po stronie workspace'u** (inne repo, nie ruszane): `memes-up.sh` i
+  `.github/workflows/ci.yml` w `workspace-portal` budują `-pl ... microservice-comments ...`,
+  co dziś zbuduje sam agregator bez jara — musi być `microservice-comments/comments-infrastructure`.
