@@ -1,0 +1,61 @@
+{
+  "consumer": {
+    "name": "microservice-offboarding"
+  },
+  "messages": [
+    {
+      "contents": {
+        "sagaId": "e2490de5-5bd3-43d5-b7c4-526e33f71304",
+        "type": "USER_CONTENT_PURGED",
+        "userId": "e2490de5-5bd3-43d5-b7c4-526e33f71304"
+      },
+      "description": "a user content purged confirmation",
+      "generators": {
+        "body": {
+          "$.sagaId": {
+            "type": "Uuid"
+          },
+          "$.userId": {
+            "type": "Uuid"
+          }
+        }
+      },
+      "matchingRules": {
+        "body": {
+          "$.sagaId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+              }
+            ]
+          },
+          "$.userId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+              }
+            ]
+          }
+        }
+      },
+      "metaData": {
+        "contentType": "application/json"
+      }
+    }
+  ],
+  "metadata": {
+    "pact-jvm": {
+      "version": "4.7.3"
+    },
+    "pactSpecification": {
+      "version": "3.0.0"
+    }
+  },
+  "provider": {
+    "name": "microservice-comments"
+  }
+}

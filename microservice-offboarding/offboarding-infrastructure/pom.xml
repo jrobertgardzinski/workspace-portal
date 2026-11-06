@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- Everything with the outside in it: the Kafka loop, the JDBC store and its migrations, the
+         probes, the metrics exporter, and Main — the composition root that decides which adapter
+         each port gets.
+
+         This is the deployable: it keeps the old artifact name, so the Dockerfile, the compose
+         build and the CI boot smoke still find microservice-offboarding.jar (under this module's
+         target/ now). -->
+    <parent>
+        <groupId>com.jrobertgardzinski</groupId>
+        <artifactId>microservice-offboarding</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>offboarding-infrastructure</artifactId>
+    <properties>
+        <offboarding.repo.root>${project.parent.basedir}</offboarding.repo.root>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>offboarding-application</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>offboarding-application</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- the in-memory store the router fixture runs on; the loop tests drive the real
+                 chain against a real broker and must not grow a second copy of it -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>offboarding-system</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- SagaStore's fake and contract, now beside the port -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>offboarding-domain</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- JdbcSagaStore reads the basis of a closure through ClosureInitiator rather
+                 than comparing strings -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>account-closure</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <!-- the loop and Main hand every stating part the one watcher /metrics reads back -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>observation</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <!-- EVERYTHING WITH THE OUTSIDE IN IT, and this is the only module that may declare
+             it: /health and /metrics over HTTP, Kafka for everything the saga says or hears,
+             JDBC + Flyway for the saga's progress. Until 2026-10-03 the repository pom handed
+             these to all four modules; they live here now because this is where they are used. -->
+        <dependency>
+            <groupId>io.helidon.webserver</groupId>
+            <artifactId>helidon-webserver</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <!-- runtime only: nothing names these in code. Logging routes Helidon's own lines through
+             SLF4J/Logback so the correlation id rides every line via MDC (%X{cid}); the drivers
+             are picked by the JDBC url - Postgres in prod, H2 in PG mode for dev and the tests. -->
+        <dependency>
+            <groupId>io.helidon.logging</groupId>
+            <artifactId>helidon-logging-slf4j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- a real broker for the KafkaLoop integration test: the transport guarantees (offsets
+             past poison pills, flush-before-commit, rewind-and-retry) only exist against actual
+             Kafka; skipped where docker is absent, like memes' MinIO test -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>kafka</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>microservice-offboarding</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-libs</id>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

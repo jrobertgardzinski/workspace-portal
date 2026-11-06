@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- The portal's process manager for account deletion, extracted from microservice-security
+         so identity stays reusable (the owner's verdict: the portal cleans up after itself).
+         Same stack as microservice-user-collections — Helidon 4 SE on virtual threads — because
+         the interesting part here is the PATTERN (an orchestrator that owns the saga), not a new
+         framework. Own parent (Helidon's) keeps it buildable standalone. -->
+    <parent>
+        <groupId>io.helidon.applications</groupId>
+        <artifactId>helidon-se</artifactId>
+        <version>4.5.1</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.jrobertgardzinski</groupId>
+    <artifactId>microservice-offboarding</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <!--
+      The estate's layers, as Maven modules rather than packages.
+
+      Modules and not packages because the split had to HOLD: the saga's spec used to reach into
+      the transport for the class that decides what gets published, and a package boundary cannot
+      stop that — a missing dependency can. Nothing here can see Kafka, the database or the HTTP
+      endpoints except the one module whose job that is, and neither can the scenarios.
+
+      The names are the estate's own, and that matters more than it looks: a monolith is assembled
+      by taking every service's modules UP TO AND INCLUDING application and supplying one
+      infrastructure underneath. A service that called its layers something else would not slot in.
+      (This one skips config: its numbers turned out to be constants with a written rationale
+      rather than dials — see SweepOverdue — so an empty module would be ceremony.)
+
+        domain         — the saga's data: what a case is opened with, what a confirmation lands
+                         as, what the sweeper hands back, and the facts this service states
+        system         — the use cases, one per door into the process manager, over the SagaStore
+                         port. Framework-free
+        application    — the orchestrator: the switchboard between those use cases, talking in
+                         Source and Destination. The scenarios and the contracts live with it
+        infrastructure — everything with the outside in it: Kafka, JDBC, Flyway, the probes, Main
+    -->
+    <modules>
+        <module>offboarding-domain</module>
+        <module>offboarding-system</module>
+        <module>offboarding-application</module>
+        <module>offboarding-infrastructure</module>
+    </modules>
+
+    <properties>
+        <mainClass>com.jrobertgardzinski.offboarding.infrastructure.Main</mainClass>
+        <cucumber.version>7.20.1</cucumber.version>
+        <junit-suite.version>6.1.2</junit-suite.version>
+        <allure.version>2.35.4</allure.version>
+        <!-- the same Testcontainers the workspace already runs (microservice-memes gets 1.21.2
+             from the Spring Boot 3.5.3 BOM; this Helidon build pins it explicitly) -->
+        <testcontainers.version>1.21.4</testcontainers.version>
+        <!-- specs/ and pacts/ stay at the repo root: the Gherkin files describe the SERVICE, and
+             the sibling repos' provider tests read the pacts from a path that must not depend on
+             which module happens to run the contract tests -->
+        <offboarding.repo.root>${project.basedir}</offboarding.repo.root>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-bom</artifactId>
+                <version>${allure.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Versions only, for anything a module may declare. Helidon's parent already
+                 manages its own artifacts plus jackson, slf4j and junit-jupiter, so those carry
+                 no entry here and the modules declare them without a version. -->
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>1.6.1</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zaxxer</groupId>
+                <artifactId>HikariCP</artifactId>
+                <version>5.1.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-core</artifactId>
+                <version>13.1.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-database-postgresql</artifactId>
+                <version>13.1.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>42.7.13</version>
+            </dependency>
+            <dependency>
+                <groupId>com.h2database</groupId>
+                <artifactId>h2</artifactId>
+                <version>2.4.240</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.kafka</groupId>
+                <artifactId>kafka-clients</artifactId>
+                <version>3.8.1</version>
+            </dependency>
+            <dependency>
+                <groupId>io.cucumber</groupId>
+                <artifactId>cucumber-java</artifactId>
+                <version>${cucumber.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.cucumber</groupId>
+                <artifactId>cucumber-junit-platform-engine</artifactId>
+                <version>${cucumber.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.platform</groupId>
+                <artifactId>junit-platform-suite</artifactId>
+                <version>${junit-suite.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>kafka</artifactId>
+                <version>${testcontainers.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${testcontainers.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>au.com.dius.pact.consumer</groupId>
+                <artifactId>junit5</artifactId>
+                <version>4.7.3</version>
+            </dependency>
+            <dependency>
+                <groupId>au.com.dius.pact.provider</groupId>
+                <artifactId>junit5</artifactId>
+                <version>4.7.3</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <!--
+      Inherited by EVERY module, so only what every module's tests genuinely use: a test runner
+      and the Allure sink the workspace aggregate reads (aggregate_allure.py).
+
+      Nothing with a framework in it belongs here. Until 2026-10-03 this block declared
+      helidon-webserver, jackson-databind, kafka-clients, HikariCP, Flyway, Postgres, H2 and
+      logback at compile scope, which handed all of them to offboarding-domain and
+      offboarding-system too - the two modules the comment above calls framework-free. The split
+      was kept by hand; now the build keeps it, and "nothing here can see Kafka, the database or
+      the HTTP endpoints except the one module whose job that is" is a fact about the classpath
+      rather than a hope.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- the top-level specs/ dir (one Gherkin file per use case — the entry point into
+                 this service) goes onto the test classpath instead of copying the files around;
+                 microservice-security's convention -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.6.1</version>
+                <executions>
+                    <execution>
+                        <id>add-specs</id>
+                        <phase>generate-test-resources</phase>
+                        <goals>
+                            <goal>add-test-resource</goal>
+                        </goals>
+                        <configuration>
+                            <resources>
+                                <resource>
+                                    <directory>${offboarding.repo.root}/specs</directory>
+                                    <includes>
+                                        <include>**/*.feature</include>
+                                    </includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <!-- Allure results under target/ so mvn clean removes them -->
+                        <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+                        <!-- the contract tests write the pacts here (committed, not target/) so
+                             the producers' provider tests verify them from a sibling checkout -->
+                        <pact.rootDir>${offboarding.repo.root}/pacts</pact.rootDir>
+                        <pact_do_not_track>true</pact_do_not_track>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <!-- allure reports everywhere -->
+            <plugin>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-maven</artifactId>
+                <version>3.0.3</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,170 @@
+{
+  "consumer": {
+    "name": "microservice-offboarding"
+  },
+  "messages": [
+    {
+      "contents": {
+        "email": "leaver@example.com",
+        "id": "e2490de5-5bd3-43d5-b7c4-526e33f71304",
+        "initiatedBy": "SELF",
+        "sagaId": "e2490de5-5bd3-43d5-b7c4-526e33f71304",
+        "type": "ACCOUNT_DELETION_REQUESTED",
+        "userId": "e2490de5-5bd3-43d5-b7c4-526e33f71304"
+      },
+      "description": "an account deletion requested fact",
+      "generators": {
+        "body": {
+          "$.id": {
+            "type": "Uuid"
+          },
+          "$.sagaId": {
+            "type": "Uuid"
+          },
+          "$.userId": {
+            "type": "Uuid"
+          }
+        }
+      },
+      "matchingRules": {
+        "body": {
+          "$.email": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+              }
+            ]
+          },
+          "$.sagaId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+              }
+            ]
+          },
+          "$.userId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+              }
+            ]
+          }
+        }
+      },
+      "metaData": {
+        "contentType": "application/json"
+      }
+    },
+    {
+      "contents": {
+        "email": "leaver@example.com",
+        "id": "e2490de5-5bd3-43d5-b7c4-526e33f71304",
+        "initiatedBy": "ADMIN",
+        "policy": {
+          "comments": "ANONYMIZE_AUTHOR",
+          "memes": "KEEP_POPULAR_ANONYMIZED:100"
+        },
+        "sagaId": "e2490de5-5bd3-43d5-b7c4-526e33f71304",
+        "type": "ACCOUNT_DELETION_REQUESTED",
+        "userId": "e2490de5-5bd3-43d5-b7c4-526e33f71304"
+      },
+      "description": "an account deletion requested fact with policy choices",
+      "generators": {
+        "body": {
+          "$.id": {
+            "type": "Uuid"
+          },
+          "$.sagaId": {
+            "type": "Uuid"
+          },
+          "$.userId": {
+            "type": "Uuid"
+          }
+        }
+      },
+      "matchingRules": {
+        "body": {
+          "$.email": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+              }
+            ]
+          },
+          "$.policy.comments": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.policy.memes": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.sagaId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+              }
+            ]
+          },
+          "$.userId": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+              }
+            ]
+          }
+        }
+      },
+      "metaData": {
+        "contentType": "application/json"
+      }
+    }
+  ],
+  "metadata": {
+    "pact-jvm": {
+      "version": "4.7.3"
+    },
+    "pactSpecification": {
+      "version": "3.0.0"
+    }
+  },
+  "provider": {
+    "name": "microservice-security"
+  }
+}

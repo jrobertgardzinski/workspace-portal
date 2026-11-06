@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- The ORCHESTRATOR: the switchboard that hears a message, sends it to the right use case and
+         answers with what to say next, and to whom. The saga's Gherkin scenarios and every contract
+         with a neighbour live here too, because this is the layer that owns the conversation.
+
+         It talks in Source and Destination and knows no transport — which is the whole point of
+         having it separate from infrastructure, and what lets a monolith take everything up to and
+         including this module and supply its own wiring underneath. -->
+    <parent>
+        <groupId>com.jrobertgardzinski</groupId>
+        <artifactId>microservice-offboarding</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>offboarding-application</artifactId>
+    <properties>
+        <offboarding.repo.root>${project.parent.basedir}</offboarding.repo.root>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>offboarding-system</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>offboarding-system</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- reading an event without letting a bad one wedge the topic, and saying what was
+                 wrong with it without putting anybody's address in the log -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>envelope</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <!-- SagaStore's fake and contract, now beside the port -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>offboarding-domain</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- the words this saga shares with identity and with every participant: the message
+                 names the router routes on, and who asked for the closure (ClosureInitiator,
+                 which normalises the basis before it reaches a use case) -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>account-closure</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <!-- where the router STATES what it noticed; the adapter decides these are counters -->
+            <groupId>com.jrobertgardzinski</groupId>
+            <artifactId>observation</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <!-- Frameworks this module names itself, declared here rather than inherited by every
+             module. The router parses and re-serialises the records it routes (see EventsRouter's
+             javadoc for why the mapper lives at this layer) and logs through the SLF4J facade. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <!-- the scenarios and the contracts live with this module: Gherkin drives the message
+             choreography through the real router, and the pacts pin both directions -->
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-java</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-junit-platform-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-suite</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-cucumber7-jvm</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>au.com.dius.pact.consumer</groupId>
+            <artifactId>junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>au.com.dius.pact.provider</groupId>
+            <artifactId>junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- the scenarios assert on what was logged without an address reaching the line -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
