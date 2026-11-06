@@ -4,9 +4,9 @@ The **PORTAL product**: meme gallery (`microservice-memes`), comments
 (`microservice-comments`), the user's saved refs (`microservice-user-collections`
 + its own-origin UI), the account-deletion process manager
 (`microservice-offboarding`) and the PNG→WebP encoder (`microservice-image`,
-Python). Each sub-directory is an independent git repository, gitignored here;
-this workspace versions only the aggregator `pom.xml`, the compose file and the
-up/down scripts.
+Python). Each sub-directory is a project of its own and, until
+2026-11-06, was an independent git repository; all of them live in this one now, with
+their history, next to the aggregator `pom.xml`, the compose file and the up/down scripts.
 
 ## Two protocols the portal owns
 
