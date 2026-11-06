@@ -17,7 +17,7 @@
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-boot.version>4.1.1</spring-boot.version>
+        <spring-boot.version>4.1.2</spring-boot.version>
         <!-- Spring Boot 4's BOM no longer manages these two; pinned so the build stays
              reproducible rather than resolving whatever happens to be newest. -->
         <rest-assured.version>6.0.1</rest-assured.version>
@@ -159,12 +159,12 @@
             <dependency>
                 <groupId>au.com.dius.pact.consumer</groupId>
                 <artifactId>junit5</artifactId>
-                <version>4.7.5</version>
+                <version>4.7.6</version>
             </dependency>
             <dependency>
                 <groupId>au.com.dius.pact.provider</groupId>
                 <artifactId>junit5</artifactId>
-                <version>4.7.5</version>
+                <version>4.7.6</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
