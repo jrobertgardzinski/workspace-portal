@@ -1,0 +1,51 @@
+{
+  "consumer": {
+    "name": "author-directory"
+  },
+  "interactions": [
+    {
+      "description": "a lookup of two accounts and one id nobody holds",
+      "providerStates": [
+        {
+          "name": "accounts exist for alice and bob"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/users",
+        "query": {
+          "ids": [
+            "0f8fad5b-d9cb-469f-a165-70867728950e,7c9e6679-7425-40de-944b-e07fc1f90ae7,00000000-0000-0000-0000-000000000000"
+          ]
+        }
+      },
+      "response": {
+        "body": [
+          {
+            "displayName": "a***@example.com",
+            "id": "0f8fad5b-d9cb-469f-a165-70867728950e"
+          },
+          {
+            "displayName": "b***@example.com",
+            "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+          }
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "status": 200
+      }
+    }
+  ],
+  "metadata": {
+    "pact-jvm": {
+      "version": "4.6.17"
+    },
+    "pactSpecification": {
+      "version": "3.0.0"
+    }
+  },
+  "provider": {
+    "name": "microservice-security"
+  }
+}
