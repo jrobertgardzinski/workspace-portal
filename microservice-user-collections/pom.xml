@@ -47,7 +47,7 @@
              pins it explicitly since no BOM here manages it) -->
         <testcontainers.version>1.21.4</testcontainers.version>
         <!-- pinned here because there is no framework parent to pin them any more -->
-        <compiler-plugin.version>3.15.0</compiler-plugin.version>
+        <compiler-plugin.version>3.16.0</compiler-plugin.version>
         <surefire-plugin.version>3.5.6</surefire-plugin.version>
         <jar-plugin.version>3.4.2</jar-plugin.version>
         <dependency-plugin.version>3.8.1</dependency-plugin.version>
