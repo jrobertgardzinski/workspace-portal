@@ -63,3 +63,164 @@ updates:
       # registry release for Dependabot to follow, and it would open a pull request every week
       # about a tag that never changes.
       - dependency-name: "security-*"
+
+  # The sub-projects. GitHub reads this file and nothing below it, so what each repository's own
+  # dependabot.yml used to say lives here with the directory as a prefix (moved 2026-11-07). No
+  # github-actions entries among them: the only workflows left are this repository's, covered above.
+
+  # microservice-comments
+  # Spring Boot and the comment service
+  - package-ecosystem: maven
+    directory: "/microservice-comments"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]
+    groups:
+      patches:
+        patterns: ["*"]
+        update-types: ["patch"]
+    ignore:
+      # The framework's own MAJOR line is a migration you plan, not a Monday pull request — and
+      # leaving it un-ignored costs more than the noise. Dependabot always targets the LATEST
+      # version, so while 4.x exists it offers 3.5.3 -> 4.1.0 and NEVER 3.5.3 -> 3.5.16: the
+      # thirteen patch releases of the supported line, the ones carrying the security fixes, would
+      # simply never be proposed. Ignoring the major is what makes the patch line visible at all.
+      # (Found the hard way on 2026-07-29, from Dependabot's first run against this very file.)
+      - dependency-name: "org.springframework.boot:*"
+        update-types: ["version-update:semver-major"]
+
+  # Base images in this repository's Dockerfile. Added 2026-07-30: image tags were watched by nothing,
+  # so they kept whatever was current when the line was written.
+  - package-ecosystem: docker
+    directory: "/microservice-comments"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]
+
+  # microservice-image
+  # Pillow — decodes images supplied by anonymous callers, so the first place a decoder CVE would land
+  - package-ecosystem: pip
+    directory: "/microservice-image"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]
+    groups:
+      patches:
+        patterns: ["*"]
+        update-types: ["patch"]
+
+  - package-ecosystem: docker
+    directory: "/microservice-image"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]
+
+  # microservice-memes
+  # Spring Boot and the gallery's server side
+  - package-ecosystem: maven
+    directory: "/microservice-memes"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]
+    groups:
+      patches:
+        patterns: ["*"]
+        update-types: ["patch"]
+    ignore:
+      - dependency-name: "org.springframework.boot:*"
+        update-types: ["version-update:semver-major"]
+
+  # the gallery UI's dependency tree
+  - package-ecosystem: npm
+    directory: "/microservice-memes/memes-ui"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]
+    groups:
+      patches:
+        patterns: ["*"]
+        update-types: ["patch"]
+
+  - package-ecosystem: docker
+    directory: "/microservice-memes"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]
+
+  # microservice-offboarding
+  - package-ecosystem: maven
+    directory: "/microservice-offboarding"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]
+    groups:
+      patches:
+        patterns: ["*"]
+        update-types: ["patch"]
+
+  - package-ecosystem: docker
+    directory: "/microservice-offboarding"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]
+
+  # microservice-user-collections
+  - package-ecosystem: maven
+    directory: "/microservice-user-collections"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]
+    groups:
+      patches:
+        patterns: ["*"]
+        update-types: ["patch"]
+
+  - package-ecosystem: docker
+    directory: "/microservice-user-collections"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]

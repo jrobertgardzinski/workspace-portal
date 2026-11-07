@@ -61,9 +61,64 @@ jobs:
       - name: Verify portal's consumer pacts against security (provider side)
         run: >
           ./mvnw -B --no-transfer-progress -pl microservice-security/security-infrastructure test
-          -Dtest='MeIntrospectionPactProviderTest,OffboardingFactsPactProviderTest,SilentlySkippedPactTest'
+          -Dtest='MeIntrospectionPactProviderTest,OffboardingFactsPactProviderTest,DisplayNamesPactProviderTest,SilentlySkippedPactTest'
           -DfailIfNoTests=true
         working-directory: shared
+
+      # A skipped verification reads green, so the run says out loud that every one of them executed
+      # interactions. Came up from the services' own workflows on 2026-11-07.
+      - name: Prove the pact verifications actually ran
+        if: always()
+        run: |
+          check() {
+            file="$1/TEST-$2.xml"
+            if [ ! -f "$file" ]; then
+              echo "::error::$2 produced no surefire report — it never ran."
+              ls -1 "$1" || true
+              exit 1
+            fi
+            cases=$(grep -c '<testcase' "$file" || true)
+            skips=$(grep -c '<skipped' "$file" || true)
+            if [ "$cases" -eq 0 ] || [ "$cases" -eq "$skips" ]; then
+              echo "::error::$2 executed no interaction ($cases case(s), $skips skipped)."
+              echo "The consumer pacts are not where @PactFolder looks — check the checkout paths."
+              exit 1
+            fi
+            echo "$2: $cases interaction(s) verified, $skips skipped."
+          }
+          security=shared/microservice-security/security-infrastructure/target/surefire-reports
+          for test in MeIntrospectionPactProviderTest OffboardingFactsPactProviderTest \
+                      DisplayNamesPactProviderTest; do
+            check "$security" "com.jrobertgardzinski.$test"
+          done
+          offboarding=portal/microservice-offboarding/offboarding-application/target/surefire-reports
+          for test in SecurityOutcomePactProviderTest contracts.memes.MemesCommandPactProviderTest \
+                      contracts.comments.CommentsCommandPactProviderTest \
+                      contracts.collections.CollectionsCommandPactProviderTest; do
+            check "$offboarding" "com.jrobertgardzinski.offboarding.application.$test"
+          done
+
+  # microservice-image is Python + Pillow, outside the Maven reactor, and it decodes what anonymous
+  # callers upload. Its suite ran in its own workflow until that became a directory of this repo.
+  python-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout this workspace
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install the pinned requirements
+        run: pip install -r requirements.txt
+        working-directory: microservice-image
+
+      - name: Image service — the unittest suite
+        run: python -m unittest test_server.py -v
+        working-directory: microservice-image
 
   # The gallery driven through a real browser (cucumber-js + Playwright): the memes-ui harness
   # boots the REAL compose stack (run-e2e.sh -> ../../infra-up.sh) and drives the gallery in it.
