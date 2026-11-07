@@ -38,7 +38,7 @@
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <helidon.version>4.5.1</helidon.version>
-        <cucumber.version>7.34.6</cucumber.version>
+        <cucumber.version>8.0.4</cucumber.version>
         <junit-suite.version>6.1.2</junit-suite.version>
         <allure.version>2.35.4</allure.version>
         <pact.version>4.7.3</pact.version>
