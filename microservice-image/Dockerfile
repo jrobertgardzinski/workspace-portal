@@ -1,5 +1,5 @@
 # The image-encoder — Python + Pillow (WebP via bundled libwebp), nothing else.
-FROM python:3.14-slim
+FROM python:3.15-slim
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
