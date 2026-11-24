@@ -1,5 +1,6 @@
 package com.jrobertgardzinski.portal.closure2.world;
 
+import com.jrobertgardzinski.security.domain.vo.token.VerificationToken;
 import com.jrobertgardzinski.email.domain.Email;
 import com.jrobertgardzinski.email.domain.NormalizedEmail;
 import com.jrobertgardzinski.identity.UserId;
@@ -102,5 +103,45 @@ public final class Accounts implements UserRepository {
     @Override
     public User save(User user) {
         return rows.save(user);
+    }
+
+    @Override
+    public void startVerification(Email email, VerificationToken token) {
+        rows.startVerification(email, token);
+    }
+
+    @Override
+    public Optional<PendingVerification> completeVerification(VerificationToken token) {
+        return rows.completeVerification(token);
+    }
+
+    @Override
+    public void markVerified(Email email) {
+        rows.markVerified(email);
+    }
+
+    @Override
+    public boolean isVerified(Email email) {
+        return rows.isVerified(email);
+    }
+
+    @Override
+    public boolean isPasswordless(Email email) {
+        return rows.isPasswordless(email);
+    }
+
+    @Override
+    public void setPasswordless(Email email, boolean passwordless) {
+        rows.setPasswordless(email, passwordless);
+    }
+
+    @Override
+    public Optional<Email> findEmailByFederatedIdentity(String provider, String subject) {
+        return rows.findEmailByFederatedIdentity(provider, subject);
+    }
+
+    @Override
+    public void linkFederatedIdentity(String provider, String subject, Email userEmail) {
+        rows.linkFederatedIdentity(provider, subject, userEmail);
     }
 }

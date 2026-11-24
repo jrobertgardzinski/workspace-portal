@@ -250,7 +250,7 @@ public class AccountClosureSteps {
                 "a session outlived the account");
         assertTrue(portal.identity().factors().findByUser(alice()).isEmpty(),
                 "a second factor's secret outlived the account");
-        assertEquals(0, portal.identity().recoveryCodes().unusedCount(alice()),
+        assertEquals(0, portal.identity().factors().unusedRecoveryCodes(alice()),
                 "a recovery code outlived the account");
     }
 
